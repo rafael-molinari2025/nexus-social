@@ -47,6 +47,10 @@
       transition: all var(--transition);
     }
     .notif-filter-btn.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+    @media (max-width: 640px) {
+      .notif-page { padding: 1rem .5rem calc(80px + 1rem); }
+      .page-header { flex-wrap: wrap; gap: .5rem; }
+    }
   </style>
 </head>
 <body>

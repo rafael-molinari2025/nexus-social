@@ -57,6 +57,14 @@
       .layout-2col { grid-template-columns: 1fr; }
       .comm-actions { flex-direction: row; }
     }
+    @media (max-width: 640px) {
+      .comm-detail-page { padding: 0 .5rem calc(80px + 1.5rem); }
+      .comm-cover { height: 140px; }
+      .comm-header-card { flex-direction: column; gap: .875rem; }
+      .comm-actions { flex-direction: row; align-self: flex-start; }
+      .comm-header-name { font-size: 18px; }
+      .member-grid { grid-template-columns: repeat(4, 1fr); }
+    }
   </style>
 </head>
 <body>

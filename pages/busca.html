@@ -9,6 +9,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     .busca-page { max-width: 720px; margin: 0 auto; padding: 1.5rem .75rem; }
+    @media (max-width: 640px) {
+      .busca-page { padding: 1rem .5rem calc(80px + 1rem); }
+      .people-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    }
     .search-hero {
       display: flex; align-items: center; gap: .75rem;
       background: var(--surface); border: 0.5px solid var(--border);

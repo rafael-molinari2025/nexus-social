@@ -94,9 +94,19 @@
       color: var(--text-muted); font-size: 15px; pointer-events: none;
     }
     @media (max-width: 640px) {
+      .profile-page { padding: 1rem .5rem calc(80px + 1rem); }
+      .profile-cover { height: 130px; }
       .friends-big-grid { grid-template-columns: repeat(3, 1fr); }
       .profile-info-top { flex-direction: column; align-items: flex-start; gap: .75rem; }
       .fields-row-2 { grid-template-columns: 1fr; }
+      .profile-fullname { font-size: 18px; }
+      .profile-info-card { padding: 0 1rem 1.25rem; }
+      .profile-tab { padding: .65rem .85rem; font-size: 13px; }
+    }
+    @media (max-width: 380px) {
+      .friends-big-grid { grid-template-columns: repeat(2, 1fr); }
+      .profile-avatar-area { margin-top: -32px; }
+      .gender-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>

@@ -26,6 +26,14 @@
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
     .page-title { font-size: 20px; font-weight: 600; }
     .section-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); margin: 1.5rem 0 .75rem; }
+    @media (max-width: 640px) {
+      .comm-page { padding: 1rem .5rem calc(80px + 1rem); }
+      .comm-grid { grid-template-columns: 1fr; }
+      .page-header { flex-wrap: wrap; gap: .5rem; }
+    }
+    @media (max-width: 380px) {
+      .comm-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>

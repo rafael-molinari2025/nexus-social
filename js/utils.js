@@ -127,11 +127,13 @@ function initNotifications(uid) {
     .collection('items')
     .where('read', '==', false)
     .onSnapshot(snap => {
-      const badge = document.getElementById('notif-badge');
       const count = snap.size;
-      if (badge) {
-        badge.style.display = count > 0 ? 'block' : 'none';
-      }
+      // Badge no topbar (desktop)
+      const badge = document.getElementById('notif-badge');
+      if (badge) badge.style.display = count > 0 ? 'block' : 'none';
+      // Dot no bottom nav (mobile)
+      const dot = document.getElementById('notif-dot');
+      if (dot) dot.style.display = count > 0 ? 'block' : 'none';
     }, () => {});
 }
 
@@ -209,8 +211,11 @@ function renderTopbar(user, activePage = 'feed') {
         <i class="ti ${themeIcon}" aria-hidden="true"></i>
       </button>
     </nav>
-    <div class="avatar avatar-32" style="background:${cl.bg};margin-left:.5rem" onclick="location.href='${PAGES}perfil.html?uid=${user.uid}'">${av}</div>
+    <div class="avatar avatar-32" style="background:${cl.bg};margin-left:.25rem" onclick="location.href='${PAGES}perfil.html?uid=${user.uid}'">${av}</div>
   `;
+
+  // Botão de tema fica visível no mobile (fora do topbar-nav)
+  // Já inserido acima do avatar
 
   const si = document.getElementById('search-input');
   if (si) {
@@ -220,6 +225,38 @@ function renderTopbar(user, activePage = 'feed') {
         if (q) location.href = `${PAGES}busca.html?q=${encodeURIComponent(q)}`;
       }
     });
+  }
+
+  // ── Bottom navigation (mobile) ──────────────────────────────
+  if (!document.getElementById('bottom-nav')) {
+    const bnav = document.createElement('nav');
+    bnav.id = 'bottom-nav';
+    bnav.className = 'bottom-nav';
+    bnav.setAttribute('aria-label', 'Navegação principal');
+    bnav.innerHTML = `
+      <button class="bottom-nav-btn${activePage==='feed'?' active':''}" onclick="location.href='${ROOT}index.html'" title="Início">
+        <i class="ti ti-home" aria-hidden="true"></i>
+        <span>Início</span>
+      </button>
+      <button class="bottom-nav-btn${activePage==='friends'?' active':''}" onclick="location.href='${PAGES}amigos.html'" title="Amigos">
+        <i class="ti ti-users" aria-hidden="true"></i>
+        <span>Amigos</span>
+      </button>
+      <button class="bottom-nav-btn${activePage==='messages'?' active':''}" onclick="location.href='${PAGES}mensagens.html'" title="Mensagens">
+        <i class="ti ti-message-circle-2" aria-hidden="true"></i>
+        <span>Chat</span>
+      </button>
+      <button class="bottom-nav-btn${activePage==='communities'?' active':''}" onclick="location.href='${PAGES}comunidades.html'" title="Comunidades">
+        <i class="ti ti-users-group" aria-hidden="true"></i>
+        <span>Grupos</span>
+      </button>
+      <button class="bottom-nav-btn${activePage==='notifications'?' active':''}" id="bnav-notif-btn" onclick="toggleNotifPanel('${user.uid}')" title="Notificações">
+        <i class="ti ti-bell" aria-hidden="true"></i>
+        <span class="notif-dot" id="notif-dot"></span>
+        <span>Avisos</span>
+      </button>
+    `;
+    document.body.appendChild(bnav);
   }
 
   // Iniciar listener de notificações

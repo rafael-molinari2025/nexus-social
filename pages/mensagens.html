@@ -243,10 +243,32 @@
     .user-result-username { font-size: 11px; color: var(--text-muted); }
 
     /* Responsive */
+    @media (max-width: 768px) {
+      .chat-layout { grid-template-columns: 280px 1fr; }
+    }
     @media (max-width: 640px) {
-      .chat-layout { grid-template-columns: 1fr; }
-      .chat-sidebar { display: none; }
-      .chat-sidebar.show { display: flex; }
+      body { overflow: hidden; }
+      .chat-layout {
+        grid-template-columns: 1fr;
+        height: calc(100vh - var(--topbar-h) - 60px); /* 60px = bottom nav */
+      }
+      /* No mobile, mostrar apenas sidebar OU chat */
+      .chat-sidebar { width: 100%; }
+      .chat-main { display: none; }
+      .chat-sidebar.hidden { display: none; }
+      .chat-main.show { display: flex; }
+      /* Botão de voltar no header do chat */
+      .chat-back-btn {
+        display: flex !important;
+        width: 36px; height: 36px; border: none; background: none;
+        border-radius: var(--radius-md); cursor: pointer;
+        align-items: center; justify-content: center;
+        color: var(--text-secondary); font-size: 20px;
+        flex-shrink: 0;
+      }
+    }
+    @media (min-width: 641px) {
+      .chat-back-btn { display: none; }
     }
   </style>
 </head>
@@ -412,6 +434,9 @@ async function openConversation(cid, otherUid) {
 
   document.getElementById('chat-main').innerHTML = `
     <div class="chat-header">
+      <button class="chat-back-btn" onclick="mobileBackToList()" title="Voltar" aria-label="Voltar para lista">
+        <i class="ti ti-arrow-left" aria-hidden="true"></i>
+      </button>
       <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer"
            onclick="location.href='perfil.html?uid=${other.uid}'">${av}</div>
       <div class="chat-header-info">
@@ -435,6 +460,14 @@ async function openConversation(cid, otherUid) {
       </button>
     </div>
   `;
+
+  // Mobile: ocultar sidebar e exibir chat
+  const sidebar = document.getElementById('chat-sidebar');
+  const main    = document.getElementById('chat-main');
+  if (window.innerWidth <= 640) {
+    sidebar.classList.add('hidden');
+    main.classList.add('show');
+  }
 
   // Subscribe to messages
   if (messagesUnsub) messagesUnsub();
@@ -609,6 +642,22 @@ document.addEventListener('click', e => {
     document.getElementById('user-results').style.display = 'none';
   }
 });
+
+// ── Mobile: voltar para lista de conversas ───────────────────────
+function mobileBackToList() {
+  const sidebar = document.getElementById('chat-sidebar');
+  const main    = document.getElementById('chat-main');
+  sidebar.classList.remove('hidden');
+  main.classList.remove('show');
+  activeConvId = null;
+  // Restaurar welcome screen
+  main.innerHTML = `
+    <div class="chat-welcome" id="chat-welcome">
+      <div class="chat-welcome-icon"><i class="ti ti-messages"></i></div>
+      <h2>Suas mensagens</h2>
+      <p>Selecione uma conversa ou busque um usuário para começar a conversar.</p>
+    </div>`;
+}
 </script>
 </body>
 </html>

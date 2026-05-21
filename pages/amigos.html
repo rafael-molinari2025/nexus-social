@@ -44,6 +44,12 @@
       transition: color var(--transition);
     }
     .remove-friend-btn:hover { color: var(--coral-400); }
+    @media (max-width: 640px) {
+      .friends-page { padding: 1rem .5rem calc(80px + 1rem); }
+      .friends-big-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+      .request-card { padding: .75rem; }
+      .request-btns { flex-direction: column; gap: .3rem; }
+    }
   </style>
 </head>
 <body>
