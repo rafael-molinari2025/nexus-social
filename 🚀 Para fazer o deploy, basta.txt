@@ -1,0 +1,17 @@
+🚀 Para fazer o deploy, basta:
+
+# 1. Preencher js/firebase-config.js e .firebaserc com seus dados
+# 2. Instalar CLI
+npm install -g firebase-tools && firebase login
+
+# 3. Deploy
+firebase deploy --only hosting
+
+# 4. Push GitHub
+git init && git add . && git commit -m "feat: Nexus Social" && git push
+
+
+📦 Arquivos de deploy
+firebase.json — hosting configurado com cache headers
+.firebaserc — placeholder SEU_PROJETO_ID para preencher
+README.md — guia completo com índices Firestore necessários

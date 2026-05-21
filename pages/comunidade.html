@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Comunidade</title>
+  <meta name="description" content="Página de comunidade no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    .comm-detail-page { max-width: 860px; margin: 0 auto; padding: 0 .75rem 2rem; }
+    .comm-cover {
+      height: 200px; display: flex; align-items: center; justify-content: center;
+      position: relative; border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+      overflow: hidden; margin-bottom: 1rem;
+    }
+    .comm-cover-icon { font-size: 64px; opacity: .85; }
+    .comm-header-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-xl); padding: 1.5rem;
+      display: flex; align-items: flex-start; gap: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .comm-header-icon {
+      width: 72px; height: 72px; border-radius: var(--radius-lg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; flex-shrink: 0;
+    }
+    .comm-header-info { flex: 1; min-width: 0; }
+    .comm-header-name { font-size: 22px; font-weight: 600; margin-bottom: .25rem; }
+    .comm-header-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.55; margin-bottom: .65rem; }
+    .comm-header-meta { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .comm-meta-item { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: .3rem; }
+    .comm-actions { display: flex; gap: .5rem; flex-shrink: 0; flex-direction: column; align-items: flex-end; }
+    .layout-2col { display: grid; grid-template-columns: 1fr 280px; gap: 1rem; }
+    .comm-tabs { display: flex; border-bottom: 0.5px solid var(--border); margin-bottom: 1rem; }
+    .comm-tab {
+      padding: .75rem 1.25rem; background: none; border: none;
+      font-size: 14px; font-weight: 500; color: var(--text-muted);
+      border-bottom: 2px solid transparent; margin-bottom: -0.5px;
+      cursor: pointer; font-family: var(--font-sans); transition: all var(--transition);
+    }
+    .comm-tab.active { color: var(--purple-600); border-bottom-color: var(--purple-600); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .member-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+    .member-item {
+      display: flex; flex-direction: column; align-items: center;
+      gap: .35rem; padding: .65rem .5rem;
+      background: var(--gray-50); border-radius: var(--radius-md);
+      cursor: pointer; transition: background var(--transition);
+    }
+    .member-item:hover { background: var(--purple-50); }
+    .member-name { font-size: 11px; font-weight: 500; text-align: center; line-height: 1.2; }
+    .member-role { font-size: 10px; color: var(--purple-600); font-weight: 500; }
+    @media (max-width: 720px) {
+      .layout-2col { grid-template-columns: 1fr; }
+      .comm-actions { flex-direction: row; }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="comm-detail-page">
+    <div class="loading-screen" id="page-loader"><div class="spinner"></div></div>
+    <div id="page-content" style="display:none"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+const CATEGORY_COLORS = {
+  tecnologia: {bg:'#EEEDFE',c:'#534AB7',icon:'ti-code'},
+  musica:     {bg:'#FAEEDA',c:'#854F0B',icon:'ti-music'},
+  arte:       {bg:'#FBEAF0',c:'#993556',icon:'ti-palette'},
+  esportes:   {bg:'#E1F5EE',c:'#0F6E56',icon:'ti-ball-football'},
+  jogos:      {bg:'#FAECE7',c:'#993C1D',icon:'ti-device-gamepad'},
+  livros:     {bg:'#E6F1FB',c:'#185FA5',icon:'ti-book'},
+  outros:     {bg:'#F1EFE8',c:'#5F5E5A',icon:'ti-users-group'}
+};
+
+const params = new URLSearchParams(location.search);
+const commId = params.get('id');
+let currentUser = null;
+let commData = null;
+let isMember = false;
+let isAdmin = false;
+let memberDocId = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'communities');
+
+  if (!commId) {
+    showError('Comunidade não encontrada.');
+    return;
+  }
+
+  const [commSnap, memberSnap] = await Promise.all([
+    db.collection('communities').doc(commId).get(),
+    db.collection('community_members')
+      .where('communityId','==',commId)
+      .where('uid','==',user.uid).get()
+  ]);
+
+  if (!commSnap.exists) { showError('Comunidade não encontrada.'); return; }
+
+  commData = { id: commId, ...commSnap.data() };
+  isMember = !memberSnap.empty;
+  if (isMember) {
+    memberDocId = memberSnap.docs[0].id;
+    isAdmin = memberSnap.docs[0].data().role === 'admin';
+  }
+
+  document.title = `Nexus — ${commData.name}`;
+  renderPage();
+});
+
+function renderPage() {
+  const cl = CATEGORY_COLORS[commData.category] || CATEGORY_COLORS.outros;
+  const joinBtn = isMember
+    ? (isAdmin
+        ? `<button class="btn btn-sm" disabled><i class="ti ti-shield-check" aria-hidden="true"></i> Admin</button>`
+        : `<button class="btn btn-danger btn-sm" onclick="leaveCommunity()"><i class="ti ti-door-exit" aria-hidden="true"></i> Sair</button>`)
+    : `<button class="btn btn-primary" id="join-btn" onclick="joinCommunity()"><i class="ti ti-plus" aria-hidden="true"></i> Participar</button>`;
+
+  const shareBtn = `<button class="btn btn-sm" onclick="shareCommunity()"><i class="ti ti-share-3" aria-hidden="true"></i> Compartilhar</button>`;
+
+  document.getElementById('page-content').innerHTML = `
+    <!-- Cover -->
+    <div class="comm-cover" style="background:linear-gradient(135deg,${cl.c}22,${cl.bg})">
+      <i class="ti ${cl.icon} comm-cover-icon" style="color:${cl.c}" aria-hidden="true"></i>
+    </div>
+
+    <!-- Header -->
+    <div class="comm-header-card">
+      <div class="comm-header-icon" style="background:${cl.bg}">
+        <i class="ti ${cl.icon}" style="color:${cl.c}" aria-hidden="true"></i>
+      </div>
+      <div class="comm-header-info">
+        <div class="comm-header-name">${sanitize(commData.name)}</div>
+        ${commData.description ? `<div class="comm-header-desc">${sanitize(commData.description)}</div>` : ''}
+        <div class="comm-header-meta">
+          <span class="comm-meta-item"><i class="ti ti-users" aria-hidden="true"></i> <strong>${commData.membersCount||0}</strong> membros</span>
+          <span style="background:${cl.bg};color:${cl.c};font-size:11px;font-weight:500;padding:2px 10px;border-radius:var(--radius-full)">${commData.category||'outros'}</span>
+          ${commData.createdAt ? `<span class="comm-meta-item"><i class="ti ti-calendar" aria-hidden="true"></i> Criada ${timeAgo(commData.createdAt)}</span>` : ''}
+        </div>
+      </div>
+      <div class="comm-actions">
+        ${joinBtn}
+        ${shareBtn}
+      </div>
+    </div>
+
+    <!-- Layout 2 colunas -->
+    <div class="layout-2col">
+      <!-- Feed principal -->
+      <div>
+        ${isMember ? `
+        <div class="card" style="margin-bottom:.75rem">
+          <div class="composer">
+            <div class="avatar avatar-40" id="composer-av"></div>
+            <div class="composer-box">
+              <textarea class="composer-textarea" id="comm-post-text" placeholder="Compartilhe algo com a comunidade..."></textarea>
+              <div class="composer-footer">
+                <div></div>
+                <button class="btn btn-primary btn-sm" onclick="createCommPost()">
+                  <i class="ti ti-send" aria-hidden="true"></i> Publicar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>` : ''}
+
+        <div class="comm-tabs">
+          <button class="comm-tab active" onclick="switchTab('posts')">Posts</button>
+          <button class="comm-tab" onclick="switchTab('members')">Membros</button>
+        </div>
+
+        <div class="tab-panel active" id="panel-posts">
+          <div class="loading-screen" style="min-height:150px"><div class="spinner"></div></div>
+        </div>
+        <div class="tab-panel" id="panel-members">
+          <div class="loading-screen" style="min-height:100px"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div>
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">Sobre a comunidade</div>
+            ${commData.description ? `<p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:.75rem">${sanitize(commData.description)}</p>` : ''}
+            <div style="display:flex;flex-direction:column;gap:.5rem">
+              <div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:.4rem">
+                <i class="ti ti-users" aria-hidden="true"></i> <strong id="member-count">${commData.membersCount||0}</strong>&nbsp;membros
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:.4rem">
+                <i class="ti ti-tag" aria-hidden="true"></i> ${commData.category||'outros'}
+              </div>
+              ${commData.createdAt ? `<div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:.4rem">
+                <i class="ti ti-calendar" aria-hidden="true"></i> Criada ${timeAgo(commData.createdAt)}
+              </div>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:.75rem" id="top-members-card">
+          <div class="card-body">
+            <div class="card-title">Membros em destaque</div>
+            <div id="top-members-list">
+              <div class="spinner" style="margin:auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Renderizar avatar no composer
+  if (isMember) {
+    const cl2 = getAvatarColor(currentUser.uid);
+    const av2El = document.getElementById('composer-av');
+    if (av2El) {
+      av2El.style.cssText = `background:${cl2.bg};color:${cl2.color};flex-shrink:0`;
+      av2El.innerHTML = currentUser.photoURL
+        ? `<img src="${currentUser.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : getInitials(currentUser.displayName);
+    }
+  }
+
+  document.getElementById('page-loader').style.display = 'none';
+  document.getElementById('page-content').style.display = 'block';
+
+  loadPosts();
+  loadTopMembers();
+}
+
+// ── Posts da comunidade ───────────────────────────────────────
+function loadPosts() {
+  const el = document.getElementById('panel-posts');
+  db.collection('posts')
+    .where('communityId', '==', commId)
+    .orderBy('createdAt', 'desc')
+    .limit(30)
+    .onSnapshot(snap => {
+      if (snap.empty) {
+        el.innerHTML = `<div class="empty-state card"><i class="ti ti-news-off" aria-hidden="true"></i><p>Nenhum post ainda. ${isMember ? 'Seja o primeiro!' : 'Entre na comunidade para postar.'}</p></div>`;
+        return;
+      }
+      el.innerHTML = `<div class="card">${snap.docs.map(doc => postHTML(doc.id, doc.data())).join('')}</div>`;
+    }, () => showToast('Erro ao carregar posts.'));
+}
+
+function postHTML(id, p) {
+  const cl = getAvatarColor(p.authorId);
+  const av = p.authorPhoto
+    ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : getInitials(p.authorName);
+  const liked = p.likes && p.likes.includes(currentUser.uid);
+  const canDelete = p.authorId === currentUser.uid || isAdmin;
+  return `
+  <div class="post" id="post-${id}">
+    <div class="post-header">
+      <div class="avatar avatar-40" style="background:${cl.bg};color:${cl.color};cursor:pointer"
+           onclick="location.href='perfil.html?uid=${p.authorId}'">${av}</div>
+      <div class="post-meta">
+        <div class="post-author">${sanitize(p.authorName||'Usuário')}</div>
+        <div class="post-time">${timeAgo(p.createdAt)}</div>
+      </div>
+      ${canDelete ? `<button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
+    </div>
+    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>')}</div>
+    <div class="post-actions">
+      <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${id}')">
+        <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
+      </button>
+      <button class="post-action-btn" onclick="location.href='post.html?id=${id}'">
+        <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0} comentários
+      </button>
+      <button class="post-action-btn" onclick="sharePost('${id}')">
+        <i class="ti ti-share-3" aria-hidden="true"></i> compartilhar
+      </button>
+    </div>
+  </div>`;
+}
+
+async function createCommPost() {
+  if (!isMember) return showToast('Entre na comunidade para postar.');
+  const text = document.getElementById('comm-post-text').value.trim();
+  if (!text) return showToast('Escreva algo para publicar.');
+  try {
+    await db.collection('posts').add({
+      text,
+      communityId: commId,
+      communityName: commData.name,
+      authorId: currentUser.uid,
+      authorName: currentUser.displayName,
+      authorPhoto: currentUser.photoURL || null,
+      likes: [],
+      commentsCount: 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('comm-post-text').value = '';
+    showToast('Post publicado!');
+  } catch(e) { showToast('Erro ao publicar.'); }
+}
+
+async function toggleLike(postId) {
+  const ref = db.collection('posts').doc(postId);
+  const snap = await ref.get();
+  const likes = snap.data().likes || [];
+  await ref.update({
+    likes: likes.includes(currentUser.uid)
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+}
+
+async function deletePost(postId) {
+  if (!confirm('Excluir este post?')) return;
+  await db.collection('posts').doc(postId).delete();
+  showToast('Post excluído.');
+}
+
+function sharePost(postId) {
+  navigator.clipboard.writeText(`${location.origin}/pages/post.html?id=${postId}`)
+    .then(() => showToast('Link copiado!'));
+}
+
+// ── Membros ───────────────────────────────────────────────────
+async function loadTopMembers() {
+  const el = document.getElementById('top-members-list');
+  const snap = await db.collection('community_members')
+    .where('communityId','==',commId).limit(9).get();
+  const usersData = await Promise.all(snap.docs.map(d => getUserData(d.data().uid)));
+  el.innerHTML = `<div class="member-grid">${snap.docs.map((doc, i) => {
+    const u = usersData[i];
+    if (!u) return '';
+    const cl = getAvatarColor(u.uid);
+    const av = u.photoURL
+      ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+    const role = doc.data().role;
+    return `<div class="member-item" onclick="location.href='perfil.html?uid=${u.uid}'">
+      <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+      <div class="member-name">${sanitize((u.displayName||'Usuário').split(' ')[0])}</div>
+      ${role==='admin' ? `<div class="member-role">admin</div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function loadAllMembers() {
+  const el = document.getElementById('panel-members');
+  el.innerHTML = '<div class="loading-screen" style="min-height:100px"><div class="spinner"></div></div>';
+  const snap = await db.collection('community_members')
+    .where('communityId','==',commId).orderBy('joinedAt').limit(50).get();
+  const usersData = await Promise.all(snap.docs.map(d => getUserData(d.data().uid)));
+  el.innerHTML = `<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.5rem;padding:.75rem">
+    ${snap.docs.map((doc, i) => {
+      const u = usersData[i];
+      if (!u) return '';
+      const cl = getAvatarColor(u.uid);
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      const role = doc.data().role;
+      return `<div class="search-result-item" style="border-radius:var(--radius-md)" onclick="location.href='perfil.html?uid=${u.uid}'">
+        <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+        <div class="search-result-info">
+          <div class="search-result-name">${sanitize(u.displayName||'Usuário')}</div>
+          ${role==='admin' ? `<div style="font-size:11px;color:var(--purple-600);font-weight:500">Administrador</div>` : ''}
+          ${u.bio ? `<div class="search-result-sub">${sanitize(u.bio)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div></div>`;
+}
+
+// ── Join / Leave ──────────────────────────────────────────────
+async function joinCommunity() {
+  const btn = document.getElementById('join-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Entrando…'; }
+  try {
+    const memberRef = await db.collection('community_members').add({
+      communityId: commId,
+      uid: currentUser.uid,
+      role: 'member',
+      joinedAt: firebase.firestore.FieldValue.serverTimestamp()  // sempre incluso
+    });
+    memberDocId = memberRef.id;
+    await db.collection('communities').doc(commId).update({
+      membersCount: firebase.firestore.FieldValue.increment(1)
+    });
+    showToast('Você entrou na comunidade!');
+    isMember = true;
+    commData.membersCount = (commData.membersCount||0) + 1;
+    renderPage();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-plus"></i> Participar'; }
+    showToast('Erro ao entrar na comunidade.');
+  }
+}
+
+async function leaveCommunity() {
+  if (!confirm('Sair desta comunidade?')) return;
+  try {
+    const snap = await db.collection('community_members')
+      .where('communityId','==',commId).where('uid','==',currentUser.uid).get();
+    await Promise.all(snap.docs.map(d => d.ref.delete()));
+    await db.collection('communities').doc(commId).update({
+      membersCount: firebase.firestore.FieldValue.increment(-1)
+    });
+    showToast('Você saiu da comunidade.');
+    isMember = false;
+    isAdmin = false;
+    memberDocId = null;    // ← CORRIGIDO: limpar memberDocId
+    commData.membersCount = Math.max(0, (commData.membersCount||1) - 1);
+    renderPage();
+  } catch(e) { showToast('Erro ao sair da comunidade.'); }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.comm-tab').forEach((b,i) => {
+    b.classList.toggle('active', ['posts','members'][i] === tab);
+  });
+  ['posts','members'].forEach(t => {
+    document.getElementById(`panel-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'members') loadAllMembers();
+}
+
+// ── Share ─────────────────────────────────────────────────────
+function shareCommunity() {
+  navigator.clipboard.writeText(`${location.origin}/pages/comunidade.html?id=${commId}`)
+    .then(() => showToast('Link da comunidade copiado!'));
+}
+
+function showError(msg) {
+  document.getElementById('page-loader').style.display = 'none';
+  document.getElementById('page-content').style.display = 'block';
+  document.getElementById('page-content').innerHTML = `
+    <div class="empty-state" style="padding:4rem 1rem">
+      <i class="ti ti-alert-triangle" style="font-size:48px;color:var(--coral-400)" aria-hidden="true"></i>
+      <p style="font-size:16px;font-weight:500">${msg}</p>
+      <a href="comunidades.html" class="btn btn-primary" style="margin-top:.5rem">Ver comunidades</a>
+    </div>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Recados</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    .recados-page { max-width: 680px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+    .page-title { font-size: 20px; font-weight: 600; }
+    .scrap-full {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem 1.1rem;
+      margin-bottom: .65rem;
+      display: flex; gap: .75rem;
+    }
+    .scrap-full-content { flex: 1; min-width: 0; }
+    .scrap-full-header { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .3rem; }
+    .scrap-full-author { font-size: 14px; font-weight: 500; cursor: pointer; }
+    .scrap-full-author:hover { color: var(--purple-600); }
+    .scrap-full-arrow { font-size: 12px; color: var(--text-muted); }
+    .scrap-full-to { font-size: 13px; color: var(--purple-600); cursor: pointer; font-weight: 500; }
+    .scrap-full-to:hover { text-decoration: underline; }
+    .scrap-full-text { font-size: 14px; line-height: 1.6; color: var(--text-primary); }
+    .scrap-full-time { font-size: 11px; color: var(--text-muted); margin-top: .35rem; }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="recados-page">
+    <div class="page-header">
+      <h1 class="page-title">Meus recados</h1>
+      <button class="btn btn-primary" onclick="openWriteModal()">
+        <i class="ti ti-pencil" aria-hidden="true"></i> Escrever recado
+      </button>
+    </div>
+
+    <!-- Compositor de recado -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-body">
+        <div class="card-title">Escrever recado para um amigo</div>
+        <div style="display:flex;flex-direction:column;gap:.65rem">
+          <input class="form-input" type="text" id="scrap-to-search" placeholder="Buscar amigo pelo nome..." oninput="searchFriends(this.value)">
+          <div id="friend-results" style="display:none"></div>
+          <div id="selected-friend" style="display:none;align-items:center;gap:.5rem;background:var(--purple-50);border-radius:var(--radius-md);padding:.5rem .75rem">
+            <span id="selected-name" style="font-size:13px;font-weight:500;color:var(--purple-600);flex:1"></span>
+            <button onclick="clearSelected()" style="background:none;border:none;cursor:pointer;color:var(--text-muted)"><i class="ti ti-x" style="font-size:14px" aria-hidden="true"></i></button>
+          </div>
+          <textarea class="composer-textarea" id="scrap-write-text" placeholder="Seu recado…" style="min-height:80px"></textarea>
+          <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="sendScrap()">
+            <i class="ti ti-send" aria-hidden="true"></i> Enviar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recebidos -->
+    <div style="margin-bottom:.75rem">
+      <div style="display:flex;gap:.4rem;margin-bottom:.75rem">
+        <button class="tab-toggle active" id="tab-recv" onclick="switchTab('received')">Recebidos</button>
+        <button class="tab-toggle" id="tab-sent" onclick="switchTab('sent')">Enviados</button>
+      </div>
+    </div>
+
+    <div id="scraps-container">
+      <div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<style>
+.tab-toggle {
+  padding: .35rem .9rem; border: 0.5px solid var(--border-md);
+  border-radius: var(--radius-full); background: none;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  color: var(--text-secondary); font-family: var(--font-sans);
+  transition: all var(--transition);
+}
+.tab-toggle.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+.friend-result-item {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .45rem .65rem; border-radius: var(--radius-md);
+  cursor: pointer; transition: background var(--transition);
+}
+.friend-result-item:hover { background: var(--gray-50); }
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let selectedFriend = null;
+let currentTab = 'received';
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'scraps');
+  loadScraps('received');
+});
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-recv').classList.toggle('active', tab === 'received');
+  document.getElementById('tab-sent').classList.toggle('active', tab === 'sent');
+  loadScraps(tab);
+}
+
+async function loadScraps(type) {
+  const el = document.getElementById('scraps-container');
+  el.innerHTML = '<div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div>';
+
+  const field = type === 'received' ? 'toUid' : 'fromUid';
+  const snap = await db.collection('scraps')
+    .where(field, '==', currentUser.uid)
+    .orderBy('createdAt', 'desc')
+    .limit(50).get();
+
+  if (snap.empty) {
+    el.innerHTML = `<div class="empty-state card"><i class="ti ti-messages" aria-hidden="true"></i><p>Nenhum recado ${type==='received'?'recebido':'enviado'} ainda.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = snap.docs.map(doc => {
+    const s = doc.data();
+    const isSent = type === 'sent';
+    const authorUid   = isSent ? currentUser.uid : s.fromUid;
+    const authorName  = isSent ? currentUser.displayName : s.fromName;
+    const authorPhoto = isSent ? currentUser.photoURL : s.fromPhoto;
+    const toUid  = s.toUid;
+    const toName = s.toName || 'Usuário';
+
+    const cl = getAvatarColor(authorUid);
+    const av = authorPhoto
+      ? `<img src="${authorPhoto}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(authorName)}</span>`;
+
+    return `
+    <div class="scrap-full">
+      <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer;flex-shrink:0"
+           onclick="location.href='perfil.html?uid=${authorUid}'">${av}</div>
+      <div class="scrap-full-content">
+        <div class="scrap-full-header">
+          <span class="scrap-full-author" onclick="location.href='perfil.html?uid=${authorUid}'">${sanitize(authorName||'Usuário')}</span>
+          ${isSent ? `<span class="scrap-full-arrow">→</span><span class="scrap-full-to" onclick="location.href='perfil.html?uid=${toUid}'">${sanitize(toName)}</span>` : ''}
+        </div>
+        <div class="scrap-full-text">${sanitize(s.text).replace(/\n/g,'<br>')}</div>
+        <div class="scrap-full-time">${timeAgo(s.createdAt)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Search friends ────────────────────────────────────────────
+let searchTimeout;
+async function searchFriends(q) {
+  clearTimeout(searchTimeout);
+  const el = document.getElementById('friend-results');
+  if (!q.trim()) { el.style.display = 'none'; return; }
+  searchTimeout = setTimeout(async () => {
+    const snap = await db.collection('users')
+      .orderBy('displayName')
+      .startAt(q).endAt(q + '\uf8ff')
+      .limit(5).get();
+
+    if (snap.empty) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = `<div style="border:0.5px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--surface)">
+      ${snap.docs.filter(d => d.id !== currentUser.uid).map(d => {
+        const u = { uid: d.id, ...d.data() };
+        const cl = getAvatarColor(u.uid);
+        const av = u.photoURL
+          ? `<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+          : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+        return `<div class="friend-result-item" onclick="selectFriend('${u.uid}','${sanitize(u.displayName||'')}')">
+          <div class="avatar avatar-32" style="background:${cl.bg}">${av}</div>
+          <span style="font-size:13px">${sanitize(u.displayName||'Usuário')}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }, 300);
+}
+
+function selectFriend(uid, name) {
+  selectedFriend = { uid, name };
+  document.getElementById('friend-results').style.display = 'none';
+  document.getElementById('scrap-to-search').value = '';
+  document.getElementById('selected-friend').style.display = 'flex';
+  document.getElementById('selected-name').textContent = name;
+}
+
+function clearSelected() {
+  selectedFriend = null;
+  document.getElementById('selected-friend').style.display = 'none';
+}
+
+async function sendScrap() {
+  const text = document.getElementById('scrap-write-text').value.trim();
+  if (!selectedFriend) return showToast('Selecione um amigo.');
+  if (!text) return showToast('Escreva algo no recado.');
+
+  await db.collection('scraps').add({
+    toUid:    selectedFriend.uid,
+    toName:   selectedFriend.name,
+    fromUid:  currentUser.uid,
+    fromName: currentUser.displayName,
+    fromPhoto: currentUser.photoURL || null,
+    text,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  document.getElementById('scrap-write-text').value = '';
+  clearSelected();
+  showToast('Recado enviado!');
+  if (currentTab === 'sent') loadScraps('sent');
+}
+</script>
+</body>
+</html>

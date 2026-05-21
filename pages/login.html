@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Entrar</title>
+  <meta name="description" content="Entre na sua conta Nexus e conecte-se com quem você gosta.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+  .tab-toggle {
+    flex:1; height:34px; border:none; background:none;
+    border-radius:calc(var(--radius-md) - 1px);
+    font-size:13px; font-weight:500; cursor:pointer;
+    color:var(--text-secondary); font-family:var(--font-sans);
+    transition: all var(--transition);
+  }
+  .tab-toggle.active {
+    background:var(--surface); color:var(--purple-600);
+    box-shadow:var(--shadow-sm);
+  }
+
+  /* Step indicator */
+  .step-indicator {
+    display: flex; align-items: center; justify-content: center;
+    gap: .5rem; margin-bottom: 1.25rem;
+  }
+  .step-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gray-200); transition: all .3s ease;
+  }
+  .step-dot.active { background: var(--purple-600); width: 24px; border-radius: 4px; }
+  .step-dot.done  { background: var(--purple-400); }
+
+  .step-title {
+    font-size: 13px; font-weight: 600; color: var(--text-secondary);
+    text-align: center; margin-bottom: 1rem; text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  /* Gender select */
+  .gender-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; }
+  .gender-btn {
+    padding: .6rem .5rem; border: 1.5px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface); font-size: 12px; font-weight: 500;
+    color: var(--text-secondary); cursor: pointer; text-align: center;
+    transition: all var(--transition); font-family: var(--font-sans);
+  }
+  .gender-btn:hover { border-color: var(--purple-400); color: var(--purple-600); }
+  .gender-btn.selected { border-color: var(--purple-600); background: #EEEDFE; color: var(--purple-600); }
+
+  /* Password strength */
+  .pass-strength { height: 4px; border-radius: 2px; margin-top: .35rem; transition: all .3s; }
+  .pass-hint { font-size: 11px; color: var(--text-muted); margin-top: .25rem; }
+
+  /* Input with icon */
+  .input-icon-wrap { position: relative; }
+  .input-icon-wrap .form-input { padding-left: 2.4rem; }
+  .input-icon-wrap .input-icon {
+    position: absolute; left: .75rem; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); font-size: 15px; pointer-events: none;
+  }
+  .input-icon-wrap .input-suffix {
+    position: absolute; right: .75rem; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); font-size: 13px; cursor: pointer;
+  }
+
+  /* Inline fields */
+  .fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+
+  /* Navigation buttons */
+  .step-nav { display: flex; gap: .65rem; }
+  .step-nav .btn-back {
+    flex: 0 0 42px; height: 42px; border-radius: var(--radius-md);
+    border: 1.5px solid var(--border); background: var(--surface);
+    color: var(--text-secondary); cursor: pointer; display: flex;
+    align-items: center; justify-content: center; font-size: 16px;
+    transition: all var(--transition);
+  }
+  .step-nav .btn-back:hover { border-color: var(--purple-400); color: var(--purple-600); }
+
+  /* Terms */
+  .terms-check { display: flex; align-items: flex-start; gap: .5rem; font-size: 12px; color: var(--text-muted); }
+  .terms-check input[type=checkbox] { margin-top: 2px; accent-color: var(--purple-600); flex-shrink: 0; }
+  .terms-check a { color: var(--purple-600); text-decoration: none; }
+
+  /* Auth card wider for signup */
+  .auth-card.wide { max-width: 440px; }
+  </style>
+</head>
+<body>
+
+<div class="auth-page">
+  <div class="auth-card" id="auth-card">
+    <div>
+      <div class="auth-logo">nexus</div>
+      <p class="auth-subtitle">Conecte-se com quem você gosta</p>
+    </div>
+
+    <div id="auth-error" class="auth-error"></div>
+
+    <!-- Abas -->
+    <div style="display:flex;background:var(--gray-100);border-radius:var(--radius-md);padding:3px;gap:3px">
+      <button class="tab-toggle active" id="tab-login" onclick="switchTab('login')">Entrar</button>
+      <button class="tab-toggle" id="tab-signup" onclick="switchTab('signup')">Cadastrar</button>
+    </div>
+
+    <!-- ═══════════════ LOGIN ═══════════════ -->
+    <div id="form-login">
+      <div style="display:flex;flex-direction:column;gap:.85rem">
+        <div class="form-group">
+          <label class="form-label">E-mail</label>
+          <div class="input-icon-wrap">
+            <i class="ti ti-mail input-icon"></i>
+            <input class="form-input" type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Senha</label>
+          <div class="input-icon-wrap">
+            <i class="ti ti-lock input-icon"></i>
+            <input class="form-input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+            <span class="input-suffix" onclick="togglePass('login-password', this)"><i class="ti ti-eye"></i></span>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px;border-radius:var(--radius-md)" onclick="loginEmail()">
+          <i class="ti ti-login"></i> Entrar
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════ CADASTRO (2 etapas) ═══════════════ -->
+    <div id="form-signup" style="display:none">
+
+      <!-- Indicador de etapas -->
+      <div class="step-indicator">
+        <div class="step-dot active" id="dot-1"></div>
+        <div class="step-dot" id="dot-2"></div>
+      </div>
+
+      <!-- ETAPA 1: Conta -->
+      <div id="signup-step-1">
+        <div class="step-title"><i class="ti ti-user-circle"></i> Dados da conta</div>
+        <div style="display:flex;flex-direction:column;gap:.75rem">
+
+          <div class="fields-row">
+            <div class="form-group">
+              <label class="form-label">Nome</label>
+              <input class="form-input" type="text" id="signup-firstname" placeholder="Rafael" autocomplete="given-name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sobrenome</label>
+              <input class="form-input" type="text" id="signup-lastname" placeholder="Molinari" autocomplete="family-name">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <div class="input-icon-wrap">
+              <i class="ti ti-mail input-icon"></i>
+              <input class="form-input" type="email" id="signup-email" placeholder="seu@email.com" autocomplete="email">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Senha</label>
+            <div class="input-icon-wrap">
+              <i class="ti ti-lock input-icon"></i>
+              <input class="form-input" type="password" id="signup-password"
+                     placeholder="Mínimo 6 caracteres" autocomplete="new-password"
+                     oninput="checkPassStrength(this.value)">
+              <span class="input-suffix" onclick="togglePass('signup-password', this)"><i class="ti ti-eye"></i></span>
+            </div>
+            <div class="pass-strength" id="pass-bar" style="background:var(--gray-200);width:0"></div>
+            <div class="pass-hint" id="pass-hint"></div>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px;border-radius:var(--radius-md)" onclick="goStep2()">
+            Continuar <i class="ti ti-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- ETAPA 2: Perfil -->
+      <div id="signup-step-2" style="display:none">
+        <div class="step-title"><i class="ti ti-id-badge"></i> Sobre você</div>
+        <div style="display:flex;flex-direction:column;gap:.75rem">
+
+          <div class="form-group">
+            <label class="form-label">Nome de usuário</label>
+            <div class="input-icon-wrap">
+              <i class="ti ti-at input-icon"></i>
+              <input class="form-input" type="text" id="signup-username"
+                     placeholder="rafamolinari" autocomplete="username"
+                     oninput="this.value=this.value.replace(/[^a-z0-9_.]/gi,'').toLowerCase()">
+            </div>
+            <div class="pass-hint">Apenas letras, números, _ e . Sem espaços.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Data de nascimento</label>
+            <div class="input-icon-wrap">
+              <i class="ti ti-calendar input-icon"></i>
+              <input class="form-input" type="date" id="signup-birthdate" max="">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Gênero</label>
+            <div class="gender-grid">
+              <button type="button" class="gender-btn" id="g-masculino" onclick="selectGender('Masculino')">
+                <i class="ti ti-gender-male"></i><br>Masculino
+              </button>
+              <button type="button" class="gender-btn" id="g-feminino" onclick="selectGender('Feminino')">
+                <i class="ti ti-gender-female"></i><br>Feminino
+              </button>
+              <button type="button" class="gender-btn" id="g-outro" onclick="selectGender('Outro')">
+                <i class="ti ti-gender-androgyne"></i><br>Outro
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Cidade <span style="color:var(--text-muted);font-weight:400">(opcional)</span></label>
+            <div class="input-icon-wrap">
+              <i class="ti ti-map-pin input-icon"></i>
+              <input class="form-input" type="text" id="signup-city" placeholder="Ex: São Paulo, SP">
+            </div>
+          </div>
+
+          <div class="terms-check">
+            <input type="checkbox" id="signup-terms">
+            <label for="signup-terms">
+              Li e aceito os <a href="#">Termos de Uso</a> e a <a href="#">Política de Privacidade</a> do Nexus.
+            </label>
+          </div>
+
+          <div class="step-nav">
+            <button type="button" class="btn-back" onclick="goStep1()" title="Voltar">
+              <i class="ti ti-arrow-left"></i>
+            </button>
+            <button class="btn btn-primary" style="flex:1;justify-content:center;height:42px;border-radius:var(--radius-md)" onclick="signupEmail()">
+              <i class="ti ti-user-plus"></i> Criar conta
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider">ou</div>
+
+    <button class="btn-google" onclick="loginGoogle()">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      Continuar com Google
+    </button>
+  </div>
+</div>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+  redirectIfLoggedIn();
+
+  // Set max date (must be 13+)
+  const maxDate = new Date();
+  maxDate.setFullYear(maxDate.getFullYear() - 13);
+  document.getElementById('signup-birthdate').max = maxDate.toISOString().split('T')[0];
+
+  let selectedGender = '';
+
+  function switchTab(tab) {
+    document.getElementById('form-login').style.display  = tab==='login'  ? '' : 'none';
+    document.getElementById('form-signup').style.display = tab==='signup' ? '' : 'none';
+    document.getElementById('tab-login').classList.toggle('active', tab==='login');
+    document.getElementById('tab-signup').classList.toggle('active', tab==='signup');
+    clearError();
+    if (tab === 'signup') {
+      document.getElementById('auth-card').classList.add('wide');
+      goStep1();
+    } else {
+      document.getElementById('auth-card').classList.remove('wide');
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('auth-error');
+    el.textContent = msg; el.style.display = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function clearError() {
+    document.getElementById('auth-error').style.display = 'none';
+  }
+
+  function togglePass(id, btn) {
+    const inp = document.getElementById(id);
+    const isText = inp.type === 'text';
+    inp.type = isText ? 'password' : 'text';
+    btn.innerHTML = isText ? '<i class="ti ti-eye"></i>' : '<i class="ti ti-eye-off"></i>';
+  }
+
+  function checkPassStrength(val) {
+    const bar = document.getElementById('pass-bar');
+    const hint = document.getElementById('pass-hint');
+    if (!val) { bar.style.width='0'; bar.style.background='var(--gray-200)'; hint.textContent=''; return; }
+    let score = 0;
+    if (val.length >= 6) score++;
+    if (val.length >= 10) score++;
+    if (/[A-Z]/.test(val)) score++;
+    if (/[0-9]/.test(val)) score++;
+    if (/[^A-Za-z0-9]/.test(val)) score++;
+    const levels = [
+      { pct:'20%', color:'#EF4444', label:'Muito fraca' },
+      { pct:'40%', color:'#F97316', label:'Fraca' },
+      { pct:'60%', color:'#EAB308', label:'Razoável' },
+      { pct:'80%', color:'#22C55E', label:'Boa' },
+      { pct:'100%',color:'#16A34A', label:'Excelente' },
+    ];
+    const l = levels[Math.min(score, 4)];
+    bar.style.width = l.pct;
+    bar.style.background = l.color;
+    hint.textContent = `Força: ${l.label}`;
+    hint.style.color = l.color;
+  }
+
+  function selectGender(g) {
+    selectedGender = g;
+    document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
+    const map = { 'Masculino':'g-masculino', 'Feminino':'g-feminino', 'Outro':'g-outro' };
+    document.getElementById(map[g]).classList.add('selected');
+  }
+
+  function goStep1() {
+    document.getElementById('signup-step-1').style.display = '';
+    document.getElementById('signup-step-2').style.display = 'none';
+    document.getElementById('dot-1').className = 'step-dot active';
+    document.getElementById('dot-2').className = 'step-dot';
+    clearError();
+  }
+
+  function goStep2() {
+    clearError();
+    const first = document.getElementById('signup-firstname').value.trim();
+    const last  = document.getElementById('signup-lastname').value.trim();
+    const email = document.getElementById('signup-email').value.trim();
+    const pass  = document.getElementById('signup-password').value;
+    if (!first || !last) return showError('Informe seu nome e sobrenome.');
+    if (!email) return showError('Informe um e-mail válido.');
+    if (pass.length < 6) return showError('A senha deve ter pelo menos 6 caracteres.');
+    document.getElementById('signup-step-1').style.display = 'none';
+    document.getElementById('signup-step-2').style.display = '';
+    document.getElementById('dot-1').className = 'step-dot done';
+    document.getElementById('dot-2').className = 'step-dot active';
+  }
+
+  async function handleAuthSuccess(user, extraData = {}) {
+    await updateUserData(user.uid, {
+      uid: user.uid,
+      displayName: user.displayName || '',
+      photoURL: user.photoURL || '',
+      email: user.email,
+      ...extraData,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    window.location.href = '/index.html';
+  }
+
+  async function loginEmail() {
+    clearError();
+    const email = document.getElementById('login-email').value.trim();
+    const pass  = document.getElementById('login-password').value;
+    if (!email || !pass) return showError('Preencha e-mail e senha.');
+    try {
+      const { user } = await auth.signInWithEmailAndPassword(email, pass);
+      await handleAuthSuccess(user);
+    } catch(e) {
+      showError(
+        e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential'
+          ? 'E-mail ou senha incorretos.'
+          : 'Erro ao entrar. Tente novamente.'
+      );
+    }
+  }
+
+  async function signupEmail() {
+    clearError();
+    const first    = document.getElementById('signup-firstname').value.trim();
+    const last     = document.getElementById('signup-lastname').value.trim();
+    const email    = document.getElementById('signup-email').value.trim();
+    const pass     = document.getElementById('signup-password').value;
+    const username = document.getElementById('signup-username').value.trim().toLowerCase();
+    const birth    = document.getElementById('signup-birthdate').value;
+    const city     = document.getElementById('signup-city').value.trim();
+    const terms    = document.getElementById('signup-terms').checked;
+
+    if (!username) return showError('Escolha um nome de usuário.');
+    if (username.length < 3) return showError('O nome de usuário deve ter pelo menos 3 caracteres.');
+    if (!birth) return showError('Informe sua data de nascimento.');
+    if (!selectedGender) return showError('Selecione seu gênero.');
+    if (!terms) return showError('Você precisa aceitar os termos para continuar.');
+
+    const displayName = `${first} ${last}`;
+    const btn = document.querySelector('#signup-step-2 .btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Criando conta…';
+
+    try {
+      // Verificar se username já existe
+      const usernameSnap = await db.collection('users').where('username', '==', username).get();
+      if (!usernameSnap.empty) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
+        return showError('Este nome de usuário já está em uso. Escolha outro.');
+      }
+
+      const { user } = await auth.createUserWithEmailAndPassword(email, pass);
+      await user.updateProfile({ displayName });
+      await handleAuthSuccess(user, {
+        displayName,
+        username,
+        birthdate: birth,
+        gender: selectedGender,
+        city,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch(e) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
+      showError(
+        e.code === 'auth/email-already-in-use'
+          ? 'Este e-mail já está cadastrado. Tente entrar.'
+          : e.code === 'auth/invalid-email'
+            ? 'E-mail inválido.'
+            : 'Erro ao criar conta. Tente novamente.'
+      );
+    }
+  }
+
+  async function loginGoogle() {
+    clearError();
+    try {
+      const { user } = await auth.signInWithPopup(googleProvider);
+      await handleAuthSuccess(user);
+    } catch(e) {
+      if (e.code !== 'auth/popup-closed-by-user') showError('Erro ao entrar com Google.');
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const loginVisible = document.getElementById('form-login').style.display !== 'none';
+      if (loginVisible) { loginEmail(); return; }
+      const step1 = document.getElementById('signup-step-1');
+      if (step1.style.display !== 'none') { goStep2(); } else { signupEmail(); }
+    }
+  });
+</script>
+</body>
+</html>

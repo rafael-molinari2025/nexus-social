@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Busca</title>
+  <meta name="description" content="Busque pessoas e comunidades no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    .busca-page { max-width: 720px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .search-hero {
+      display: flex; align-items: center; gap: .75rem;
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-xl); padding: .875rem 1.25rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .search-hero input {
+      flex: 1; border: none; background: none; outline: none;
+      font-size: 16px; font-family: var(--font-sans);
+      color: var(--text-primary);
+    }
+    .search-hero input::placeholder { color: var(--text-muted); }
+    .search-hero i { font-size: 22px; color: var(--purple-400); flex-shrink: 0; }
+    .search-tabs {
+      display: flex; gap: .4rem; margin-bottom: 1.25rem;
+    }
+    .search-tab {
+      padding: .4rem 1rem; border: 0.5px solid var(--border-md);
+      border-radius: var(--radius-full); background: none;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); font-family: var(--font-sans);
+      transition: all var(--transition);
+    }
+    .search-tab.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+    .result-count { font-size: 13px; color: var(--text-muted); margin-bottom: .75rem; }
+    .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .75rem; }
+    .person-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1.25rem 1rem;
+      display: flex; flex-direction: column; align-items: center; gap: .5rem;
+      text-align: center; transition: box-shadow var(--transition);
+    }
+    .person-card:hover { box-shadow: var(--shadow-md); }
+    .person-name { font-size: 14px; font-weight: 600; }
+    .person-bio { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+    .person-city { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: .2rem; }
+    .comm-list { display: flex; flex-direction: column; gap: .65rem; }
+    .comm-row {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem 1.1rem;
+      display: flex; align-items: center; gap: .85rem;
+      cursor: pointer; transition: box-shadow var(--transition);
+    }
+    .comm-row:hover { box-shadow: var(--shadow-sm); }
+    .comm-row-icon {
+      width: 52px; height: 52px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+    }
+    .comm-row-info { flex: 1; min-width: 0; }
+    .comm-row-name { font-size: 15px; font-weight: 600; }
+    .comm-row-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .comm-row-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px;
+      display: flex; align-items: center; gap: .4rem; }
+    .empty-search {
+      text-align: center; padding: 3rem 1rem;
+    }
+    .empty-search-icon { font-size: 48px; color: var(--gray-200); margin-bottom: .75rem; }
+    .empty-search-title { font-size: 16px; font-weight: 600; margin-bottom: .25rem; }
+    .empty-search-sub { font-size: 13px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="busca-page">
+
+    <!-- Barra de busca principal -->
+    <div class="search-hero">
+      <i class="ti ti-search" aria-hidden="true"></i>
+      <input type="text" id="main-search" placeholder="Buscar pessoas, comunidades..." autocomplete="off">
+      <button class="btn btn-primary btn-sm" onclick="doSearch()" id="search-btn">
+        Buscar
+      </button>
+    </div>
+
+    <!-- Abas de filtro -->
+    <div class="search-tabs">
+      <button class="search-tab active" id="tab-people" onclick="switchTab('people')">
+        <i class="ti ti-users" aria-hidden="true"></i> Pessoas
+      </button>
+      <button class="search-tab" id="tab-communities" onclick="switchTab('communities')">
+        <i class="ti ti-users-group" aria-hidden="true"></i> Comunidades
+      </button>
+    </div>
+
+    <!-- Resultados -->
+    <div id="search-results">
+      <div class="empty-search">
+        <div class="empty-search-icon"><i class="ti ti-search" aria-hidden="true"></i></div>
+        <div class="empty-search-title">Encontre pessoas e comunidades</div>
+        <div class="empty-search-sub">Digite algo na barra acima para começar</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let currentTab = 'people';
+let currentQuery = '';
+let myFriendIds = new Set();
+let pendingRequests = new Set();
+
+const CATEGORY_COLORS = {
+  tecnologia: {bg:'#EEEDFE',c:'#534AB7',icon:'ti-code'},
+  musica:     {bg:'#FAEEDA',c:'#854F0B',icon:'ti-music'},
+  arte:       {bg:'#FBEAF0',c:'#993556',icon:'ti-palette'},
+  esportes:   {bg:'#E1F5EE',c:'#0F6E56',icon:'ti-ball-football'},
+  jogos:      {bg:'#FAECE7',c:'#993C1D',icon:'ti-device-gamepad'},
+  livros:     {bg:'#E6F1FB',c:'#185FA5',icon:'ti-book'},
+  outros:     {bg:'#F1EFE8',c:'#5F5E5A',icon:'ti-users-group'}
+};
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, '');
+
+  // Pré-carregar amigos e solicitações pendentes
+  const [fSnap, rSnap] = await Promise.all([
+    db.collection('friendships').where('users', 'array-contains', user.uid).get(),
+    db.collection('friend_requests').where('from', '==', user.uid).where('status', '==', 'pending').get()
+  ]);
+  fSnap.docs.forEach(d => d.data().users.forEach(u => myFriendIds.add(u)));
+  rSnap.docs.forEach(d => pendingRequests.add(d.data().to));
+
+  // Pegar query da URL
+  const params = new URLSearchParams(location.search);
+  const q = params.get('q') || '';
+  if (q) {
+    document.getElementById('main-search').value = q;
+    currentQuery = q;
+    doSearch();
+  }
+
+  // Busca ao pressionar Enter
+  document.getElementById('main-search').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+});
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-people').classList.toggle('active', tab === 'people');
+  document.getElementById('tab-communities').classList.toggle('active', tab === 'communities');
+  if (currentQuery) doSearch();
+}
+
+async function doSearch() {
+  const q = document.getElementById('main-search').value.trim();
+  if (!q) return;
+  currentQuery = q;
+
+  history.replaceState(null, '', `busca.html?q=${encodeURIComponent(q)}`);
+  document.title = `Nexus — Busca: ${q}`;
+
+  const el = document.getElementById('search-results');
+  el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+
+  if (currentTab === 'people') {
+    await searchPeople(q, el);
+  } else {
+    await searchCommunities(q, el);
+  }
+}
+
+async function searchPeople(q, el) {
+  try {
+    // Busca case-insensitive: tentar tanto o original quanto lowercase/uppercase
+    const qLower = q.toLowerCase();
+    const qCapitalized = q.charAt(0).toUpperCase() + q.slice(1).toLowerCase();
+
+    // Buscamos por displayName e por displayNameLower se disponível
+    const [snap1, snap2] = await Promise.all([
+      db.collection('users')
+        .orderBy('displayName')
+        .startAt(qCapitalized)
+        .endAt(qCapitalized + '\uf8ff')
+        .limit(15).get(),
+      db.collection('users')
+        .orderBy('displayName')
+        .startAt(q)
+        .endAt(q + '\uf8ff')
+        .limit(15).get()
+    ]);
+
+    // Mesclar resultados (deduplicate por uid)
+    const seen = new Set();
+    const allDocs = [...snap1.docs, ...snap2.docs].filter(d => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return d.id !== currentUser.uid;
+    });
+
+    const results = allDocs.map(d => ({ uid: d.id, ...d.data() }));
+
+    if (!results.length) {
+      el.innerHTML = `<div class="empty-search">
+        <div class="empty-search-icon"><i class="ti ti-user-off" aria-hidden="true"></i></div>
+        <div class="empty-search-title">Nenhuma pessoa encontrada</div>
+        <div class="empty-search-sub">Tente outro nome ou verifique a ortografia</div>
+      </div>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="result-count">${results.length} pessoa${results.length !== 1 ? 's' : ''} encontrada${results.length !== 1 ? 's' : ''}</div>
+      <div class="people-grid">${results.map(u => personCardHTML(u)).join('')}</div>
+    `;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-search"><div class="empty-search-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-search-title">Erro na busca</div><div class="empty-search-sub">Tente novamente</div></div>`;
+  }
+}
+
+function personCardHTML(u) {
+  const cl = getAvatarColor(u.uid);
+  const av = u.photoURL
+    ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+
+  const isFriend = myFriendIds.has(u.uid);
+  const isPending = pendingRequests.has(u.uid);
+
+  let actionBtn = '';
+  if (isFriend) {
+    actionBtn = `<button class="btn btn-sm" disabled><i class="ti ti-check" aria-hidden="true"></i> Amigos</button>`;
+  } else if (isPending) {
+    actionBtn = `<button class="btn btn-sm" disabled>Solicitação enviada</button>`;
+  } else {
+    actionBtn = `<button class="btn btn-primary btn-sm" id="add-${u.uid}" onclick="sendRequest('${u.uid}')">
+      <i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar
+    </button>`;
+  }
+
+  return `<div class="person-card">
+    <div class="avatar avatar-72" style="background:${cl.bg};cursor:pointer" onclick="location.href='perfil.html?uid=${u.uid}'">${av}</div>
+    <div class="person-name" style="cursor:pointer" onclick="location.href='perfil.html?uid=${u.uid}'">${sanitize(u.displayName||'Usuário')}</div>
+    ${u.username ? `<div class="person-city">@${sanitize(u.username)}</div>` : ''}
+    ${u.bio ? `<div class="person-bio">${sanitize(u.bio)}</div>` : ''}
+    ${u.city ? `<div class="person-city"><i class="ti ti-map-pin" style="font-size:11px" aria-hidden="true"></i>${sanitize(u.city)}</div>` : ''}
+    ${actionBtn}
+  </div>`;
+}
+
+async function sendRequest(targetUid) {
+  const btn = document.getElementById(`add-${targetUid}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    // Verificar duplicata
+    const existing = await db.collection('friend_requests')
+      .where('from', '==', currentUser.uid)
+      .where('to', '==', targetUid)
+      .where('status', '==', 'pending').get();
+    if (!existing.empty) { if (btn) btn.innerHTML = '<i class="ti ti-check"></i> Enviado'; return; }
+
+    await db.collection('friend_requests').add({
+      from: currentUser.uid,
+      to: targetUid,
+      status: 'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    pendingRequests.add(targetUid);
+    if (btn) { btn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i> Enviado'; }
+    showToast('Solicitação enviada!');
+
+    // Notificar
+    createNotification(targetUid, 'friend_request', {
+      message: `${currentUser.displayName} enviou uma solicitação de amizade.`,
+      link: 'amigos.html',
+      fromUid: currentUser.uid,
+      fromName: currentUser.displayName
+    });
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar'; }
+    showToast('Erro ao enviar solicitação.');
+  }
+}
+
+async function searchCommunities(q, el) {
+  try {
+    const qCapitalized = q.charAt(0).toUpperCase() + q.slice(1).toLowerCase();
+    const [snap1, snap2] = await Promise.all([
+      db.collection('communities').orderBy('name').startAt(qCapitalized).endAt(qCapitalized + '\uf8ff').limit(15).get(),
+      db.collection('communities').orderBy('name').startAt(q).endAt(q + '\uf8ff').limit(15).get()
+    ]);
+
+    const seen = new Set();
+    const allDocs = [...snap1.docs, ...snap2.docs].filter(d => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id); return true;
+    });
+
+    if (!allDocs.length) {
+      el.innerHTML = `<div class="empty-search">
+        <div class="empty-search-icon"><i class="ti ti-users-group" aria-hidden="true"></i></div>
+        <div class="empty-search-title">Nenhuma comunidade encontrada</div>
+        <div class="empty-search-sub">Tente outro nome ou <a href="comunidades.html" style="color:var(--purple-600)">crie uma nova</a></div>
+      </div>`;
+      return;
+    }
+
+    const memberSnap = await db.collection('community_members').where('uid','==',currentUser.uid).get();
+    const myCommunities = new Set(memberSnap.docs.map(d => d.data().communityId));
+
+    el.innerHTML = `
+      <div class="result-count">${allDocs.length} comunidade${allDocs.length !== 1 ? 's' : ''} encontrada${allDocs.length !== 1 ? 's' : ''}</div>
+      <div class="comm-list">${allDocs.map(doc => {
+        const d = doc.data();
+        const cl = CATEGORY_COLORS[d.category] || CATEGORY_COLORS.outros;
+        const isMember = myCommunities.has(doc.id);
+        return `<div class="comm-row" onclick="location.href='comunidade.html?id=${doc.id}'">
+          <div class="comm-row-icon" style="background:${cl.bg}">
+            <i class="ti ${cl.icon}" style="color:${cl.c}" aria-hidden="true"></i>
+          </div>
+          <div class="comm-row-info">
+            <div class="comm-row-name">${sanitize(d.name)}</div>
+            <div class="comm-row-desc">${sanitize(d.description||'Sem descrição')}</div>
+            <div class="comm-row-meta">
+              <i class="ti ti-users" style="font-size:11px" aria-hidden="true"></i> ${d.membersCount||0} membros
+              <span style="background:${cl.bg};color:${cl.c};padding:1px 7px;border-radius:var(--radius-full);font-weight:500">${d.category||'outros'}</span>
+            </div>
+          </div>
+          <div style="flex-shrink:0">
+            ${isMember
+              ? `<span class="btn btn-sm" style="pointer-events:none"><i class="ti ti-check" aria-hidden="true"></i> Membro</span>`
+              : `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();joinCommunity('${doc.id}', this)"><i class="ti ti-plus" aria-hidden="true"></i> Entrar</button>`
+            }
+          </div>
+        </div>`;
+      }).join('')}
+      </div>
+    `;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-search"><div class="empty-search-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-search-title">Erro na busca</div></div>`;
+  }
+}
+
+async function joinCommunity(commId, btn) {
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  try {
+    await db.collection('community_members').add({
+      communityId: commId,
+      uid: currentUser.uid,
+      role: 'member',
+      joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await db.collection('communities').doc(commId).update({
+      membersCount: firebase.firestore.FieldValue.increment(1)
+    });
+    btn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i> Membro';
+    showToast('Você entrou na comunidade!');
+  } catch(e) {
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-plus" aria-hidden="true"></i> Entrar';
+    showToast('Erro ao entrar na comunidade.');
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# === Dependências ===
+node_modules/
+.npm
+
+# === Firebase ===
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebaserc.bak
+
+# === Sistema ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Arquivos temporários/desnecessários ===
+files.zip
+*.zip
+*.tar.gz
+
+# === Logs ===
+*.log
+npm-debug.log*

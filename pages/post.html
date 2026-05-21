@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Post</title>
+  <meta name="description" content="Veja um post e seus comentários no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    .post-page { max-width: 640px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .back-btn { display: inline-flex; align-items: center; gap: .4rem; font-size: 13px; color: var(--text-muted); margin-bottom: 1rem; cursor: pointer; }
+    .back-btn:hover { color: var(--purple-600); }
+    .comment-composer { display: flex; gap: .65rem; padding: .875rem 1rem; border-top: 0.5px solid var(--border); }
+    .comment-input {
+      flex: 1; border: 0.5px solid var(--border-md); border-radius: var(--radius-full);
+      padding: .5rem 1rem; font-size: 13px; background: var(--gray-50);
+      color: var(--text-primary); outline: none; font-family: var(--font-sans);
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .comment-input:focus { border-color: var(--purple-400); box-shadow: 0 0 0 3px rgba(83,74,183,0.10); background: var(--surface); }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="post-page">
+    <div class="back-btn" onclick="history.back()">
+      <i class="ti ti-arrow-left" aria-hidden="true"></i> Voltar
+    </div>
+    <div id="post-container" class="card">
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const postId = params.get('id');
+let currentUser = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'feed');
+  if (!postId) { showError('Post não encontrado.'); return; }
+  loadPost();
+});
+
+function loadPost() {
+  db.collection('posts').doc(postId).onSnapshot(async snap => {
+    if (!snap.exists) { showError('Post não encontrado.'); return; }
+    const p = snap.data();
+    const cl = getAvatarColor(p.authorId);
+    const av = p.authorPhoto
+      ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : getInitials(p.authorName);
+    const liked = p.likes && p.likes.includes(currentUser.uid);
+
+    document.title = `Nexus — Post de ${p.authorName}`;
+
+    const container = document.getElementById('post-container');
+    container.innerHTML = `
+      <div class="post-header">
+        <div class="avatar avatar-48" style="background:${cl.bg};color:${cl.color};cursor:pointer"
+             onclick="location.href='perfil.html?uid=${p.authorId}'">${av}</div>
+        <div class="post-meta">
+          <div class="post-author">${sanitize(p.authorName||'Usuário')}</div>
+          <div class="post-time">${timeAgo(p.createdAt)}</div>
+        </div>
+        ${p.authorId === currentUser.uid ? `<button class="btn btn-icon" onclick="deletePost()" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
+      </div>
+      <div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>')}</div>
+      <div class="post-actions" style="border-top:0.5px solid var(--border)">
+        <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike()">
+          <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length} curtidas
+        </button>
+        <button class="post-action-btn" onclick="sharePost()">
+          <i class="ti ti-share-3" aria-hidden="true"></i> compartilhar
+        </button>
+      </div>
+
+      <!-- Compositor de comentário -->
+      <div class="comment-composer">
+        <div class="avatar avatar-32" id="comment-av" style="flex-shrink:0"></div>
+        <input class="comment-input" id="comment-input" placeholder="Escreva um comentário..." autocomplete="off">
+        <button class="btn btn-primary btn-sm" onclick="postComment()"><i class="ti ti-send" aria-hidden="true"></i></button>
+      </div>
+
+      <!-- Comentários -->
+      <div id="comments-list"></div>
+    `;
+
+    // Avatar do compositor
+    const cl2 = getAvatarColor(currentUser.uid);
+    const avEl = document.getElementById('comment-av');
+    // CORRIGIDO: incluir color no cssText
+    avEl.style.cssText = `background:${cl2.bg};color:${cl2.color};flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;`;
+    avEl.innerHTML = currentUser.photoURL
+      ? `<img src="${currentUser.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : getInitials(currentUser.displayName);
+
+    document.getElementById('comment-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') postComment();
+    });
+
+    loadComments();
+  }, () => showError('Erro ao carregar o post.'));
+}
+
+function loadComments() {
+  db.collection('posts').doc(postId).collection('comments')
+    .orderBy('createdAt', 'asc')
+    .onSnapshot(snap => {
+      const el = document.getElementById('comments-list');
+      if (!el) return;
+      if (snap.empty) {
+        el.innerHTML = `<div class="empty-state" style="padding:1.25rem"><i class="ti ti-messages" aria-hidden="true"></i><p>Nenhum comentário ainda. Seja o primeiro!</p></div>`;
+        return;
+      }
+      el.innerHTML = snap.docs.map(doc => {
+        const c = doc.data();
+        const cl = getAvatarColor(c.authorId);
+        const av = c.authorPhoto
+          ? `<img src="${c.authorPhoto}" alt="${c.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+          : `<span style="color:${cl.color}">${getInitials(c.authorName)}</span>`;
+        const canDelete = c.authorId === currentUser.uid;
+        return `<div class="comment">
+          <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer;flex-shrink:0"
+               onclick="location.href='perfil.html?uid=${c.authorId}'">${av}</div>
+          <div class="comment-body">
+            <div style="background:var(--gray-50);border-radius:var(--radius-md);padding:.5rem .75rem">
+              <div class="comment-author" style="cursor:pointer" onclick="location.href='perfil.html?uid=${c.authorId}'">${sanitize(c.authorName||'Usuário')}</div>
+              <div class="comment-text">${sanitize(c.text).replace(/\n/g,'<br>')}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.75rem;margin-top:3px">
+              <span class="comment-time">${timeAgo(c.createdAt)}</span>
+              ${canDelete ? `<button style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:0" onclick="deleteComment('${doc.id}')">Excluir</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    });
+}
+
+async function postComment() {
+  const input = document.getElementById('comment-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  try {
+    const batch = db.batch();
+    const commentRef = db.collection('posts').doc(postId).collection('comments').doc();
+    batch.set(commentRef, {
+      authorId: currentUser.uid,
+      authorName: currentUser.displayName,
+      authorPhoto: currentUser.photoURL || null,
+      text,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    batch.update(db.collection('posts').doc(postId), {
+      commentsCount: firebase.firestore.FieldValue.increment(1)
+    });
+    await batch.commit();
+  } catch(e) { showToast('Erro ao comentar.'); }
+}
+
+async function deleteComment(commentId) {
+  if (!confirm('Excluir este comentário?')) return;
+  const batch = db.batch();
+  batch.delete(db.collection('posts').doc(postId).collection('comments').doc(commentId));
+  batch.update(db.collection('posts').doc(postId), {
+    commentsCount: firebase.firestore.FieldValue.increment(-1)
+  });
+  await batch.commit();
+  showToast('Comentário excluído.');
+}
+
+async function toggleLike() {
+  const ref = db.collection('posts').doc(postId);
+  const snap = await ref.get();
+  const likes = snap.data().likes || [];
+  const alreadyLiked = likes.includes(currentUser.uid);
+  await ref.update({
+    likes: alreadyLiked
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+  // Notificar autor ao curtir (não ao descurtir, e não o próprio usuário)
+  if (!alreadyLiked && snap.data().authorId !== currentUser.uid) {
+    createNotification(snap.data().authorId, 'post_like', {
+      message: `${currentUser.displayName} curtiu seu post.`,
+      link: `post.html?id=${postId}`,
+      fromUid: currentUser.uid,
+      fromName: currentUser.displayName
+    });
+  }
+}
+
+async function deletePost() {
+  if (!confirm('Excluir este post?')) return;
+  await db.collection('posts').doc(postId).delete();
+  showToast('Post excluído.');
+  setTimeout(() => history.back(), 1200);
+}
+
+function sharePost() {
+  navigator.clipboard.writeText(location.href).then(() => showToast('Link copiado!'));
+}
+
+function showError(msg) {
+  document.getElementById('post-container').innerHTML = `
+    <div class="empty-state" style="padding:3rem 1rem">
+      <i class="ti ti-alert-triangle" style="font-size:40px;color:var(--coral-400)" aria-hidden="true"></i>
+      <p>${msg}</p>
+      <button class="btn" onclick="history.back()">Voltar</button>
+    </div>`;
+}
+</script>
+</body>
+</html>

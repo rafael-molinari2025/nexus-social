@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Notificações</title>
+  <meta name="description" content="Suas notificações no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    .notif-page { max-width: 640px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+    .page-title { font-size: 20px; font-weight: 600; }
+    .notif-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .notif-full-item {
+      display: flex; align-items: flex-start; gap: .875rem;
+      padding: 1rem 1.25rem; border-bottom: 0.5px solid var(--border);
+      cursor: pointer; transition: background var(--transition);
+      position: relative;
+    }
+    .notif-full-item:last-child { border-bottom: none; }
+    .notif-full-item:hover { background: var(--gray-50); }
+    .notif-full-item.unread { background: var(--purple-50); }
+    .notif-full-item.unread::before {
+      content: ''; position: absolute; left: .5rem; top: 50%;
+      transform: translateY(-50%); width: 6px; height: 6px;
+      background: var(--purple-600); border-radius: 50%;
+    }
+    .notif-full-icon {
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 20px;
+    }
+    .notif-full-body { flex: 1; min-width: 0; }
+    .notif-full-msg { font-size: 14px; line-height: 1.5; }
+    .notif-full-msg strong { font-weight: 600; }
+    .notif-full-time { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .notif-filter { display: flex; gap: .4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .notif-filter-btn {
+      padding: .3rem .85rem; border: 0.5px solid var(--border-md);
+      border-radius: var(--radius-full); background: none;
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); font-family: var(--font-sans);
+      transition: all var(--transition);
+    }
+    .notif-filter-btn.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="notif-page">
+    <div class="page-header">
+      <h1 class="page-title">Notificações</h1>
+      <button class="btn btn-sm" id="mark-all-btn" onclick="markAllRead()">
+        <i class="ti ti-checks" aria-hidden="true"></i> Marcar tudo como lido
+      </button>
+    </div>
+
+    <div class="notif-filter" id="notif-filter">
+      <button class="notif-filter-btn active" onclick="filterNotifs('all', this)">Todas</button>
+      <button class="notif-filter-btn" onclick="filterNotifs('friend_request', this)">Amizades</button>
+      <button class="notif-filter-btn" onclick="filterNotifs('post_like', this)">Curtidas</button>
+      <button class="notif-filter-btn" onclick="filterNotifs('post_comment', this)">Comentários</button>
+      <button class="notif-filter-btn" onclick="filterNotifs('scrap', this)">Recados</button>
+    </div>
+
+    <div class="notif-card" id="notif-list">
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let allNotifs = [];
+let currentFilter = 'all';
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'notifications');
+  loadNotifs();
+});
+
+async function loadNotifs() {
+  const el = document.getElementById('notif-list');
+  el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+
+  try {
+    allNotifs = await loadNotifications(currentUser.uid);
+    renderNotifs();
+    // Marcar como lidas ao entrar na página
+    markAllNotificationsRead(currentUser.uid).catch(() => {});
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state" style="padding:3rem"><i class="ti ti-alert-circle"></i><p>Erro ao carregar notificações.</p></div>`;
+  }
+}
+
+function renderNotifs() {
+  const el = document.getElementById('notif-list');
+  const filtered = currentFilter === 'all'
+    ? allNotifs
+    : allNotifs.filter(n => n.type === currentFilter);
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:3rem 1rem">
+      <i class="ti ti-bell-off" style="font-size:40px;color:var(--gray-200)"></i>
+      <p>${currentFilter === 'all' ? 'Nenhuma notificação ainda.' : 'Nenhuma notificação nesta categoria.'}</p>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(n => {
+    const ic = notifIcon(n.type);
+    const href = n.link || '#';
+    return `
+      <div class="notif-full-item${n.read ? '' : ' unread'}" onclick="location.href='${href}'">
+        <div class="notif-full-icon" style="background:${ic.bg}">
+          <i class="ti ${ic.icon}" style="color:${ic.color}"></i>
+        </div>
+        <div class="notif-full-body">
+          <div class="notif-full-msg">${sanitize(n.message || '')}</div>
+          <div class="notif-full-time">${timeAgo(n.createdAt)}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function filterNotifs(type, btn) {
+  currentFilter = type;
+  document.querySelectorAll('.notif-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderNotifs();
+}
+
+async function markAllRead() {
+  try {
+    await markAllNotificationsRead(currentUser.uid);
+    allNotifs = allNotifs.map(n => ({ ...n, read: true }));
+    renderNotifs();
+    showToast('Tudo marcado como lido!');
+  } catch(e) {
+    showToast('Erro ao marcar notificações.');
+  }
+}
+</script>
+</body>
+</html>

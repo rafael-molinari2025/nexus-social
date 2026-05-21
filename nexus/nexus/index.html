@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Feed</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+</head>
+<body>
+
+<div id="topbar" class="topbar"></div>
+
+<div class="app-layout">
+  <!-- Sidebar esquerda -->
+  <aside class="sidebar-left">
+    <div class="card" id="profile-card-widget"></div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">amigos online</div>
+        <div class="friends-grid" id="online-friends"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Feed central -->
+  <main class="feed-col">
+    <!-- Composer -->
+    <div class="card" id="composer-card">
+      <div class="composer">
+        <div id="composer-avatar"></div>
+        <div class="composer-box">
+          <textarea class="composer-textarea" id="post-text" placeholder="O que você está pensando?"></textarea>
+          <div class="composer-footer">
+            <div class="composer-actions">
+              <button class="composer-action-btn" title="Foto"><i class="ti ti-photo" aria-hidden="true"></i></button>
+              <button class="composer-action-btn" title="Localização"><i class="ti ti-map-pin" aria-hidden="true"></i></button>
+              <button class="composer-action-btn" title="Humor"><i class="ti ti-mood-smile" aria-hidden="true"></i></button>
+            </div>
+            <button class="btn btn-primary btn-sm" id="post-btn" onclick="createPost()">
+              <i class="ti ti-send"></i> Publicar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Posts -->
+    <div id="posts-list">
+      <div class="loading-screen" style="min-height:200px">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Sidebar direita -->
+  <aside class="sidebar-right">
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">sugestões de amigos</div>
+        <div id="friend-suggestions"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">comunidades em alta</div>
+        <div id="trending-communities"></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/utils.js"></script>
+<script>
+let currentUser = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { displayName: user.displayName, uid: user.uid };
+
+  renderTopbar(userData, 'feed');
+  renderProfileWidget(userData);
+  renderComposerAvatar(userData);
+  loadPosts();
+  loadOnlineFriends(userData);
+  loadFriendSuggestions(userData);
+  loadTrendingCommunities();
+});
+
+// ── Profile widget ────────────────────────────────────────────
+function renderProfileWidget(user) {
+  const cl = getAvatarColor(user.uid);
+  const av = user.photoURL
+    ? `<img src="${user.photoURL}" alt="${user.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(user.displayName)}</span>`;
+
+  document.getElementById('profile-card-widget').innerHTML = `
+    <div class="profile-banner"></div>
+    <div class="profile-card-body">
+      <div class="profile-avatar-wrap">
+        <div class="avatar avatar-48" style="background:${cl.bg}">${av}</div>
+      </div>
+      <div class="profile-name">${sanitize(user.displayName || 'Usuário')}</div>
+      <div class="profile-handle">${sanitize(user.bio || user.email || '')}</div>
+      <div class="profile-stats" id="profile-stats">
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">amigos</span></div>
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">comunidades</span></div>
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">posts</span></div>
+      </div>
+    </div>
+  `;
+
+  // Carregar contadores reais
+  loadProfileStats(user.uid);
+}
+
+async function loadProfileStats(uid) {
+  try {
+    const [friends, comms, posts] = await Promise.all([
+      db.collection('friendships').where('users', 'array-contains', uid).get(),
+      db.collection('community_members').where('uid', '==', uid).get(),
+      db.collection('posts').where('authorId', '==', uid).get()
+    ]);
+    const el = document.getElementById('profile-stats');
+    if (el) el.innerHTML = `
+      <div class="profile-stat"><span class="profile-stat-num">${friends.size}</span><span class="profile-stat-label">amigos</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">${comms.size}</span><span class="profile-stat-label">comunidades</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">${posts.size}</span><span class="profile-stat-label">posts</span></div>
+    `;
+  } catch(e) {}
+}
+
+// ── Composer ──────────────────────────────────────────────────
+function renderComposerAvatar(user) {
+  const cl = getAvatarColor(user.uid);
+  const el = document.getElementById('composer-avatar');
+  if (!el) return;
+  el.className = 'avatar avatar-40';
+  el.style.cssText = `background:${cl.bg};color:${cl.color};flex-shrink:0`;
+  el.innerHTML = user.photoURL
+    ? `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : getInitials(user.displayName);
+}
+
+// ── Create post ───────────────────────────────────────────────
+async function createPost() {
+  const text = document.getElementById('post-text').value.trim();
+  if (!text) return showToast('Escreva algo para publicar.');
+
+  const btn = document.getElementById('post-btn');
+  btn.disabled = true; btn.textContent = 'Publicando…';
+
+  try {
+    await db.collection('posts').add({
+      text,
+      authorId:   currentUser.uid,
+      authorName: currentUser.displayName,
+      authorPhoto: currentUser.photoURL || null,
+      likes:      [],
+      commentsCount: 0,
+      createdAt:  firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('post-text').value = '';
+    showToast('Post publicado!');
+  } catch(e) {
+    showToast('Erro ao publicar. Tente novamente.');
+  }
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Publicar';
+}
+
+// ── Load posts (realtime) ─────────────────────────────────────
+function loadPosts() {
+  db.collection('posts')
+    .orderBy('createdAt', 'desc')
+    .limit(30)
+    .onSnapshot(snap => {
+      const list = document.getElementById('posts-list');
+      if (snap.empty) {
+        list.innerHTML = `<div class="empty-state card">
+          <i class="ti ti-news-off" aria-hidden="true"></i>
+          <p>Nenhum post ainda. Seja o primeiro a publicar!</p>
+        </div>`;
+        return;
+      }
+      list.innerHTML = `<div class="card">${snap.docs.map(doc => postHTML(doc.id, doc.data())).join('')}</div>`;
+    }, () => showToast('Erro ao carregar posts.'));
+}
+
+function postHTML(id, p) {
+  const cl = getAvatarColor(p.authorId);
+  const av = p.authorPhoto
+    ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : getInitials(p.authorName);
+  const liked = currentUser && p.likes && p.likes.includes(currentUser.uid);
+  return `
+  <div class="post" id="post-${id}">
+    <div class="post-header">
+      <div class="avatar avatar-40" style="background:${cl.bg};color:${cl.color};cursor:pointer"
+           onclick="location.href='pages/perfil.html?uid=${p.authorId}'">${av}</div>
+      <div class="post-meta">
+        <div class="post-author">${sanitize(p.authorName || 'Usuário')}</div>
+        <div class="post-time">${timeAgo(p.createdAt)}</div>
+      </div>
+      ${p.authorId === currentUser?.uid ? `<button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
+    </div>
+    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>')}</div>
+    <div class="post-actions">
+      <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${id}')">
+        <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
+      </button>
+      <button class="post-action-btn" onclick="location.href='pages/post.html?id=${id}'">
+        <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount || 0} comentários
+      </button>
+      <button class="post-action-btn" onclick="sharePost('${id}')">
+        <i class="ti ti-share-3" aria-hidden="true"></i> compartilhar
+      </button>
+    </div>
+  </div>`;
+}
+
+async function toggleLike(postId) {
+  if (!currentUser) return;
+  const ref = db.collection('posts').doc(postId);
+  const snap = await ref.get();
+  const likes = snap.data().likes || [];
+  const liked = likes.includes(currentUser.uid);
+  await ref.update({
+    likes: liked
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+}
+
+async function deletePost(postId) {
+  if (!confirm('Excluir este post?')) return;
+  await db.collection('posts').doc(postId).delete();
+  showToast('Post excluído.');
+}
+
+function sharePost(postId) {
+  const url = `${location.origin}/pages/post.html?id=${postId}`;
+  navigator.clipboard.writeText(url).then(() => showToast('Link copiado!'));
+}
+
+// ── Online friends ────────────────────────────────────────────
+async function loadOnlineFriends(currentUserData) {
+  const el = document.getElementById('online-friends');
+  try {
+    const snap = await db.collection('friendships')
+      .where('users', 'array-contains', currentUser.uid)
+      .limit(12).get();
+
+    if (snap.empty) {
+      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhum amigo ainda.</p>`;
+      return;
+    }
+
+    const friendIds = [];
+    snap.forEach(doc => {
+      const other = doc.data().users.find(u => u !== currentUser.uid);
+      if (other) friendIds.push(other);
+    });
+
+    const usersData = await Promise.all(friendIds.slice(0, 6).map(uid => getUserData(uid)));
+    el.innerHTML = usersData.filter(Boolean).map(u => {
+      const cl = getAvatarColor(u.uid);
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      return `
+        <div class="friend-item" onclick="location.href='pages/perfil.html?uid=${u.uid}'">
+          <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+          <div class="online-indicator"></div>
+          <div class="friend-name">${sanitize((u.displayName||'').split(' ')[0])}</div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '';
+  }
+}
+
+// ── Friend suggestions ────────────────────────────────────────
+async function loadFriendSuggestions(currentUserData) {
+  const el = document.getElementById('friend-suggestions');
+  try {
+    const snap = await db.collection('users')
+      .where('uid', '!=', currentUser.uid)
+      .limit(5).get();
+
+    if (snap.empty) {
+      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões no momento.</p>`;
+      return;
+    }
+    el.innerHTML = snap.docs.map(doc => {
+      const u = doc.data();
+      const cl = getAvatarColor(u.uid);
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      return `
+        <div class="suggest-item">
+          <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer"
+               onclick="location.href='pages/perfil.html?uid=${u.uid}'">${av}</div>
+          <div class="suggest-info">
+            <div class="suggest-name">${sanitize(u.displayName||'Usuário')}</div>
+            <div class="suggest-sub">${sanitize(u.bio||'')}</div>
+          </div>
+          <button class="btn btn-sm" onclick="sendFriendRequest('${u.uid}', this)">
+            <i class="ti ti-user-plus" aria-hidden="true"></i>
+          </button>
+        </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function sendFriendRequest(targetUid, btn) {
+  try {
+    await db.collection('friend_requests').add({
+      from: currentUser.uid,
+      to:   targetUid,
+      status: 'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    btn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i>';
+    btn.disabled = true;
+    showToast('Solicitação enviada!');
+  } catch(e) { showToast('Erro ao enviar solicitação.'); }
+}
+
+// ── Trending communities ──────────────────────────────────────
+async function loadTrendingCommunities() {
+  const el = document.getElementById('trending-communities');
+  try {
+    const snap = await db.collection('communities')
+      .orderBy('membersCount', 'desc')
+      .limit(5).get();
+
+    if (snap.empty) {
+      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhuma comunidade ainda.</p>`;
+      return;
+    }
+    const icons = ['ti-code','ti-camera','ti-music','ti-book','ti-plant','ti-rocket','ti-brain'];
+    const colors = [
+      {bg:'#EEEDFE',c:'#534AB7'},{bg:'#E1F5EE',c:'#0F6E56'},{bg:'#FAEEDA',c:'#854F0B'},
+      {bg:'#FAECE7',c:'#993C1D'},{bg:'#FBEAF0',c:'#993556'}
+    ];
+    el.innerHTML = snap.docs.map((doc, i) => {
+      const d = doc.data();
+      const ic = icons[i % icons.length];
+      const cl = colors[i % colors.length];
+      return `
+        <div class="comm-item" onclick="location.href='pages/comunidade.html?id=${doc.id}'">
+          <div class="comm-icon" style="background:${cl.bg}">
+            <i class="ti ${ic}" style="color:${cl.c}" aria-hidden="true"></i>
+          </div>
+          <div>
+            <div class="comm-name">${sanitize(d.name)}</div>
+            <div class="comm-members">${d.membersCount||0} membros</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {}
+}
+</script>
+</body>
+</html>

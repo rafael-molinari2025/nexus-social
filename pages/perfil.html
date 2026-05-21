@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Perfil</title>
+  <meta name="description" content="Veja o perfil de um usuário no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    .profile-page { max-width: 760px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .profile-cover {
+      height: 180px;
+      background: linear-gradient(135deg, var(--purple-600), var(--purple-400));
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      position: relative;
+    }
+    .profile-cover-edit { position: absolute; bottom:.75rem; right:.75rem; }
+    .profile-info-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+      padding: 0 1.5rem 1.5rem;
+      margin-bottom: 1rem;
+      overflow: visible;
+    }
+    .profile-info-top {
+      display: flex; align-items: flex-end;
+      justify-content: space-between;
+      padding-bottom: 1rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .profile-avatar-area {
+      margin-top: -40px;
+      position: relative;
+      z-index: 2;
+      display: inline-block;
+    }
+    .avatar-upload-btn {
+      position: absolute; bottom: 2px; right: 2px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--purple-600); color: #fff;
+      border: 2.5px solid var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; padding: 0; transition: background var(--transition);
+    }
+    .avatar-upload-btn:hover { background: var(--purple-700, #4338ca); }
+    .avatar-upload-btn i { font-size: 12px; }
+    .profile-fullname { font-size: 20px; font-weight: 600; margin-top: .5rem; }
+    .profile-location { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: .3rem; margin-top: .25rem; }
+    .profile-bio-text { font-size: 14px; color: var(--text-secondary); margin-top: .65rem; line-height: 1.55; }
+    .profile-tabs { display: flex; gap: 0; border-bottom: 0.5px solid var(--border); margin-bottom: 1rem; }
+    .profile-tab {
+      padding: .75rem 1.25rem; background: none; border: none;
+      font-size: 14px; font-weight: 500; color: var(--text-muted);
+      border-bottom: 2px solid transparent; margin-bottom: -0.5px;
+      cursor: pointer; font-family: var(--font-sans);
+      transition: all var(--transition);
+    }
+    .profile-tab.active { color: var(--purple-600); border-bottom-color: var(--purple-600); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .friends-big-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
+    .friend-big-item {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); padding: .75rem;
+      display: flex; flex-direction: column; align-items: center;
+      gap: .4rem; cursor: pointer; transition: box-shadow var(--transition);
+    }
+    .friend-big-item:hover { box-shadow: var(--shadow-sm); }
+    .friend-big-name { font-size: 12px; font-weight: 500; text-align: center; }
+    .edit-modal-form { display: flex; flex-direction: column; gap: .85rem; }
+    .modal { max-width: 480px; max-height: 90vh; overflow-y: auto; }
+    .fields-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+    .gender-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; }
+    .gender-btn {
+      padding: .5rem .4rem; border: 1.5px solid var(--border); border-radius: var(--radius-md);
+      background: var(--surface); font-size: 12px; font-weight: 500;
+      color: var(--text-secondary); cursor: pointer; text-align: center;
+      transition: all var(--transition); font-family: var(--font-sans);
+    }
+    .gender-btn:hover { border-color: var(--purple-400); color: var(--purple-600); }
+    .gender-btn.selected { border-color: var(--purple-600); background: #EEEDFE; color: var(--purple-600); }
+    .section-divider {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-muted);
+      padding: .25rem 0; border-bottom: 1px solid var(--border); margin-bottom: -.25rem;
+    }
+    .input-icon-wrap { position: relative; }
+    .input-icon-wrap .form-input { padding-left: 2.4rem; }
+    .input-icon-wrap .input-icon {
+      position: absolute; left: .75rem; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 15px; pointer-events: none;
+    }
+    @media (max-width: 640px) {
+      .friends-big-grid { grid-template-columns: repeat(3, 1fr); }
+      .profile-info-top { flex-direction: column; align-items: flex-start; gap: .75rem; }
+      .fields-row-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="profile-page" id="profile-page">
+    <div class="loading-screen"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Editar perfil</span>
+      <button class="btn btn-icon" onclick="closeModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <div class="edit-modal-form">
+
+      <div class="section-divider">Informações básicas</div>
+
+      <div class="fields-row-2">
+        <div class="form-group">
+          <label class="form-label">Nome</label>
+          <input class="form-input" type="text" id="edit-firstname" placeholder="Rafael">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sobrenome</label>
+          <input class="form-input" type="text" id="edit-lastname" placeholder="Molinari">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nome de usuário</label>
+        <div class="input-icon-wrap">
+          <i class="ti ti-at input-icon"></i>
+          <input class="form-input" type="text" id="edit-username" placeholder="rafamolinari"
+                 oninput="this.value=this.value.replace(/[^a-z0-9_.]/gi,'').toLowerCase()">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Bio</label>
+        <textarea class="form-input" id="edit-bio" placeholder="Uma frase sobre você" rows="3"
+                  style="resize:vertical;min-height:72px"></textarea>
+      </div>
+
+      <div class="section-divider">Informações pessoais</div>
+
+      <div class="fields-row-2">
+        <div class="form-group">
+          <label class="form-label">Data de nascimento</label>
+          <div class="input-icon-wrap">
+            <i class="ti ti-calendar input-icon"></i>
+            <input class="form-input" type="date" id="edit-birthdate">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cidade</label>
+          <div class="input-icon-wrap">
+            <i class="ti ti-map-pin input-icon"></i>
+            <input class="form-input" type="text" id="edit-city" placeholder="São Paulo, SP">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Gênero</label>
+        <div class="gender-grid">
+          <button type="button" class="gender-btn" id="eg-masculino" onclick="selectEditGender('Masculino')">
+            <i class="ti ti-gender-male"></i>&nbsp;Masculino
+          </button>
+          <button type="button" class="gender-btn" id="eg-feminino" onclick="selectEditGender('Feminino')">
+            <i class="ti ti-gender-female"></i>&nbsp;Feminino
+          </button>
+          <button type="button" class="gender-btn" id="eg-outro" onclick="selectEditGender('Outro')">
+            <i class="ti ti-gender-androgyne"></i>&nbsp;Outro
+          </button>
+        </div>
+      </div>
+
+      <div class="section-divider">Links</div>
+
+      <div class="form-group">
+        <label class="form-label">Website / Redes sociais</label>
+        <div class="input-icon-wrap">
+          <i class="ti ti-world input-icon"></i>
+          <input class="form-input" type="url" id="edit-website" placeholder="https://seusite.com">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px;border-radius:var(--radius-md)" onclick="saveProfile()">
+        <i class="ti ti-device-floppy"></i> Salvar alterações
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+
+<!-- Hidden file input for avatar upload -->
+<input type="file" id="avatar-input" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
+<script src="../js/utils.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const profileUid = params.get('uid');
+let currentUser = null;
+let profileData = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const uid = profileUid || user.uid;
+  profileData = await getUserData(uid) || { uid, displayName: user.displayName, email: user.email };
+  renderTopbar(await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName }, 'profile');
+  renderProfile(uid);
+});
+
+async function renderProfile(uid) {
+  const isOwn = currentUser.uid === uid;
+  const d = profileData;
+  const cl = getAvatarColor(uid);
+  const av = d.photoURL
+    ? `<img src="${d.photoURL}" alt="${d.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(d.displayName)}</span>`;
+
+  let isFriend = false, hasPendingRequest = false;
+  if (!isOwn) {
+    const fSnap = await db.collection('friendships').where('users', 'array-contains', currentUser.uid).get();
+    isFriend = fSnap.docs.some(doc => doc.data().users.includes(uid));
+    if (!isFriend) {
+      const rSnap = await db.collection('friend_requests').where('from', '==', currentUser.uid).where('to', '==', uid).get();
+      hasPendingRequest = !rSnap.empty;
+    }
+  }
+
+  const actionBtn = isOwn
+    ? `<button class="btn" onclick="openModal()"><i class="ti ti-pencil" aria-hidden="true"></i> Editar perfil</button>`
+    : isFriend
+      ? `<div style="display:flex;gap:.5rem">
+           <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
+           <button class="btn" disabled><i class="ti ti-check" aria-hidden="true"></i> Amigos</button>
+         </div>`
+      : hasPendingRequest
+        ? `<button class="btn" disabled>Solicitação enviada</button>`
+        : `<div style="display:flex;gap:.5rem">
+             <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
+             <button class="btn" onclick="sendFriendRequest('${uid}', this)"><i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar</button>
+           </div>`;
+
+  document.getElementById('profile-page').innerHTML = `
+    <div class="profile-cover">
+      ${isOwn ? '<button class="btn profile-cover-edit" style="background:rgba(0,0,0,.4);color:#fff;border-color:rgba(255,255,255,.3)"><i class="ti ti-camera" aria-hidden="true"></i> Capa</button>' : ''}
+    </div>
+    <div class="profile-info-card">
+      <div class="profile-info-top">
+        <div class="profile-avatar-area">
+          <div class="avatar avatar-96" style="background:${cl.bg};border:4px solid var(--surface)">${av}</div>
+          ${isOwn ? `<button class="avatar-upload-btn" onclick="document.getElementById('avatar-input').click()" title="Alterar foto">
+            <i class="ti ti-camera"></i>
+          </button>` : ''}
+        </div>
+        <div style="display:flex;gap:.5rem;padding-top:.5rem">${actionBtn}</div>
+      </div>
+      <div class="profile-fullname">${sanitize(d.displayName || 'Usuário')}</div>
+      ${d.city ? `<div class="profile-location"><i class="ti ti-map-pin" aria-hidden="true"></i>${sanitize(d.city)}</div>` : ''}
+      ${d.bio  ? `<div class="profile-bio-text">${sanitize(d.bio)}</div>` : ''}
+      <div class="profile-stats" style="margin-top:.75rem" id="pstats">
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">amigos</span></div>
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">comunidades</span></div>
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">posts</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:.25rem 0">
+      <div class="profile-tabs">
+        <button class="profile-tab active" onclick="switchTab('posts')">Posts</button>
+        <button class="profile-tab" onclick="switchTab('friends')">Amigos</button>
+        <button class="profile-tab" onclick="switchTab('communities')">Comunidades</button>
+        <button class="profile-tab" onclick="switchTab('scraps')">Recados</button>
+      </div>
+      <div class="card-body">
+        <div class="tab-content active" id="tab-posts"><div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div></div>
+        <div class="tab-content" id="tab-friends"></div>
+        <div class="tab-content" id="tab-communities"></div>
+        <div class="tab-content" id="tab-scraps"></div>
+      </div>
+    </div>
+  `;
+
+  loadProfileStats(uid);
+  loadProfilePosts(uid);
+
+  if (isOwn) {
+    const parts = (d.displayName || '').split(' ');
+    document.getElementById('edit-firstname').value = parts[0] || '';
+    document.getElementById('edit-lastname').value  = parts.slice(1).join(' ') || '';
+    document.getElementById('edit-username').value  = d.username  || '';
+    document.getElementById('edit-bio').value       = d.bio       || '';
+    document.getElementById('edit-birthdate').value = d.birthdate || '';
+    document.getElementById('edit-city').value      = d.city      || '';
+    document.getElementById('edit-website').value   = d.website   || '';
+    if (d.gender) selectEditGender(d.gender);
+  }
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.profile-tab').forEach((b,i) => {
+    b.classList.toggle('active', ['posts','friends','communities','scraps'][i] === tab);
+  });
+  ['posts','friends','communities','scraps'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'friends') loadProfileFriends(profileUid || currentUser.uid);
+  if (tab === 'communities') loadProfileCommunities(profileUid || currentUser.uid);
+  if (tab === 'scraps') loadScraps(profileUid || currentUser.uid);
+}
+
+async function loadProfileStats(uid) {
+  const [friends, comms, posts] = await Promise.all([
+    db.collection('friendships').where('users', 'array-contains', uid).get(),
+    db.collection('community_members').where('uid', '==', uid).get(),
+    db.collection('posts').where('authorId', '==', uid).get()
+  ]);
+  const el = document.getElementById('pstats');
+  if (el) el.innerHTML = `
+    <div class="profile-stat"><span class="profile-stat-num">${friends.size}</span><span class="profile-stat-label">amigos</span></div>
+    <div class="profile-stat"><span class="profile-stat-num">${comms.size}</span><span class="profile-stat-label">comunidades</span></div>
+    <div class="profile-stat"><span class="profile-stat-num">${posts.size}</span><span class="profile-stat-label">posts</span></div>
+  `;
+}
+
+async function loadProfilePosts(uid) {
+  const el = document.getElementById('tab-posts');
+  const snap = await db.collection('posts').where('authorId','==',uid).orderBy('createdAt','desc').limit(20).get();
+  if (snap.empty) { el.innerHTML = `<div class="empty-state"><i class="ti ti-news-off" aria-hidden="true"></i><p>Nenhum post ainda.</p></div>`; return; }
+  el.innerHTML = snap.docs.map(doc => {
+    const p = doc.data();
+    const liked = p.likes && p.likes.includes(currentUser.uid);
+    return `<div class="post" id="post-${doc.id}">
+      <div class="post-body" style="padding:.75rem 0">${sanitize(p.text).replace(/\n/g,'<br>')}</div>
+      <div class="post-actions" style="padding:.5rem 0">
+        <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${doc.id}')">
+          <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
+        </button>
+        <button class="post-action-btn" onclick="location.href='/pages/post.html?id=${doc.id}'">
+          <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0} comentários
+        </button>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${timeAgo(p.createdAt)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleLike(postId) {
+  if (!currentUser) return;
+  const ref = db.collection('posts').doc(postId);
+  const snap = await ref.get();
+  const likes = snap.data().likes || [];
+  await ref.update({
+    likes: likes.includes(currentUser.uid)
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+  loadProfilePosts(profileUid || currentUser.uid);
+}
+
+async function loadProfileFriends(uid) {
+  const el = document.getElementById('tab-friends');
+  const snap = await db.collection('friendships').where('users','array-contains',uid).get();
+  if (snap.empty) { el.innerHTML = `<div class="empty-state"><i class="ti ti-users-off" aria-hidden="true"></i><p>Nenhum amigo ainda.</p></div>`; return; }
+  const ids = snap.docs.map(d => d.data().users.find(u => u !== uid));
+  const users = await Promise.all(ids.map(getUserData));
+  el.innerHTML = `<div class="friends-big-grid">${users.filter(Boolean).map(u => {
+    const cl = getAvatarColor(u.uid);
+    const av = u.photoURL
+      ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+    return `<div class="friend-big-item" onclick="location.href='perfil.html?uid=${u.uid}'">
+      <div class="avatar avatar-48" style="background:${cl.bg}">${av}</div>
+      <div class="friend-big-name">${sanitize(u.displayName||'Usuário')}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function loadProfileCommunities(uid) {
+  const el = document.getElementById('tab-communities');
+  const snap = await db.collection('community_members').where('uid','==',uid).get();
+  if (snap.empty) { el.innerHTML = `<div class="empty-state"><i class="ti ti-users-group" aria-hidden="true"></i><p>Nenhuma comunidade.</p></div>`; return; }
+  const ids = snap.docs.map(d => d.data().communityId);
+  const comms = await Promise.all(ids.map(id => db.collection('communities').doc(id).get()));
+  const colors = [{bg:'#EEEDFE',c:'#534AB7'},{bg:'#E1F5EE',c:'#0F6E56'},{bg:'#FAEEDA',c:'#854F0B'}];
+  el.innerHTML = comms.filter(d => d.exists).map((d,i) => {
+    const c = d.data(); const cl = colors[i%colors.length];
+    return `<div class="comm-item" onclick="location.href='comunidade.html?id=${d.id}'">
+      <div class="comm-icon" style="background:${cl.bg}"><i class="ti ti-users-group" style="color:${cl.c}" aria-hidden="true"></i></div>
+      <div><div class="comm-name">${sanitize(c.name)}</div><div class="comm-members">${c.membersCount||0} membros</div></div>
+    </div>`;
+  }).join('');
+}
+
+async function loadScraps(uid) {
+  const el = document.getElementById('tab-scraps');
+  const isOwn = currentUser.uid === uid;
+  let html = '';
+  if (isOwn) {
+    html = `<div style="display:flex;gap:.65rem;margin-bottom:1rem">
+      <div class="avatar avatar-40" style="background:${getAvatarColor(currentUser.uid).bg};color:${getAvatarColor(currentUser.uid).color};flex-shrink:0">${getInitials(currentUser.displayName)}</div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:.4rem">
+        <textarea class="composer-textarea" id="scrap-text" placeholder="Escreva um recado…" style="min-height:60px"></textarea>
+        <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="postScrap('${uid}')">Enviar recado</button>
+      </div>
+    </div>`;
+  }
+  const snap = await db.collection('scraps').where('toUid','==',uid).orderBy('createdAt','desc').limit(30).get();
+  if (snap.empty) { el.innerHTML = html + `<div class="empty-state"><i class="ti ti-messages" aria-hidden="true"></i><p>Nenhum recado ainda.</p></div>`; return; }
+  const scrapsHTML = snap.docs.map(doc => {
+    const s = doc.data();
+    const cl = getAvatarColor(s.fromUid);
+    const av = s.fromPhoto
+      ? `<img src="${s.fromPhoto}" alt="${s.fromName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(s.fromName)}</span>`;
+    return `<div class="scrap">
+      <div class="scrap-author">
+        <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer" onclick="location.href='perfil.html?uid=${s.fromUid}'">${av}</div>
+        ${sanitize(s.fromName)}
+      </div>
+      <div class="scrap-text">${sanitize(s.text).replace(/\n/g,'<br>')}</div>
+      <div class="scrap-time">${timeAgo(s.createdAt)}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = html + scrapsHTML;
+}
+
+async function postScrap(toUid) {
+  const text = document.getElementById('scrap-text').value.trim();
+  if (!text) return showToast('Escreva um recado.');
+  // Buscar nome do destinatário para salvar toName
+  const toUser = await getUserData(toUid);
+  const toName = toUser ? (toUser.displayName || 'Usuário') : 'Usuário';
+  await db.collection('scraps').add({
+    toUid,
+    toName,                                  // ← CORRIGIDO: inclui nome do destinatário
+    fromUid:  currentUser.uid,
+    fromName: currentUser.displayName,
+    fromPhoto: currentUser.photoURL || null,
+    text,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  document.getElementById('scrap-text').value = '';
+  showToast('Recado enviado!');
+  // Notificar destinatário
+  createNotification(toUid, 'scrap', {
+    message: `${currentUser.displayName} te enviou um recado.`,
+    link: `recados.html`,
+    fromUid: currentUser.uid,
+    fromName: currentUser.displayName
+  });
+  loadScraps(toUid);
+}
+
+async function sendFriendRequest(targetUid, btn) {
+  try {
+    // Verificar duplicata
+    const existing = await db.collection('friend_requests')
+      .where('from', '==', currentUser.uid)
+      .where('to', '==', targetUid)
+      .where('status', '==', 'pending').get();
+    if (!existing.empty) {
+      btn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i> Enviado';
+      btn.disabled = true;
+      return;
+    }
+    await db.collection('friend_requests').add({
+      from: currentUser.uid,
+      to:   targetUid,
+      status: 'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    btn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i> Solicitação enviada';
+    btn.disabled = true;
+    showToast('Solicitação enviada!');
+    // Notificar
+    createNotification(targetUid, 'friend_request', {
+      message: `${currentUser.displayName} enviou uma solicitação de amizade.`,
+      link: 'amigos.html',
+      fromUid: currentUser.uid,
+      fromName: currentUser.displayName
+    });
+  } catch(e) { showToast('Erro ao enviar solicitação.'); }
+}
+
+let editGender = '';
+function selectEditGender(g) {
+  editGender = g;
+  // Usar apenas os botões do modal de edição (IDs eg-*) para evitar conflito
+  ['eg-masculino','eg-feminino','eg-outro'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('selected');
+  });
+  const map = { 'Masculino':'eg-masculino', 'Feminino':'eg-feminino', 'Outro':'eg-outro' };
+  const el = document.getElementById(map[g]);
+  if (el) el.classList.add('selected');
+}
+
+function openModal() { document.getElementById('edit-modal').classList.add('open'); }
+function closeModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+async function saveProfile() {
+  const first    = document.getElementById('edit-firstname').value.trim();
+  const last     = document.getElementById('edit-lastname').value.trim();
+  const username = document.getElementById('edit-username').value.trim().toLowerCase();
+  const bio      = document.getElementById('edit-bio').value.trim();
+  const birth    = document.getElementById('edit-birthdate').value;
+  const city     = document.getElementById('edit-city').value.trim();
+  const website  = document.getElementById('edit-website').value.trim();
+
+  if (!first) return showToast('O nome é obrigatório.');
+  if (username && username.length < 3) return showToast('Username deve ter pelo menos 3 caracteres.');
+
+  const displayName = last ? `${first} ${last}` : first;
+  const btn = document.querySelector('#edit-modal .btn-primary');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Salvando…';
+
+  try {
+    // Verificar username duplicado (se alterado)
+    if (username && username !== profileData.username) {
+      const uSnap = await db.collection('users').where('username','==',username).get();
+      if (!uSnap.empty) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
+        return showToast('Nome de usuário já em uso.');
+      }
+    }
+    const updates = { displayName, bio, city, website };
+    if (username) updates.username = username;
+    if (birth) updates.birthdate = birth;
+    if (editGender) updates.gender = editGender;
+
+    await updateUserData(currentUser.uid, updates);
+    await currentUser.updateProfile({ displayName });
+    showToast('Perfil atualizado!');
+    closeModal();
+    profileData = { ...profileData, ...updates };
+    renderProfile(currentUser.uid);
+  } catch(e) {
+    showToast('Erro ao salvar. Tente novamente.');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
+}
+
+document.getElementById('edit-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ── Avatar upload ─────────────────────────────────────────────
+async function uploadAvatar(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Validate size (max 5MB) and type
+  if (file.size > 5 * 1024 * 1024) return showToast('Imagem muito grande. Máximo 5MB.');
+  if (!file.type.startsWith('image/')) return showToast('Selecione uma imagem válida.');
+
+  showToast('Enviando foto...');
+
+  try {
+    const ref = storage.ref(`avatars/${currentUser.uid}`);
+    const snapshot = await ref.put(file);
+    const downloadURL = await snapshot.ref.getDownloadURL();
+
+    // Update Firebase Auth profile
+    await currentUser.updateProfile({ photoURL: downloadURL });
+
+    // Update Firestore
+    await updateUserData(currentUser.uid, { photoURL: downloadURL });
+
+    // Update local state and re-render
+    profileData = { ...profileData, photoURL: downloadURL };
+    showToast('Foto atualizada com sucesso!');
+    renderProfile(currentUser.uid);
+  } catch(e) {
+    console.error('Avatar upload error:', e);
+    showToast('Erro ao enviar foto. Verifique se o Storage está ativado.');
+  }
+  // Reset input so same file can be selected again
+  input.value = '';
+}
+</script>
+</body>
+</html>
