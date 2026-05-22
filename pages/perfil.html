@@ -6,6 +6,7 @@
   <title>Nexus — Perfil</title>
   <meta name="description" content="Veja o perfil de um usuário no Nexus.">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     .profile-page { max-width: 760px; margin: 0 auto; padding: 1.5rem .75rem; }
@@ -70,6 +71,9 @@
     }
     .friend-big-item:hover { box-shadow: var(--shadow-sm); }
     .friend-big-name { font-size: 12px; font-weight: 500; text-align: center; }
+    .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+    .photos-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-sm); cursor: pointer; transition: opacity var(--transition); }
+    .photos-grid img:hover { opacity: .85; }
     .edit-modal-form { display: flex; flex-direction: column; gap: .85rem; }
     .modal { max-width: 480px; max-height: 90vh; overflow-y: auto; }
     .fields-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
@@ -93,7 +97,7 @@
       position: absolute; left: .75rem; top: 50%; transform: translateY(-50%);
       color: var(--text-muted); font-size: 15px; pointer-events: none;
     }
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
       .profile-page { padding: 1rem .5rem calc(80px + 1rem); }
       .profile-cover { height: 130px; }
       .friends-big-grid { grid-template-columns: repeat(3, 1fr); }
@@ -212,7 +216,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="../js/firebase-config.js"></script>
 
 <!-- Hidden file input for avatar upload -->
@@ -251,7 +254,10 @@ async function renderProfile(uid) {
   }
 
   const actionBtn = isOwn
-    ? `<button class="btn" onclick="openModal()"><i class="ti ti-pencil" aria-hidden="true"></i> Editar perfil</button>`
+    ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
+         <button class="btn" onclick="openModal()"><i class="ti ti-pencil" aria-hidden="true"></i> Editar perfil</button>
+         <button class="btn btn-danger" onclick="handleSignOut()" style="gap:.4rem"><i class="ti ti-logout" aria-hidden="true"></i> Sair</button>
+       </div>`
     : isFriend
       ? `<div style="display:flex;gap:.5rem">
            <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
@@ -264,10 +270,17 @@ async function renderProfile(uid) {
              <button class="btn" onclick="sendFriendRequest('${uid}', this)"><i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar</button>
            </div>`;
 
+  const coverStyle = d.coverURL
+    ? `background-image:url('${d.coverURL}');background-size:cover;background-position:center;`
+    : '';
+
   document.getElementById('profile-page').innerHTML = `
-    <div class="profile-cover">
-      ${isOwn ? '<button class="btn profile-cover-edit" style="background:rgba(0,0,0,.4);color:#fff;border-color:rgba(255,255,255,.3)"><i class="ti ti-camera" aria-hidden="true"></i> Capa</button>' : ''}
+    <div class="profile-cover" style="${coverStyle}">
+      ${isOwn ? `<button class="btn profile-cover-edit" style="background:rgba(0,0,0,.5);color:#fff;border-color:rgba(255,255,255,.3)" onclick="document.getElementById('cover-input').click()">
+        <i class="ti ti-camera" aria-hidden="true"></i> Capa
+      </button>` : ''}
     </div>
+    ${isOwn ? '<input type="file" id="cover-input" accept="image/*" style="display:none" onchange="uploadCover(this)">' : ''}
     <div class="profile-info-card">
       <div class="profile-info-top">
         <div class="profile-avatar-area">
@@ -291,12 +304,14 @@ async function renderProfile(uid) {
     <div class="card" style="padding:.25rem 0">
       <div class="profile-tabs">
         <button class="profile-tab active" onclick="switchTab('posts')">Posts</button>
+        <button class="profile-tab" onclick="switchTab('fotos')"><i class="ti ti-photo" aria-hidden="true"></i> Fotos</button>
         <button class="profile-tab" onclick="switchTab('friends')">Amigos</button>
         <button class="profile-tab" onclick="switchTab('communities')">Comunidades</button>
         <button class="profile-tab" onclick="switchTab('scraps')">Recados</button>
       </div>
       <div class="card-body">
         <div class="tab-content active" id="tab-posts"><div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div></div>
+        <div class="tab-content" id="tab-fotos"></div>
         <div class="tab-content" id="tab-friends"></div>
         <div class="tab-content" id="tab-communities"></div>
         <div class="tab-content" id="tab-scraps"></div>
@@ -320,16 +335,42 @@ async function renderProfile(uid) {
   }
 }
 
+const _tabs = ['posts','fotos','friends','communities','scraps'];
 function switchTab(tab) {
   document.querySelectorAll('.profile-tab').forEach((b,i) => {
-    b.classList.toggle('active', ['posts','friends','communities','scraps'][i] === tab);
+    b.classList.toggle('active', _tabs[i] === tab);
   });
-  ['posts','friends','communities','scraps'].forEach(t => {
+  _tabs.forEach(t => {
     document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
   });
-  if (tab === 'friends') loadProfileFriends(profileUid || currentUser.uid);
-  if (tab === 'communities') loadProfileCommunities(profileUid || currentUser.uid);
-  if (tab === 'scraps') loadScraps(profileUid || currentUser.uid);
+  const uid = profileUid || currentUser.uid;
+  if (tab === 'fotos')        loadGallery(uid);
+  if (tab === 'friends')      loadProfileFriends(uid);
+  if (tab === 'communities')  loadProfileCommunities(uid);
+  if (tab === 'scraps')       loadScraps(uid);
+}
+
+async function loadGallery(uid) {
+  const el = document.getElementById('tab-fotos');
+  el.innerHTML = '<div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div>';
+  try {
+    let snap;
+    try {
+      snap = await db.collection('posts').where('authorId','==',uid).orderBy('createdAt','desc').get();
+    } catch(_) {
+      snap = await db.collection('posts').where('authorId','==',uid).get();
+    }
+    const photos = snap.docs.map(d => d.data()).filter(p => p.imageURL);
+    if (!photos.length) {
+      el.innerHTML = `<div class="empty-state"><i class="ti ti-photo-off" aria-hidden="true"></i><p>Nenhuma foto publicada ainda.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="photos-grid">${photos.map(p =>
+      `<img src="${p.imageURL}" alt="Foto" loading="lazy" onclick="window.open('${p.imageURL}','_blank')">`
+    ).join('')}</div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><i class="ti ti-wifi-off" aria-hidden="true"></i><p>Erro ao carregar fotos.</p></div>`;
+  }
 }
 
 async function loadProfileStats(uid) {
@@ -348,24 +389,47 @@ async function loadProfileStats(uid) {
 
 async function loadProfilePosts(uid) {
   const el = document.getElementById('tab-posts');
-  const snap = await db.collection('posts').where('authorId','==',uid).orderBy('createdAt','desc').limit(20).get();
-  if (snap.empty) { el.innerHTML = `<div class="empty-state"><i class="ti ti-news-off" aria-hidden="true"></i><p>Nenhum post ainda.</p></div>`; return; }
-  el.innerHTML = snap.docs.map(doc => {
-    const p = doc.data();
-    const liked = p.likes && p.likes.includes(currentUser.uid);
-    return `<div class="post" id="post-${doc.id}">
-      <div class="post-body" style="padding:.75rem 0">${sanitize(p.text).replace(/\n/g,'<br>')}</div>
-      <div class="post-actions" style="padding:.5rem 0">
-        <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${doc.id}')">
-          <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
-        </button>
-        <button class="post-action-btn" onclick="location.href='/pages/post.html?id=${doc.id}'">
-          <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0} comentários
-        </button>
-        <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${timeAgo(p.createdAt)}</span>
-      </div>
-    </div>`;
-  }).join('');
+  try {
+    let snap;
+    try {
+      snap = await db.collection('posts').where('authorId','==',uid).orderBy('createdAt','desc').limit(20).get();
+    } catch(_) {
+      // Índice composto ainda não disponível: busca sem orderBy e ordena client-side
+      snap = await db.collection('posts').where('authorId','==',uid).limit(20).get();
+    }
+
+    if (snap.empty) {
+      el.innerHTML = `<div class="empty-state"><i class="ti ti-news-off" aria-hidden="true"></i><p>Nenhum post ainda.</p></div>`;
+      return;
+    }
+
+    const docs = snap.docs.slice().sort((a, b) => {
+      const at = a.data().createdAt?.seconds || 0;
+      const bt = b.data().createdAt?.seconds || 0;
+      return bt - at;
+    });
+
+    el.innerHTML = docs.map(doc => {
+      const p = doc.data();
+      const liked = p.likes && p.likes.includes(currentUser.uid);
+      return `<div class="post" id="post-${doc.id}">
+        ${p.text ? `<div class="post-body" style="padding:.75rem 0">${sanitize(p.text).replace(/\n/g,'<br>')}</div>` : ''}
+        ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem do post" loading="lazy" style="border-radius:var(--radius-md);margin-bottom:.5rem">` : ''}
+        <div class="post-actions" style="padding:.35rem 0">
+          <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${doc.id}')">
+            <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
+          </button>
+          <button class="post-action-btn" onclick="location.href='post.html?id=${doc.id}'">
+            <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0} comentários
+          </button>
+          <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${timeAgo(p.createdAt)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('Erro ao carregar posts:', e);
+    el.innerHTML = `<div class="empty-state"><i class="ti ti-wifi-off" aria-hidden="true"></i><p>Erro ao carregar posts. Recarregue a página.</p></div>`;
+  }
 }
 
 async function toggleLike(postId) {
@@ -468,7 +532,7 @@ async function postScrap(toUid) {
   // Notificar destinatário
   createNotification(toUid, 'scrap', {
     message: `${currentUser.displayName} te enviou um recado.`,
-    link: `recados.html`,
+    link: `/pages/recados.html`,
     fromUid: currentUser.uid,
     fromName: currentUser.displayName
   });
@@ -499,7 +563,7 @@ async function sendFriendRequest(targetUid, btn) {
     // Notificar
     createNotification(targetUid, 'friend_request', {
       message: `${currentUser.displayName} enviou uma solicitação de amizade.`,
-      link: 'amigos.html',
+      link: '/pages/amigos.html',
       fromUid: currentUser.uid,
       fromName: currentUser.displayName
     });
@@ -549,7 +613,7 @@ async function saveProfile() {
         return showToast('Nome de usuário já em uso.');
       }
     }
-    const updates = { displayName, bio, city, website };
+    const updates = { displayName, displayName_lower: displayName.toLowerCase(), bio, city, website };
     if (username) updates.username = username;
     if (birth) updates.birthdate = birth;
     if (editGender) updates.gender = editGender;
@@ -571,37 +635,63 @@ document.getElementById('edit-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
 
+// ── Cover upload ──────────────────────────────────────────────
+async function uploadCover(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) return showToast('Imagem muito grande. Máximo 8MB.');
+  if (!file.type.startsWith('image/')) return showToast('Selecione uma imagem válida.');
+
+  showToast('Enviando capa...');
+  try {
+    const coverURL = await uploadToCloudinary(file);
+    await updateUserData(currentUser.uid, { coverURL });
+    profileData = { ...profileData, coverURL };
+    showToast('Capa atualizada!');
+    renderProfile(currentUser.uid);
+  } catch(e) {
+    const msg = e.name === 'AbortError'
+      ? 'Upload demorou demais. Verifique sua conexão.'
+      : 'Erro ao enviar capa. Tente novamente.';
+    showToast(msg);
+  }
+  input.value = '';
+}
+
 // ── Avatar upload ─────────────────────────────────────────────
 async function uploadAvatar(input) {
   const file = input.files[0];
   if (!file) return;
 
-  // Validate size (max 5MB) and type
   if (file.size > 5 * 1024 * 1024) return showToast('Imagem muito grande. Máximo 5MB.');
   if (!file.type.startsWith('image/')) return showToast('Selecione uma imagem válida.');
 
   showToast('Enviando foto...');
 
   try {
-    const ref = storage.ref(`avatars/${currentUser.uid}`);
-    const snapshot = await ref.put(file);
-    const downloadURL = await snapshot.ref.getDownloadURL();
+    let downloadURL;
+    try {
+      downloadURL = await uploadToCloudinary(file);
+    } catch(uploadErr) {
+      const msg = uploadErr.name === 'AbortError'
+        ? 'Upload demorou demais. Verifique sua conexão.'
+        : 'Erro ao enviar foto. Tente novamente.';
+      showToast(msg);
+      input.value = '';
+      return;
+    }
 
-    // Update Firebase Auth profile
     await currentUser.updateProfile({ photoURL: downloadURL });
-
-    // Update Firestore
     await updateUserData(currentUser.uid, { photoURL: downloadURL });
 
-    // Update local state and re-render
     profileData = { ...profileData, photoURL: downloadURL };
     showToast('Foto atualizada com sucesso!');
     renderProfile(currentUser.uid);
   } catch(e) {
     console.error('Avatar upload error:', e);
-    showToast('Erro ao enviar foto. Verifique se o Storage está ativado.');
+    showToast('Erro ao enviar foto. Tente novamente.');
   }
-  // Reset input so same file can be selected again
+
   input.value = '';
 }
 </script>

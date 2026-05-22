@@ -6,6 +6,7 @@
   <title>Nexus — Entrar</title>
   <meta name="description" content="Entre na sua conta Nexus e conecte-se com quem você gosta.">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
   .tab-toggle {
@@ -125,6 +126,9 @@
         </div>
         <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px;border-radius:var(--radius-md)" onclick="loginEmail()">
           <i class="ti ti-login"></i> Entrar
+        </button>
+        <button type="button" onclick="forgotPassword()" style="background:none;border:none;color:var(--purple-600);font-size:12px;cursor:pointer;align-self:flex-end;font-family:var(--font-sans);margin-top:-.25rem">
+          Esqueceu a senha?
         </button>
       </div>
     </div>
@@ -362,15 +366,21 @@
   }
 
   async function handleAuthSuccess(user, extraData = {}) {
+    const base = { uid: user.uid, email: user.email };
+    if (user.photoURL)    base.photoURL    = user.photoURL;
+    const displayName = (extraData.displayName || user.displayName || '').trim();
+    if (displayName) {
+      base.displayName       = displayName;
+      base.displayName_lower = displayName.toLowerCase();
+    }
+    // Remove displayName from extraData para não duplicar
+    const { displayName: _dn, ...restExtra } = extraData;
     await updateUserData(user.uid, {
-      uid: user.uid,
-      displayName: user.displayName || '',
-      photoURL: user.photoURL || '',
-      email: user.email,
-      ...extraData,
+      ...base,
+      ...restExtra,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    window.location.href = '/index.html';
+    window.location.href = `/pages/perfil.html?uid=${user.uid}`;
   }
 
   async function loginEmail() {
@@ -413,16 +423,19 @@
     btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Criando conta…';
 
     try {
-      // Verificar se username já existe
+      // Criar usuário no Auth primeiro (precisa estar autenticado para consultar Firestore)
+      const { user } = await auth.createUserWithEmailAndPassword(email, pass);
+      await user.updateProfile({ displayName });
+
+      // Agora autenticado — verificar se username já existe
       const usernameSnap = await db.collection('users').where('username', '==', username).get();
       if (!usernameSnap.empty) {
+        await user.delete();
         btn.disabled = false;
         btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
         return showError('Este nome de usuário já está em uso. Escolha outro.');
       }
 
-      const { user } = await auth.createUserWithEmailAndPassword(email, pass);
-      await user.updateProfile({ displayName });
       await handleAuthSuccess(user, {
         displayName,
         username,
@@ -462,6 +475,23 @@
       if (step1.style.display !== 'none') { goStep2(); } else { signupEmail(); }
     }
   });
+
+  async function forgotPassword() {
+    clearError();
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) return showError('Digite seu e-mail para receber o link de recuperação.');
+    try {
+      await auth.sendPasswordResetEmail(email);
+      const el = document.getElementById('auth-error');
+      el.textContent = 'Link enviado para ' + email + '. Verifique sua caixa de entrada.';
+      el.style.background = '#E1F5EE';
+      el.style.borderColor = '#2EA875';
+      el.style.color = '#0F6E56';
+      el.style.display = 'block';
+    } catch(e) {
+      showError('Não encontramos uma conta com esse e-mail. Verifique e tente novamente.');
+    }
+  }
 </script>
 </body>
 </html>

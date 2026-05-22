@@ -6,6 +6,7 @@
   <title>Nexus — Post</title>
   <meta name="description" content="Veja um post e seus comentários no Nexus.">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     .post-page { max-width: 640px; margin: 0 auto; padding: 1.5rem .75rem; }
@@ -19,7 +20,7 @@
       transition: border-color var(--transition), box-shadow var(--transition);
     }
     .comment-input:focus { border-color: var(--purple-400); box-shadow: 0 0 0 3px rgba(83,74,183,0.10); background: var(--surface); }
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
       .post-page { padding: 1rem .5rem calc(80px + 1rem); }
       .back-btn { margin-bottom: .5rem; }
       .comment-composer { padding: .75rem .875rem; gap: .5rem; }
@@ -203,7 +204,7 @@ async function toggleLike() {
   if (!alreadyLiked && snap.data().authorId !== currentUser.uid) {
     createNotification(snap.data().authorId, 'post_like', {
       message: `${currentUser.displayName} curtiu seu post.`,
-      link: `post.html?id=${postId}`,
+      link: `/pages/post.html?id=${postId}`,
       fromUid: currentUser.uid,
       fromName: currentUser.displayName
     });

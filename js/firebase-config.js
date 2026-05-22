@@ -16,9 +16,12 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 
-const auth    = firebase.auth();
-const db      = firebase.firestore();
-const storage = firebase.storage();
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// Storage SDK só carregado em páginas que precisam (perfil, etc.)
+let storage;
+try { storage = firebase.storage(); } catch(e) { /* SDK não carregado nesta página */ }
 
 // Provedor Google para login social
 const googleProvider = new firebase.auth.GoogleAuthProvider();

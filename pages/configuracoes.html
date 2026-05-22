@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Configurações</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    .config-page { max-width: 600px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .config-section { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1rem; }
+    .config-section-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 1.25rem; display: flex; align-items: center; gap: .5rem; }
+    .config-section-title i { color: var(--purple-600); }
+    .config-divider { height: 0.5px; background: var(--border); margin: 1rem 0; }
+    @media (max-width: 768px) {
+      .config-page { padding: 1rem .5rem calc(80px + 1rem); }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div class="toast" id="toast"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="config-page">
+
+    <!-- Alterar senha -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-lock"></i> Alterar senha</div>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div class="form-group">
+          <label class="form-label">Senha atual</label>
+          <input class="form-input" type="password" id="current-pass" placeholder="••••••••">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nova senha</label>
+          <input class="form-input" type="password" id="new-pass" placeholder="Mínimo 6 caracteres">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirmar nova senha</label>
+          <input class="form-input" type="password" id="confirm-pass" placeholder="Repita a nova senha">
+        </div>
+        <button class="btn btn-primary" style="align-self:flex-start" onclick="changePassword()">
+          <i class="ti ti-device-floppy"></i> Salvar nova senha
+        </button>
+      </div>
+    </div>
+
+    <!-- Sessão -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-login"></i> Sessão</div>
+      <p style="font-size:14px;color:var(--text-secondary);margin-bottom:1rem">Sair da sua conta neste dispositivo.</p>
+      <button class="btn" onclick="handleSignOut()">
+        <i class="ti ti-logout"></i> Sair da conta
+      </button>
+    </div>
+
+    <!-- Zona de perigo -->
+    <div class="config-section" style="border-color:var(--coral-400)">
+      <div class="config-section-title" style="color:var(--coral-400)"><i class="ti ti-alert-triangle"></i> Zona de perigo</div>
+      <p style="font-size:14px;color:var(--text-secondary);margin-bottom:1rem">Esta ação é permanente e não pode ser desfeita. Todos os seus dados, posts e conversas serão apagados.</p>
+      <button class="btn" style="border-color:var(--coral-400);color:var(--coral-400)" onclick="deleteAccount()">
+        <i class="ti ti-trash"></i> Excluir minha conta
+      </button>
+    </div>
+
+    <!-- Sobre -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-info-circle"></i> Sobre o Nexus</div>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6">
+        Nexus — Rede social para conectar pessoas.<br>
+        Versão 1.0 · Desenvolvido com Firebase &amp; Cloudinary.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'settings');
+});
+
+async function changePassword() {
+  const current = document.getElementById('current-pass').value;
+  const newPass  = document.getElementById('new-pass').value;
+  const confirm  = document.getElementById('confirm-pass').value;
+  if (!current || !newPass || !confirm) return showToast('Preencha todos os campos.');
+  if (newPass.length < 6) return showToast('A nova senha deve ter pelo menos 6 caracteres.');
+  if (newPass !== confirm) return showToast('As senhas não coincidem.');
+
+  try {
+    const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, current);
+    await currentUser.reauthenticateWithCredential(credential);
+    await currentUser.updatePassword(newPass);
+    document.getElementById('current-pass').value = '';
+    document.getElementById('new-pass').value = '';
+    document.getElementById('confirm-pass').value = '';
+    showToast('Senha alterada com sucesso!');
+  } catch(e) {
+    if (e.code === 'auth/wrong-password') showToast('Senha atual incorreta.');
+    else showToast('Erro ao alterar senha. Tente novamente.');
+  }
+}
+
+async function deleteAccount() {
+  if (!confirm('Tem certeza? Esta ação é permanente e todos os seus dados serão excluídos.')) return;
+  const pass = prompt('Digite sua senha para confirmar:');
+  if (!pass) return;
+  try {
+    const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, pass);
+    await currentUser.reauthenticateWithCredential(credential);
+    await currentUser.delete();
+    window.location.href = '/pages/login.html';
+  } catch(e) {
+    if (e.code === 'auth/wrong-password') showToast('Senha incorreta. Conta não excluída.');
+    else showToast('Erro ao excluir conta. Tente novamente.');
+  }
+}
+</script>
+</body>
+</html>

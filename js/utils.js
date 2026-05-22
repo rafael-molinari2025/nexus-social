@@ -97,8 +97,10 @@ function requireAuth(callback) {
 function redirectIfLoggedIn() {
   auth.onAuthStateChanged(user => {
     if (user) {
-      const feedPath = _isInPages ? '../index.html' : 'index.html';
-      window.location.href = feedPath;
+      const profilePath = _isInPages
+        ? `perfil.html?uid=${user.uid}`
+        : `pages/perfil.html?uid=${user.uid}`;
+      window.location.href = profilePath;
     }
   });
 }
@@ -191,7 +193,7 @@ function renderTopbar(user, activePage = 'feed') {
   const themeIcon = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'ti-sun' : 'ti-moon';
 
   nav.innerHTML = `
-    <a href="${ROOT}index.html" class="topbar-logo">nexus</a>
+    <a href="${PAGES}perfil.html?uid=${user.uid}" class="topbar-logo">nexus</a>
     <div class="topbar-search">
       <i class="ti ti-search" aria-hidden="true"></i>
       <input type="text" placeholder="Buscar pessoas, comunidades..." id="search-input" autocomplete="off">
@@ -207,12 +209,41 @@ function renderTopbar(user, activePage = 'feed') {
           <span class="notif-badge" id="notif-badge" style="display:none"></span>
         </button>
       </div>
-      <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Alternar tema">
-        <i class="ti ${themeIcon}" aria-hidden="true"></i>
-      </button>
     </nav>
-    <div class="avatar avatar-32" style="background:${cl.bg};margin-left:.25rem" onclick="location.href='${PAGES}perfil.html?uid=${user.uid}'">${av}</div>
+    <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Alternar tema">
+      <i class="ti ${themeIcon}" aria-hidden="true"></i>
+    </button>
+    <div class="user-menu" id="user-menu">
+      <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer">${av}</div>
+    </div>
   `;
+
+  // Setup user menu dropdown
+  (function setupUserMenu() {
+    const wrap = document.getElementById('user-menu');
+    if (!wrap) return;
+    wrap.addEventListener('click', e => {
+      e.stopPropagation();
+      const existing = document.getElementById('user-dropdown');
+      if (existing) { existing.remove(); return; }
+      const dd = document.createElement('div');
+      dd.id = 'user-dropdown';
+      dd.className = 'user-dropdown';
+      dd.innerHTML = `
+        <a href="${PAGES}perfil.html?uid=${user.uid}" class="user-dropdown-item">
+          <i class="ti ti-user-circle" aria-hidden="true"></i> Meu perfil
+        </a>
+        <a href="${PAGES}configuracoes.html" class="user-dropdown-item">
+          <i class="ti ti-settings" aria-hidden="true"></i> Configurações
+        </a>
+        <div class="user-dropdown-divider"></div>
+        <button class="user-dropdown-item danger" onclick="handleSignOut()">
+          <i class="ti ti-logout" aria-hidden="true"></i> Sair
+        </button>
+      `;
+      wrap.appendChild(dd);
+    });
+  })();
 
   // Botão de tema fica visível no mobile (fora do topbar-nav)
   // Já inserido acima do avatar
@@ -267,9 +298,6 @@ function renderTopbar(user, activePage = 'feed') {
 let _notifPanelOpen = false;
 
 async function toggleNotifPanel(uid) {
-  const wrap = document.querySelector('.notif-topbar-wrap');
-  if (!wrap) return;
-
   let panel = document.getElementById('notif-panel');
   if (panel) {
     panel.remove();
@@ -284,7 +312,7 @@ async function toggleNotifPanel(uid) {
   panel.innerHTML = `
     <div class="notif-panel-header">
       <span class="notif-panel-title">Notificações</span>
-      <button class="btn btn-sm" onclick="markAllNotificationsRead('${uid}').then(()=>{ showToast('Tudo marcado como lido'); document.getElementById('notif-panel')?.remove(); _notifPanelOpen=false; })">Marcar tudo lido</button>
+      <button class="btn btn-sm" id="_notif-mark-btn">Marcar tudo lido</button>
     </div>
     <div class="notif-panel-body" id="notif-panel-body">
       <div style="display:flex;align-items:center;justify-content:center;padding:2rem">
@@ -292,7 +320,16 @@ async function toggleNotifPanel(uid) {
       </div>
     </div>
   `;
-  wrap.appendChild(panel);
+  // Appended to body so position:fixed works on mobile (topbar-nav is hidden)
+  document.body.appendChild(panel);
+
+  panel.querySelector('#_notif-mark-btn').addEventListener('click', () => {
+    markAllNotificationsRead(uid).then(() => {
+      showToast('Tudo marcado como lido');
+      const p = document.getElementById('notif-panel');
+      if (p) { p.remove(); _notifPanelOpen = false; }
+    }).catch(() => {});
+  });
 
   const notifs = await loadNotifications(uid);
   const body = document.getElementById('notif-panel-body');
@@ -305,9 +342,8 @@ async function toggleNotifPanel(uid) {
 
   body.innerHTML = notifs.map(n => {
     const ic = notifIcon(n.type);
-    const href = n.link || '#';
     return `
-      <div class="notif-item${n.read ? '' : ' unread'}" onclick="location.href='${href}'">
+      <div class="notif-item${n.read ? '' : ' unread'}" data-href="${n.link || ''}">
         <div class="notif-icon" style="background:${ic.bg}">
           <i class="ti ${ic.icon}" style="color:${ic.color}"></i>
         </div>
@@ -318,17 +354,73 @@ async function toggleNotifPanel(uid) {
       </div>`;
   }).join('');
 
-  // Marcar como lidos ao abrir
+  body.addEventListener('click', e => {
+    const item = e.target.closest('.notif-item[data-href]');
+    if (item && item.dataset.href) location.href = item.dataset.href;
+  });
+
   markAllNotificationsRead(uid).catch(() => {});
 }
 
-// Fechar painel ao clicar fora
+// ── Sign out ──────────────────────────────────────────────────
+function handleSignOut() {
+  auth.signOut().then(() => {
+    window.location.href = _isInPages ? 'login.html' : 'pages/login.html';
+  }).catch(() => showToast('Erro ao sair. Tente novamente.'));
+}
+
+// Fechar painéis ao clicar fora
 document.addEventListener('click', e => {
-  if (_notifPanelOpen && !e.target.closest('.notif-topbar-wrap')) {
+  if (_notifPanelOpen
+      && !e.target.closest('#notif-panel')
+      && !e.target.closest('.notif-topbar-wrap')
+      && !e.target.closest('#bnav-notif-btn')) {
     const panel = document.getElementById('notif-panel');
     if (panel) { panel.remove(); _notifPanelOpen = false; }
   }
+  if (!e.target.closest('.user-menu')) {
+    const dd = document.getElementById('user-dropdown');
+    if (dd) dd.remove();
+  }
 });
+
+// ── Cloudinary upload ─────────────────────────────────────────
+const _CLOUDINARY_CLOUD  = 'dyoi5mrdc';
+const _CLOUDINARY_PRESET = 'nexus_uploads';
+
+async function uploadToCloudinary(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', _CLOUDINARY_PRESET);
+
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(() => ctrl.abort(), 30000);
+
+  try {
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${_CLOUDINARY_CLOUD}/image/upload`,
+      { method: 'POST', body: formData, signal: ctrl.signal }
+    );
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error?.message || `Falha no upload (${res.status})`);
+    }
+    const data = await res.json();
+    return data.secure_url;
+  } catch(e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') throw new Error('O upload demorou demais. Tente com uma imagem menor.');
+    throw e;
+  }
+}
+
+// ── PWA Service Worker ────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 
 // ── Sanitize text (basic XSS prevention) ─────────────────────
 function sanitize(str = '') {
@@ -338,4 +430,20 @@ function sanitize(str = '') {
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&#39;');
+}
+
+// ── Online status ─────────────────────────────────────────────
+function isOnline(user) {
+  if (!user || !user.lastSeen) return false;
+  const ms = user.lastSeen.toMillis ? user.lastSeen.toMillis() : Number(user.lastSeen);
+  return (Date.now() - ms) < 5 * 60 * 1000;
+}
+
+function updateOnlineStatus(uid) {
+  if (!uid) return;
+  const ping = () => db.collection('users').doc(uid)
+    .update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() })
+    .catch(() => {});
+  ping();
+  setInterval(ping, 2 * 60 * 1000);
 }

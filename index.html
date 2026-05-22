@@ -6,9 +6,205 @@
   <title>Nexus — Feed</title>
   <meta name="description" content="Veja o feed de posts e fique conectado com seus amigos no Nexus.">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    /* ── Stories ──────────────────────────────────────────────────── */
+    .stories-bar {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: .875rem 1rem;
+      margin-bottom: .75rem; display: flex; gap: .75rem;
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .stories-bar::-webkit-scrollbar { display: none; }
+    .story-thumb {
+      display: flex; flex-direction: column; align-items: center;
+      gap: .3rem; cursor: pointer; flex-shrink: 0; width: 62px;
+    }
+    .story-ring {
+      width: 54px; height: 54px; border-radius: 50%; padding: 2.5px;
+      background: linear-gradient(135deg, #a855f7, #ec4899, #f97316);
+      flex-shrink: 0;
+    }
+    .story-ring.unseen { background: linear-gradient(135deg, #a855f7, #ec4899, #f97316); }
+    .story-ring.seen   { background: var(--gray-300); }
+    .story-ring.add    { background: none; border: 2px dashed var(--gray-300); padding: 1.5px; }
+    .story-ring-inner {
+      width: 100%; height: 100%; border-radius: 50%;
+      border: 2px solid var(--surface); overflow: hidden;
+      background: var(--gray-100); position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .story-ring-inner img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .story-add-icon {
+      position: absolute; bottom: -1px; right: -1px;
+      width: 18px; height: 18px; background: var(--purple-600); color: #fff;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; border: 2px solid var(--surface);
+    }
+    .story-name {
+      font-size: 11px; color: var(--text-secondary); text-align: center;
+      width: 62px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ── Story viewer ─────────────────────────────────────────────── */
+    .story-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.92);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+    }
+    .story-viewer {
+      width: min(380px, 100vw); height: min(680px, 95vh);
+      border-radius: 16px; overflow: hidden; position: relative;
+      display: flex; flex-direction: column;
+    }
+    .story-prog-bar {
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; gap: 3px; padding: .6rem .75rem .4rem; z-index: 5;
+    }
+    .story-prog-seg {
+      flex: 1; height: 3px; background: rgba(255,255,255,.3);
+      border-radius: 2px; overflow: hidden;
+    }
+    .story-prog-fill { height: 100%; background: #fff; width: 0%; }
+    .story-viewer-header {
+      position: absolute; top: 1.5rem; left: 0; right: 0;
+      display: flex; align-items: center; gap: .5rem; padding: 0 .75rem; z-index: 5;
+    }
+    .story-viewer-body {
+      width: 100%; height: 100%; display: flex;
+      align-items: center; justify-content: center;
+    }
+    .story-viewer-text {
+      padding: 3rem 1.5rem; font-size: 22px; font-weight: 600;
+      color: #fff; text-align: center; word-break: break-word; line-height: 1.4;
+    }
+
+    /* ── Story creator ────────────────────────────────────────────── */
+    .story-creator-modal {
+      background: var(--surface); border-radius: 16px;
+      width: min(440px, 95vw); padding: 1.5rem;
+    }
+    .story-color-row { display: flex; gap: .4rem; flex-wrap: wrap; margin: .75rem 0 1rem; }
+    .story-color-dot {
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      border: 2px solid transparent; transition: transform .15s, border-color .15s;
+    }
+    .story-color-dot.sel { border-color: var(--purple-600); transform: scale(1.2); }
+    .story-preview-box {
+      border-radius: 12px; min-height: 130px; display: flex;
+      align-items: center; justify-content: center; margin-bottom: .75rem;
+      transition: background .2s;
+    }
+    .story-preview-box textarea {
+      width: 100%; border: none; background: none; outline: none;
+      font-size: 20px; font-weight: 600; color: #fff; text-align: center;
+      resize: none; font-family: var(--font-sans); min-height: 90px;
+    }
+    .story-type-tabs { display: flex; gap: .4rem; margin-bottom: 1rem; }
+    .story-type-tab {
+      flex: 1; padding: .45rem; border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); background: var(--surface);
+      font-size: 13px; font-weight: 500; cursor: pointer; text-align: center;
+      color: var(--text-secondary); font-family: var(--font-sans);
+      transition: all var(--transition);
+    }
+    .story-type-tab.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+
+    /* ── Feed tabs ────────────────────────────────────────────────── */
+    .feed-tabs {
+      display: flex; gap: .4rem; margin-bottom: .75rem;
+    }
+    .feed-tab {
+      flex: 1; padding: .5rem; border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); background: var(--surface);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); font-family: var(--font-sans);
+      transition: all var(--transition); text-align: center;
+    }
+    .feed-tab.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+
+    /* ── Privacy picker ───────────────────────────────────────────── */
+    .composer-privacy-btn {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: var(--gray-100); border: none; border-radius: var(--radius-sm);
+      padding: .3rem .6rem; font-size: 12px; font-weight: 500;
+      color: var(--text-secondary); cursor: pointer; font-family: var(--font-sans);
+      transition: background var(--transition);
+    }
+    .composer-privacy-btn:hover { background: var(--gray-200); }
+    .post-privacy-badge {
+      font-size: 10px; color: var(--text-muted);
+      display: inline-flex; align-items: center; gap: 2px; margin-left: .3rem;
+    }
+
+    /* ── Emoji reactions ──────────────────────────────────────────── */
+    .reaction-wrap { position: relative; display: inline-block; }
+    .reaction-picker {
+      position: absolute; bottom: calc(100% + 6px); left: 0;
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: 999px; box-shadow: var(--shadow-lg);
+      display: flex; gap: 1px; padding: 5px 8px;
+      white-space: nowrap; z-index: 30;
+      opacity: 0; pointer-events: none;
+      transform: translateY(6px) scale(.88);
+      transition: opacity .16s, transform .16s;
+    }
+    .reaction-wrap:hover .reaction-picker { opacity: 1; pointer-events: all; transform: translateY(0) scale(1); }
+    .reaction-emoji-btn {
+      font-size: 21px; cursor: pointer; line-height: 1;
+      padding: 2px 4px; border-radius: 6px;
+      transition: transform .14s, background .14s;
+      border: none; background: none;
+    }
+    .reaction-emoji-btn:hover { transform: scale(1.4); background: var(--gray-100); }
+    .reaction-summary {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 12px; color: var(--text-muted); padding: .2rem .5rem .1rem;
+    }
+    .post-action-btn.reacted { color: var(--purple-600); font-weight: 600; }
+
+    /* ── Hashtag / Mention ────────────────────────────────────────── */
+    .hashtag { color: var(--purple-600); text-decoration: none; font-weight: 500; }
+    .hashtag:hover { text-decoration: underline; }
+    .mention { color: #0ea5e9; text-decoration: none; font-weight: 500; }
+    .mention:hover { text-decoration: underline; }
+
+    /* ── Online dot ───────────────────────────────────────────────── */
+    .online-dot {
+      position: absolute; bottom: 0; right: 0;
+      width: 10px; height: 10px; border-radius: 50%;
+      border: 2px solid var(--surface);
+    }
+
+    /* ── Report ───────────────────────────────────────────────────── */
+    .report-opt {
+      width: 100%; text-align: left; padding: .6rem .85rem;
+      border: 0.5px solid var(--border); border-radius: var(--radius-md);
+      background: var(--surface); font-size: 13px; color: var(--text-secondary);
+      cursor: pointer; font-family: var(--font-sans);
+      transition: background var(--transition), color var(--transition);
+    }
+    .report-opt:hover { background: var(--gray-50, #fafafa); color: var(--text-primary); }
+
+    /* ── Char counter ─────────────────────────────────────────────── */
+    .composer-char-count {
+      display: none; text-align: right; font-size: 11px;
+      color: var(--text-muted); margin-top: .2rem; transition: color var(--transition);
+    }
+    .composer-char-count.warn { color: #d97706; display: block; }
+    .composer-char-count.danger { color: #dc2626; display: block; }
+
+    @media (max-width: 768px) {
+      .stories-bar { padding: .65rem .75rem; }
+    }
+  </style>
 </head>
 <body>
+
+<div id="auth-loading" style="position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:1rem">
+  <span style="font-family:var(--font-display);font-size:28px;color:var(--purple-600);font-weight:500">nexus</span>
+  <div class="spinner"></div>
+</div>
 
 <div id="topbar" class="topbar"></div>
 
@@ -16,7 +212,6 @@
   <!-- Sidebar esquerda -->
   <aside class="sidebar-left">
     <div class="card" id="profile-card-widget"></div>
-
     <div class="card">
       <div class="card-body">
         <div class="card-title">amigos online</div>
@@ -27,41 +222,62 @@
 
   <!-- Feed central -->
   <main class="feed-col">
+
+    <!-- Stories -->
+    <div class="stories-bar" id="stories-bar">
+      <div class="story-thumb" style="opacity:.4">
+        <div class="story-ring add"><div class="story-ring-inner"><i class="ti ti-sparkles" style="font-size:20px;color:var(--text-muted)"></i></div></div>
+        <div class="story-name">Stories</div>
+      </div>
+    </div>
+
+    <!-- Feed tabs -->
+    <div class="feed-tabs">
+      <button class="feed-tab active" id="tab-all" onclick="switchFeedTab('all')">
+        <i class="ti ti-layout-grid" style="font-size:14px;vertical-align:-2px" aria-hidden="true"></i> Para você
+      </button>
+      <button class="feed-tab" id="tab-friends" onclick="switchFeedTab('friends')">
+        <i class="ti ti-users" style="font-size:14px;vertical-align:-2px" aria-hidden="true"></i> Amigos
+      </button>
+    </div>
+
     <!-- Composer -->
     <div class="card" id="composer-card">
       <div class="composer">
         <div id="composer-avatar"></div>
         <div class="composer-box">
-          <textarea class="composer-textarea" id="post-text" placeholder="O que você está pensando?"></textarea>
-          <!-- Preview de imagem -->
+          <textarea class="composer-textarea" id="post-text"
+            placeholder="O que você está pensando? Use #hashtags e @menções"
+            oninput="updateCharCount()" maxlength="2000"></textarea>
+          <div class="composer-char-count" id="post-char-count"></div>
           <div id="image-preview-wrap" style="display:none"></div>
           <div class="composer-footer">
             <div class="composer-actions">
-              <button class="composer-action-btn" title="Foto" onclick="document.getElementById('post-image-input').click()">
+              <button class="composer-action-btn" title="Foto"
+                      onclick="document.getElementById('post-image-input').click()">
                 <i class="ti ti-photo" aria-hidden="true"></i>
               </button>
-              <button class="composer-action-btn" title="Localização">
-                <i class="ti ti-map-pin" aria-hidden="true"></i>
-              </button>
-              <button class="composer-action-btn" title="Humor">
+              <button class="composer-action-btn" title="Emoji" onclick="insertEmoji()">
                 <i class="ti ti-mood-smile" aria-hidden="true"></i>
+              </button>
+              <button class="composer-privacy-btn" id="privacy-btn" onclick="cyclePrivacy()" title="Privacidade">
+                <i class="ti ti-world" id="privacy-icon" aria-hidden="true"></i>
+                <span id="privacy-label">Público</span>
               </button>
             </div>
             <button class="btn btn-primary btn-sm" id="post-btn" onclick="createPost()">
-              <i class="ti ti-send"></i> Publicar
+              <i class="ti ti-send" aria-hidden="true"></i> Publicar
             </button>
           </div>
         </div>
       </div>
     </div>
-    <!-- Input de imagem (oculto) -->
-    <input type="file" id="post-image-input" accept="image/*" style="display:none" onchange="previewPostImage(this)">
+    <input type="file" id="post-image-input" accept="image/*" style="display:none"
+           onchange="previewPostImage(this)">
 
     <!-- Posts -->
     <div id="posts-list">
-      <div class="loading-screen" style="min-height:200px">
-        <div class="spinner"></div>
-      </div>
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
     </div>
   </main>
 
@@ -73,7 +289,6 @@
         <div id="friend-suggestions"></div>
       </div>
     </div>
-
     <div class="card">
       <div class="card-body">
         <div class="card-title">comunidades em alta</div>
@@ -85,16 +300,129 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- ── Editar post ────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="edit-post-modal" style="display:none"
+     onclick="if(event.target===this)closeEditModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title">Editar post</span>
+      <button class="btn btn-icon" onclick="closeEditModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <textarea class="composer-textarea" id="edit-post-ta"
+              style="min-height:120px;margin-bottom:1rem"
+              placeholder="O que você está pensando?"></textarea>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px"
+            onclick="saveEditPost()">
+      <i class="ti ti-device-floppy" aria-hidden="true"></i> Salvar alterações
+    </button>
+  </div>
+</div>
+
+<!-- ── Criar story ────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="story-create-modal" style="display:none"
+     onclick="if(event.target===this)closeStoryModal()">
+  <div class="modal story-creator-modal">
+    <div class="modal-header">
+      <span class="modal-title">Criar story</span>
+      <button class="btn btn-icon" onclick="closeStoryModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+
+    <div class="story-type-tabs">
+      <button class="story-type-tab active" id="sttab-text" onclick="setStoryType('text')">
+        <i class="ti ti-text-size" style="font-size:14px" aria-hidden="true"></i> Texto
+      </button>
+      <button class="story-type-tab" id="sttab-image" onclick="setStoryType('image')">
+        <i class="ti ti-photo" style="font-size:14px" aria-hidden="true"></i> Foto
+      </button>
+    </div>
+
+    <!-- Text story -->
+    <div id="st-text-section">
+      <div class="story-color-row" id="story-color-row"></div>
+      <div class="story-preview-box" id="story-preview-box" style="background:#6366f1">
+        <textarea id="story-text-input" placeholder="Escreva algo..." rows="3"></textarea>
+      </div>
+    </div>
+
+    <!-- Image story -->
+    <div id="st-image-section" style="display:none">
+      <div id="st-img-preview" style="min-height:140px;border-radius:12px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;cursor:pointer;margin-bottom:.75rem"
+           onclick="document.getElementById('st-img-input').click()">
+        <div style="text-align:center;color:var(--text-muted)">
+          <i class="ti ti-photo" style="font-size:36px;opacity:.4" aria-hidden="true"></i>
+          <p style="font-size:13px;margin-top:.4rem">Clique para selecionar</p>
+        </div>
+      </div>
+      <input type="file" id="st-img-input" accept="image/*" style="display:none"
+             onchange="previewStoryImage(this)">
+    </div>
+
+    <button class="btn btn-primary" id="story-pub-btn"
+            style="width:100%;justify-content:center;height:42px" onclick="publishStory()">
+      <i class="ti ti-sparkles" aria-hidden="true"></i> Publicar story
+    </button>
+  </div>
+</div>
+
+<!-- ── Denunciar post ─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="report-modal" style="display:none"
+     onclick="if(event.target===this)closeReportModal()">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <span class="modal-title">Denunciar post</span>
+      <button class="btn btn-icon" onclick="closeReportModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:.75rem">
+      Por que você está denunciando este post?
+    </p>
+    <div style="display:flex;flex-direction:column;gap:.4rem">
+      <button class="report-opt" onclick="submitReport('Spam ou publicidade')">Spam ou publicidade</button>
+      <button class="report-opt" onclick="submitReport('Conteúdo ofensivo ou impróprio')">Conteúdo ofensivo ou impróprio</button>
+      <button class="report-opt" onclick="submitReport('Desinformação ou fake news')">Desinformação ou fake news</button>
+      <button class="report-opt" onclick="submitReport('Assédio ou bullying')">Assédio ou bullying</button>
+      <button class="report-opt" onclick="submitReport('Outro')">Outro</button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/utils.js"></script>
 <script>
-let currentUser = null;
+let currentUser   = null;
 let _postImageFile = null;
+let _feedTab      = 'all';
+let _friendIds    = new Set();
+let _privacyIdx   = 0;
+let _editingPostId = null;
+let _reportPostId = null;
+let _storyType    = 'text';
+let _storyColor   = '#6366f1';
+let _storyImgFile = null;
+let _postsUnsub   = null;
+let _lastPostDoc  = null;
+let _extraPostsHTML = '';
+
+const PRIVACY = [
+  { v:'public',  icon:'ti-world',  label:'Público' },
+  { v:'friends', icon:'ti-users',  label:'Amigos' },
+  { v:'private', icon:'ti-lock',   label:'Só eu' },
+];
+const REACTIONS  = ['❤️','😂','😮','😢','😡','👏'];
+const ST_COLORS  = ['#6366f1','#ec4899','#f97316','#22c55e','#3b82f6','#8b5cf6','#0ea5e9','#ef4444','#b45309'];
+
+// ── Char counter ───────────────────────────────────────────────
+function updateCharCount() {
+  const ta  = document.getElementById('post-text');
+  const el  = document.getElementById('post-char-count');
+  if (!ta || !el) return;
+  const len = ta.value.length;
+  el.textContent = `${len}/2000`;
+  el.className = 'composer-char-count' + (len > 1900 ? ' danger' : len > 1500 ? ' warn' : '');
+}
 
 requireAuth(async user => {
   currentUser = user;
@@ -103,21 +431,41 @@ requireAuth(async user => {
   renderTopbar(userData, 'feed');
   renderProfileWidget(userData);
   renderComposerAvatar(userData);
+  initStoryColors();
+  loadStories();
   loadPosts();
-  loadOnlineFriends(userData);
-  loadFriendSuggestions(userData);
+  loadOnlineFriends();
+  loadFriendSuggestions();
   loadTrendingCommunities();
+
+  updateOnlineStatus(user.uid);
+
+  db.collection('friendships').where('users', 'array-contains', user.uid).get()
+    .then(s => s.docs.forEach(d => d.data().users.forEach(u => _friendIds.add(u))))
+    .catch(() => {});
+
+  document.getElementById('auth-loading')?.remove();
 });
 
-// ── Profile widget ────────────────────────────────────────────
+// ── Feed tabs ──────────────────────────────────────────────────
+function switchFeedTab(tab) {
+  _feedTab = tab;
+  document.getElementById('tab-all').classList.toggle('active', tab === 'all');
+  document.getElementById('tab-friends').classList.toggle('active', tab === 'friends');
+  loadPosts();
+}
+
+// ── Profile widget ─────────────────────────────────────────────
 function renderProfileWidget(user) {
   const cl = getAvatarColor(user.uid);
   const av = user.photoURL
-    ? `<img src="${user.photoURL}" alt="${user.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(user.displayName)}</span>`;
-
+  const cover = user.coverURL
+    ? `background-image:url('${user.coverURL}');background-size:cover;background-position:center`
+    : '';
   document.getElementById('profile-card-widget').innerHTML = `
-    <div class="profile-banner"></div>
+    <div class="profile-banner" style="${cover}"></div>
     <div class="profile-card-body">
       <div class="profile-avatar-wrap">
         <div class="avatar avatar-48" style="background:${cl.bg}">${av}</div>
@@ -126,35 +474,33 @@ function renderProfileWidget(user) {
       <div class="profile-handle">${sanitize(user.bio || user.email || '')}</div>
       <div class="profile-stats" id="profile-stats">
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">amigos</span></div>
-        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">comunidades</span></div>
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">grupos</span></div>
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">posts</span></div>
       </div>
-      <a href="pages/perfil.html?uid=${user.uid}" class="btn btn-sm" style="margin-top:.5rem;align-self:stretch;justify-content:center">
+      <a href="pages/perfil.html?uid=${user.uid}" class="btn btn-sm"
+         style="margin-top:.5rem;align-self:stretch;justify-content:center">
         <i class="ti ti-user" aria-hidden="true"></i> Meu perfil
       </a>
-    </div>
-  `;
-
+    </div>`;
   loadProfileStats(user.uid);
 }
 
 async function loadProfileStats(uid) {
   try {
-    const [friends, comms, posts] = await Promise.all([
+    const [f, c, p] = await Promise.all([
       db.collection('friendships').where('users', 'array-contains', uid).get(),
       db.collection('community_members').where('uid', '==', uid).get(),
       db.collection('posts').where('authorId', '==', uid).get()
     ]);
     const el = document.getElementById('profile-stats');
     if (el) el.innerHTML = `
-      <div class="profile-stat"><span class="profile-stat-num">${friends.size}</span><span class="profile-stat-label">amigos</span></div>
-      <div class="profile-stat"><span class="profile-stat-num">${comms.size}</span><span class="profile-stat-label">comunidades</span></div>
-      <div class="profile-stat"><span class="profile-stat-num">${posts.size}</span><span class="profile-stat-label">posts</span></div>
-    `;
+      <div class="profile-stat"><span class="profile-stat-num">${f.size}</span><span class="profile-stat-label">amigos</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">${c.size}</span><span class="profile-stat-label">grupos</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">${p.size}</span><span class="profile-stat-label">posts</span></div>`;
   } catch(e) {}
 }
 
-// ── Composer ──────────────────────────────────────────────────
+// ── Composer ───────────────────────────────────────────────────
 function renderComposerAvatar(user) {
   const cl = getAvatarColor(user.uid);
   const el = document.getElementById('composer-avatar');
@@ -166,330 +512,689 @@ function renderComposerAvatar(user) {
     : getInitials(user.displayName);
 }
 
-// ── Preview de imagem no post ──────────────────────────────────
+function cyclePrivacy() {
+  _privacyIdx = (_privacyIdx + 1) % PRIVACY.length;
+  const p = PRIVACY[_privacyIdx];
+  document.getElementById('privacy-icon').className = `ti ${p.icon}`;
+  document.getElementById('privacy-label').textContent = p.label;
+}
+
+function insertEmoji() {
+  const emojis = ['😊','🔥','😂','❤️','👍','🎉','😍','🤔','👏','✨','🙌','💯'];
+  const e = emojis[Math.floor(Math.random() * emojis.length)];
+  const ta = document.getElementById('post-text');
+  const pos = ta.selectionStart;
+  ta.value = ta.value.slice(0, pos) + e + ta.value.slice(ta.selectionEnd);
+  ta.focus();
+  ta.setSelectionRange(pos + e.length, pos + e.length);
+}
+
 function previewPostImage(input) {
   const file = input.files[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) { showToast('Selecione uma imagem válida.'); return; }
   if (file.size > 8 * 1024 * 1024) { showToast('Imagem muito grande. Máximo 8MB.'); return; }
-
   _postImageFile = file;
   const reader = new FileReader();
   reader.onload = e => {
     const wrap = document.getElementById('image-preview-wrap');
     wrap.style.display = 'block';
-    wrap.innerHTML = `
-      <div class="composer-image-preview">
-        <img src="${e.target.result}" alt="Preview">
-        <button class="composer-image-remove" onclick="removePostImage()" title="Remover imagem">
-          <i class="ti ti-x"></i>
-        </button>
-      </div>`;
+    wrap.innerHTML = `<div class="composer-image-preview">
+      <img src="${e.target.result}" alt="Preview">
+      <button class="composer-image-remove" onclick="removePostImage()" title="Remover">
+        <i class="ti ti-x" aria-hidden="true"></i>
+      </button>
+    </div>`;
   };
   reader.readAsDataURL(file);
 }
 
 function removePostImage() {
   _postImageFile = null;
-  const wrap = document.getElementById('image-preview-wrap');
-  wrap.style.display = 'none';
-  wrap.innerHTML = '';
+  const w = document.getElementById('image-preview-wrap');
+  w.style.display = 'none'; w.innerHTML = '';
   document.getElementById('post-image-input').value = '';
 }
 
-// ── Create post ───────────────────────────────────────────────
+// ── Create post ────────────────────────────────────────────────
 async function createPost() {
   const text = document.getElementById('post-text').value.trim();
   if (!text && !_postImageFile) return showToast('Escreva algo ou adicione uma imagem.');
-
+  if (text.length > 2000) return showToast('Post muito longo. Máximo 2000 caracteres.');
   const btn = document.getElementById('post-btn');
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Publicando…';
-
+  const reset = () => { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Publicar'; };
   try {
     let imageURL = null;
-
-    // Upload de imagem se houver
     if (_postImageFile) {
-      const ext = _postImageFile.name.split('.').pop();
-      const ref = storage.ref(`posts/${currentUser.uid}/${Date.now()}.${ext}`);
-      const snap = await ref.put(_postImageFile);
-      imageURL = await snap.ref.getDownloadURL();
+      try { imageURL = await uploadToCloudinary(_postImageFile); }
+      catch(e) { showToast(e.name === 'AbortError' ? 'Upload demorou demais.' : 'Erro ao enviar imagem.'); reset(); return; }
     }
-
+    const hashtags = [...new Set((text.match(/#(\w+)/g)||[]).map(t => t.slice(1).toLowerCase()))];
     await db.collection('posts').add({
       text: text || '',
       imageURL,
-      authorId:    currentUser.uid,
-      authorName:  currentUser.displayName,
-      authorPhoto: currentUser.photoURL || null,
-      likes:       [],
-      bookmarks:   [],
+      authorId:     currentUser.uid,
+      authorName:   currentUser.displayName,
+      authorPhoto:  currentUser.photoURL || null,
+      likes:        [],
+      bookmarks:    [],
+      reactions:    {},
       commentsCount: 0,
-      createdAt:   firebase.firestore.FieldValue.serverTimestamp()
+      privacy:      PRIVACY[_privacyIdx].v,
+      hashtags,
+      createdAt:    firebase.firestore.FieldValue.serverTimestamp()
     });
-
     document.getElementById('post-text').value = '';
     removePostImage();
     showToast('Post publicado!');
   } catch(e) {
-    console.error('Erro ao publicar:', e);
+    console.error(e);
     showToast('Erro ao publicar. Tente novamente.');
   }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="ti ti-send"></i> Publicar';
+  reset();
 }
 
-// ── Load posts (realtime) ─────────────────────────────────────
+// ── Parse post text (hashtags + mentions) ──────────────────────
+function parsePostText(text) {
+  return sanitize(text)
+    .replace(/\n/g, '<br>')
+    .replace(/#(\w+)/g, '<a href="/pages/busca.html?q=$1" class="hashtag">#$1</a>')
+    .replace(/@(\w+)/g, '<a href="/pages/busca.html?q=$1" class="mention">@$1</a>');
+}
+
+// ── Load posts (realtime, first 20) ───────────────────────────
+function filterPostDocs(docs) {
+  if (_feedTab === 'friends') {
+    docs = docs.filter(d => {
+      const a = d.data().authorId;
+      return a === currentUser.uid || _friendIds.has(a);
+    });
+  }
+  return docs.filter(d => {
+    const p = d.data();
+    const prv = p.privacy || 'public';
+    if (prv === 'private') return p.authorId === currentUser.uid;
+    if (prv === 'friends') return p.authorId === currentUser.uid || _friendIds.has(p.authorId);
+    return true;
+  });
+}
+
 function loadPosts() {
-  db.collection('posts')
-    .orderBy('createdAt', 'desc')
-    .limit(30)
+  if (_postsUnsub) { _postsUnsub(); _postsUnsub = null; }
+  _lastPostDoc   = null;
+  _extraPostsHTML = '';
+  const list = document.getElementById('posts-list');
+  list.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+
+  _postsUnsub = db.collection('posts').orderBy('createdAt', 'desc').limit(20)
     .onSnapshot(snap => {
-      const list = document.getElementById('posts-list');
-      if (snap.empty) {
-        list.innerHTML = `<div class="empty-state card">
-          <i class="ti ti-news-off" aria-hidden="true"></i>
-          <p>Nenhum post ainda. Seja o primeiro a publicar!</p>
-        </div>`;
+      _lastPostDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      const docs = filterPostDocs(snap.docs);
+
+      if (!docs.length && !_extraPostsHTML) {
+        list.innerHTML = snap.empty
+          ? `<div class="empty-state card"><i class="ti ti-news-off"></i><p>Nenhum post ainda. Seja o primeiro!</p></div>`
+          : `<div class="empty-state card"><i class="ti ti-users"></i><p>Nenhum post dos seus amigos ainda.</p></div>`;
         return;
       }
-      list.innerHTML = `<div class="card">${snap.docs.map(doc => postHTML(doc.id, doc.data())).join('')}</div>`;
-    }, (err) => {
-      console.error('Erro ao carregar posts:', err);
-      const list = document.getElementById('posts-list');
-      list.innerHTML = `<div class="empty-state card">
-        <i class="ti ti-wifi-off" aria-hidden="true"></i>
-        <p>Não foi possível carregar os posts.<br>Verifique sua conexão e recarregue a página.</p>
-      </div>`;
+
+      const mainHTML = docs.map(d => postHTML(d.id, d.data())).join('');
+      list.innerHTML = `<div class="card" id="posts-container">${mainHTML}${_extraPostsHTML}</div>
+        ${snap.docs.length === 20 ? `<button class="btn btn-sm" id="load-more-btn"
+          style="width:100%;justify-content:center;height:40px;margin-top:.5rem"
+          onclick="loadMorePosts()">
+          <i class="ti ti-refresh" aria-hidden="true"></i> Carregar mais
+        </button>` : ''}`;
+    }, err => {
+      console.error('loadPosts:', err);
+      list.innerHTML = `<div class="empty-state card"><i class="ti ti-wifi-off"></i><p>Erro ao carregar posts.</p></div>`;
     });
 }
 
+async function loadMorePosts() {
+  if (!_lastPostDoc) return;
+  const btn = document.getElementById('load-more-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin" aria-hidden="true"></i> Carregando…'; }
+  try {
+    const snap = await db.collection('posts')
+      .orderBy('createdAt', 'desc')
+      .startAfter(_lastPostDoc)
+      .limit(20)
+      .get();
+
+    _lastPostDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    const docs = filterPostDocs(snap.docs);
+
+    if (docs.length) {
+      const newHTML = docs.map(d => postHTML(d.id, d.data())).join('');
+      _extraPostsHTML += newHTML;
+      document.getElementById('posts-container')?.insertAdjacentHTML('beforeend', newHTML);
+    }
+
+    if (!_lastPostDoc || snap.docs.length < 20) {
+      btn?.remove();
+    } else if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i> Carregar mais';
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i> Carregar mais'; }
+    showToast('Erro ao carregar mais posts.');
+  }
+}
+
+// ── Post HTML ──────────────────────────────────────────────────
 function postHTML(id, p) {
-  const cl = getAvatarColor(p.authorId);
-  const av = p.authorPhoto
+  const cl  = getAvatarColor(p.authorId);
+  const av  = p.authorPhoto
     ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : getInitials(p.authorName);
-  const liked     = currentUser && p.likes     && p.likes.includes(currentUser.uid);
-  const bookmarked = currentUser && p.bookmarks && p.bookmarks.includes(currentUser.uid);
+  const rawtext = (p.text || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+
+  // Reactions
+  const rxns     = p.reactions || {};
+  const myRxn    = REACTIONS.find(e => (rxns[e]||[]).includes(currentUser?.uid));
+  const totalRxn = REACTIONS.reduce((s, e) => s + (rxns[e]||[]).length, 0) + (p.likes||[]).length;
+  const topEmoji = REACTIONS.filter(e => (rxns[e]||[]).length).sort((a,b) => (rxns[b]||[]).length-(rxns[a]||[]).length).slice(0,2);
+  const bookmarked = (p.bookmarks||[]).includes(currentUser?.uid);
+
+  const privOpt = PRIVACY.find(o => o.v === (p.privacy||'public')) || PRIVACY[0];
+  const pickerBtns = REACTIONS.map(e =>
+    `<button class="reaction-emoji-btn" onclick="event.stopPropagation();setReaction('${id}','${e}')" title="${e}">${e}</button>`
+  ).join('');
 
   return `
-  <div class="post" id="post-${id}">
+  <div class="post" id="post-${id}" data-rawtext="${rawtext}">
     <div class="post-header">
-      <div class="avatar avatar-40" style="background:${cl.bg};color:${cl.color};cursor:pointer"
+      <div class="avatar avatar-40" style="background:${cl.bg};color:${cl.color};cursor:pointer;position:relative"
            onclick="location.href='pages/perfil.html?uid=${p.authorId}'">${av}</div>
       <div class="post-meta">
-        <div class="post-author">${sanitize(p.authorName || 'Usuário')}</div>
-        <div class="post-time">${timeAgo(p.createdAt)}</div>
+        <div class="post-author">${sanitize(p.authorName||'Usuário')}</div>
+        <div class="post-time">
+          ${timeAgo(p.createdAt)}
+          <span class="post-privacy-badge" title="${privOpt.label}">
+            <i class="ti ${privOpt.icon}" style="font-size:10px" aria-hidden="true"></i>
+          </span>
+        </div>
       </div>
-      ${p.authorId === currentUser?.uid ? `<button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
+      <div style="display:flex;gap:.1rem;margin-left:auto">
+        ${p.authorId === currentUser?.uid ? `
+          <button class="btn btn-icon" onclick="startEditPost('${id}')" title="Editar">
+            <i class="ti ti-pencil" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i>
+          </button>
+          <button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir">
+            <i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i>
+          </button>
+        ` : `
+          <button class="btn btn-icon" onclick="openReportModal('${id}')" title="Denunciar">
+            <i class="ti ti-flag" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i>
+          </button>
+        `}
+      </div>
     </div>
-    ${p.text ? `<div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>')}</div>` : ''}
-    ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem do post" loading="lazy">` : ''}
+    ${p.text ? `<div class="post-body">${parsePostText(p.text)}</div>` : ''}
+    ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" onerror="this.style.display='none'">` : ''}
+    ${topEmoji.length || totalRxn ? `
+      <div class="reaction-summary">
+        ${topEmoji.map(e => `<span>${e}</span>`).join('')}
+        ${totalRxn ? `<span>${totalRxn}</span>` : ''}
+      </div>` : ''}
     <div class="post-actions">
-      <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${id}')">
-        <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
-      </button>
+      <div class="reaction-wrap">
+        <button class="post-action-btn${myRxn ? ' reacted' : ''}"
+                onclick="setReaction('${id}','${myRxn||'❤️'}')">
+          ${myRxn || '<i class="ti ti-heart" aria-hidden="true"></i>'}
+          ${totalRxn || ''}
+        </button>
+        <div class="reaction-picker">${pickerBtns}</div>
+      </div>
       <button class="post-action-btn" onclick="location.href='pages/post.html?id=${id}'">
-        <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount || 0} comentários
+        <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0}
       </button>
-      <button class="post-action-btn${bookmarked?' bookmarked':''}" onclick="toggleBookmark('${id}')" title="${bookmarked?'Remover dos salvos':'Salvar post'}">
-        <i class="ti ti-bookmark" aria-hidden="true"></i> ${bookmarked ? 'Salvo' : 'Salvar'}
+      <button class="post-action-btn${bookmarked?' bookmarked':''}"
+              onclick="toggleBookmark('${id}')" title="${bookmarked?'Remover dos salvos':'Salvar'}">
+        <i class="ti ti-bookmark" aria-hidden="true"></i>
       </button>
       <button class="post-action-btn" onclick="sharePost('${id}')">
-        <i class="ti ti-share-3" aria-hidden="true"></i> compartilhar
+        <i class="ti ti-share-3" aria-hidden="true"></i>
       </button>
     </div>
   </div>`;
 }
 
-async function toggleLike(postId) {
+// ── Emoji reactions ────────────────────────────────────────────
+async function setReaction(postId, emoji) {
   if (!currentUser) return;
-  const ref = db.collection('posts').doc(postId);
+  const ref  = db.collection('posts').doc(postId);
   const snap = await ref.get();
-  const likes = snap.data().likes || [];
-  const liked = likes.includes(currentUser.uid);
-  await ref.update({
-    likes: liked
-      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
-      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  const p    = snap.data();
+  const rxns = p.reactions || {};
+
+  const already = (rxns[emoji]||[]).includes(currentUser.uid);
+  const updates = {};
+
+  // Remove from all reaction arrays + legacy likes
+  REACTIONS.forEach(e => {
+    if ((rxns[e]||[]).includes(currentUser.uid))
+      updates[`reactions.${e}`] = firebase.firestore.FieldValue.arrayRemove(currentUser.uid);
   });
-  // Notificar autor (se não for eu mesmo)
-  if (!liked && snap.data().authorId !== currentUser.uid) {
-    createNotification(snap.data().authorId, 'post_like', {
-      message: `${currentUser.displayName} curtiu seu post.`,
-      link: `pages/post.html?id=${postId}`,
-      fromUid: currentUser.uid,
-      fromName: currentUser.displayName
-    });
+  if ((p.likes||[]).includes(currentUser.uid))
+    updates.likes = firebase.firestore.FieldValue.arrayRemove(currentUser.uid);
+
+  // Add new reaction only if different from current
+  if (!already) {
+    updates[`reactions.${emoji}`] = firebase.firestore.FieldValue.arrayUnion(currentUser.uid);
+    if (p.authorId !== currentUser.uid) {
+      createNotification(p.authorId, 'post_like', {
+        message: `${currentUser.displayName} reagiu ${emoji} ao seu post.`,
+        link: `/pages/post.html?id=${postId}`,
+        fromUid: currentUser.uid,
+        fromName: currentUser.displayName
+      });
+    }
   }
+  await ref.update(updates);
 }
 
 async function toggleBookmark(postId) {
   if (!currentUser) return;
-  const ref = db.collection('posts').doc(postId);
+  const ref  = db.collection('posts').doc(postId);
   const snap = await ref.get();
-  const bookmarks = snap.data().bookmarks || [];
-  const saved = bookmarks.includes(currentUser.uid);
+  const saved = (snap.data().bookmarks||[]).includes(currentUser.uid);
   await ref.update({
     bookmarks: saved
       ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
       : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
   });
-  showToast(saved ? 'Post removido dos salvos.' : 'Post salvo!');
+  showToast(saved ? 'Removido dos salvos.' : 'Post salvo!');
 }
 
 async function deletePost(postId) {
-  if (!confirm('Excluir este post?')) return;
+  if (!confirm('Excluir este post permanentemente?')) return;
   await db.collection('posts').doc(postId).delete();
   showToast('Post excluído.');
 }
 
 function sharePost(postId) {
   const url = `${location.origin}/pages/post.html?id=${postId}`;
-  navigator.clipboard.writeText(url).then(() => showToast('Link copiado!'));
+  navigator.clipboard.writeText(url).then(() => showToast('Link copiado!')).catch(() => showToast('Erro ao copiar.'));
 }
 
-// ── Online friends ────────────────────────────────────────────
-async function loadOnlineFriends(currentUserData) {
-  const el = document.getElementById('online-friends');
+// ── Edit post ──────────────────────────────────────────────────
+function startEditPost(postId) {
+  _editingPostId = postId;
+  const el = document.getElementById(`post-${postId}`);
+  document.getElementById('edit-post-ta').value = el?.dataset.rawtext || '';
+  document.getElementById('edit-post-modal').style.display = 'flex';
+  document.getElementById('edit-post-ta').focus();
+}
+function closeEditModal() {
+  _editingPostId = null;
+  document.getElementById('edit-post-modal').style.display = 'none';
+}
+async function saveEditPost() {
+  const text = document.getElementById('edit-post-ta').value.trim();
+  if (!text) return showToast('O post não pode estar vazio.');
+  if (text.length > 2000) return showToast('Post muito longo. Máximo 2000 caracteres.');
+  if (!_editingPostId) return;
+  const hashtags = [...new Set((text.match(/#(\w+)/g)||[]).map(t => t.slice(1).toLowerCase()))];
   try {
-    const snap = await db.collection('friendships')
-      .where('users', 'array-contains', currentUser.uid)
-      .limit(12).get();
+    await db.collection('posts').doc(_editingPostId).update({ text, hashtags });
+    showToast('Post atualizado!');
+    closeEditModal();
+  } catch(e) { showToast('Erro ao salvar.'); }
+}
 
-    if (snap.empty) {
-      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhum amigo ainda.</p>`;
-      return;
-    }
+// ── Report ─────────────────────────────────────────────────────
+function openReportModal(postId) {
+  _reportPostId = postId;
+  document.getElementById('report-modal').style.display = 'flex';
+}
+function closeReportModal() {
+  _reportPostId = null;
+  document.getElementById('report-modal').style.display = 'none';
+}
+async function submitReport(reason) {
+  if (!_reportPostId) return;
+  try {
+    await db.collection('reports').add({
+      postId: _reportPostId,
+      reason,
+      reportedBy: currentUser.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Denúncia enviada. Obrigado!');
+  } catch(e) { showToast('Erro ao denunciar.'); }
+  closeReportModal();
+}
 
-    const friendIds = [];
-    snap.forEach(doc => {
-      const other = doc.data().users.find(u => u !== currentUser.uid);
-      if (other) friendIds.push(other);
+// ── Stories ────────────────────────────────────────────────────
+const ST_VIEWED_KEY = 'nx_sv_';
+
+async function loadStories() {
+  const bar = document.getElementById('stories-bar');
+  if (!bar) return;
+  try {
+    const snap = await db.collection('stories')
+      .orderBy('createdAt', 'desc').limit(60).get();
+
+    const byUser = {};
+    const now = Date.now();
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.expiresAt && d.expiresAt.toMillis() < now) return;
+      if (!byUser[d.uid]) byUser[d.uid] = { info: d, ids: [] };
+      byUser[d.uid].ids.push(doc.id);
     });
 
-    const usersData = await Promise.all(friendIds.slice(0, 6).map(uid => getUserData(uid)));
-    el.innerHTML = usersData.filter(Boolean).map(u => {
-      const cl = getAvatarColor(u.uid);
-      const av = u.photoURL
-        ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
-      return `
-        <div class="friend-item" onclick="location.href='pages/perfil.html?uid=${u.uid}'">
-          <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
-          <div class="online-indicator"></div>
-          <div class="friend-name">${sanitize((u.displayName||'').split(' ')[0])}</div>
-        </div>`;
-    }).join('');
+    const myInfo    = byUser[currentUser.uid];
+    const others    = Object.values(byUser).filter(u => u.info.uid !== currentUser.uid);
+    const userData  = await getUserData(currentUser.uid) || {};
+    const cl        = getAvatarColor(currentUser.uid);
+    const myAv      = userData.photoURL
+      ? `<img src="${userData.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<div style="width:100%;height:100%;background:${cl.bg};display:flex;align-items:center;justify-content:center"><span style="color:${cl.color};font-weight:600;font-size:16px">${getInitials(userData.displayName)}</span></div>`;
+
+    let html = '';
+
+    // My story (always first)
+    if (myInfo) {
+      const seen = localStorage.getItem(ST_VIEWED_KEY + myInfo.ids[0]);
+      html += `<div class="story-thumb" onclick="viewStory('${myInfo.ids[0]}')">
+        <div class="story-ring${seen?' seen':' unseen'}">
+          <div class="story-ring-inner">${myAv}
+            <div class="story-add-icon" onclick="event.stopPropagation();openStoryModal()">+</div>
+          </div>
+        </div>
+        <div class="story-name">Meu story</div>
+      </div>`;
+    } else {
+      html += `<div class="story-thumb" onclick="openStoryModal()">
+        <div class="story-ring add">
+          <div class="story-ring-inner">${myAv}
+            <div class="story-add-icon">+</div>
+          </div>
+        </div>
+        <div class="story-name">Criar story</div>
+      </div>`;
+    }
+
+    others.forEach(u => {
+      const d  = u.info;
+      const uc = getAvatarColor(d.uid);
+      const av = d.photoURL
+        ? `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<div style="width:100%;height:100%;background:${uc.bg};display:flex;align-items:center;justify-content:center"><span style="color:${uc.color};font-weight:600;font-size:16px">${getInitials(d.displayName)}</span></div>`;
+      const seen = localStorage.getItem(ST_VIEWED_KEY + u.ids[0]);
+      html += `<div class="story-thumb" onclick="viewStory('${u.ids[0]}')">
+        <div class="story-ring${seen?' seen':' unseen'}">
+          <div class="story-ring-inner">${av}</div>
+        </div>
+        <div class="story-name">${sanitize((d.displayName||'').split(' ')[0]||'Usuário')}</div>
+      </div>`;
+    });
+
+    bar.innerHTML = html;
   } catch(e) {
-    el.innerHTML = '';
+    console.error('Stories:', e);
+    bar.innerHTML = `<div class="story-thumb" onclick="openStoryModal()">
+      <div class="story-ring add"><div class="story-ring-inner">
+        <i class="ti ti-plus" style="font-size:20px;color:var(--text-muted)"></i>
+      </div></div>
+      <div class="story-name">Criar story</div>
+    </div>`;
   }
 }
 
-// ── Friend suggestions ────────────────────────────────────────
-async function loadFriendSuggestions(currentUserData) {
+async function viewStory(storyId) {
+  const snap = await db.collection('stories').doc(storyId).get();
+  if (!snap.exists) { showToast('Story não encontrado.'); return; }
+  const s  = snap.data();
+  const cl = getAvatarColor(s.uid);
+  const av = s.photoURL
+    ? `<img src="${s.photoURL}" style="width:32px;height:32px;border-radius:50%;object-fit:cover">`
+    : `<div style="width:32px;height:32px;border-radius:50%;background:${cl.bg};display:flex;align-items:center;justify-content:center"><span style="color:${cl.color};font-size:12px;font-weight:700">${getInitials(s.displayName)}</span></div>`;
+
+  const bgStyle = s.imageURL ? 'background:#000' : `background:${s.bgColor||'#6366f1'}`;
+  const body    = s.imageURL
+    ? `<img src="${s.imageURL}" style="max-width:100%;max-height:100%;object-fit:contain">`
+    : `<div class="story-viewer-text">${sanitize(s.text||'')}</div>`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'story-overlay';
+  overlay.id = 'story-view-overlay';
+  overlay.innerHTML = `
+    <div class="story-viewer" style="${bgStyle}">
+      <div class="story-prog-bar"><div class="story-prog-seg"><div class="story-prog-fill" id="spf"></div></div></div>
+      <div class="story-viewer-header">
+        ${av}
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#fff">${sanitize(s.displayName||'Usuário')}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.65)">${timeAgo(s.createdAt)}</div>
+        </div>
+        <button onclick="document.getElementById('story-view-overlay').remove()"
+                style="margin-left:auto;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1">
+          <i class="ti ti-x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="story-viewer-body">${body}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Animate progress
+  const fill = document.getElementById('spf');
+  if (fill) {
+    fill.style.transition = 'width 5s linear';
+    requestAnimationFrame(() => { fill.style.width = '100%'; });
+    setTimeout(() => overlay.remove(), 5100);
+  }
+
+  // Mark viewed
+  localStorage.setItem(ST_VIEWED_KEY + storyId, '1');
+  db.collection('stories').doc(storyId).update({
+    views: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  }).catch(() => {});
+}
+
+// ── Story creation ─────────────────────────────────────────────
+function initStoryColors() {
+  const row = document.getElementById('story-color-row');
+  if (!row) return;
+  row.innerHTML = ST_COLORS.map((c, i) =>
+    `<div class="story-color-dot${i===0?' sel':''}" style="background:${c}"
+          onclick="selectStoryColor('${c}',this)"></div>`
+  ).join('');
+}
+
+function selectStoryColor(color, dot) {
+  _storyColor = color;
+  document.getElementById('story-preview-box').style.background = color;
+  document.querySelectorAll('.story-color-dot').forEach(d => d.classList.remove('sel'));
+  dot?.classList.add('sel');
+}
+
+function setStoryType(type) {
+  _storyType = type;
+  document.getElementById('st-text-section').style.display  = type==='text'  ? '' : 'none';
+  document.getElementById('st-image-section').style.display = type==='image' ? '' : 'none';
+  document.getElementById('sttab-text').classList.toggle('active', type==='text');
+  document.getElementById('sttab-image').classList.toggle('active', type==='image');
+}
+
+function openStoryModal() {
+  document.getElementById('story-create-modal').style.display = 'flex';
+  document.getElementById('story-text-input').value = '';
+  _storyImgFile = null;
+  document.getElementById('st-img-preview').innerHTML = `
+    <div style="text-align:center;color:var(--text-muted)">
+      <i class="ti ti-photo" style="font-size:36px;opacity:.4"></i>
+      <p style="font-size:13px;margin-top:.4rem">Clique para selecionar</p>
+    </div>`;
+  setStoryType('text');
+}
+function closeStoryModal() { document.getElementById('story-create-modal').style.display = 'none'; }
+
+function previewStoryImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { showToast('Imagem muito grande. Máximo 8MB.'); return; }
+  _storyImgFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('st-img-preview').innerHTML =
+      `<img src="${e.target.result}" style="max-width:100%;max-height:240px;border-radius:8px;object-fit:contain">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function publishStory() {
+  const btn = document.getElementById('story-pub-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Publicando…';
+  const reset = () => { btn.disabled = false; btn.innerHTML = '<i class="ti ti-sparkles"></i> Publicar story'; };
+  try {
+    const ud = await getUserData(currentUser.uid) || {};
+    const expires = new Date(Date.now() + 24 * 3600 * 1000);
+    const base = {
+      uid:         currentUser.uid,
+      displayName: ud.displayName || currentUser.displayName || '',
+      photoURL:    ud.photoURL    || currentUser.photoURL    || '',
+      type:        _storyType,
+      bgColor:     _storyColor,
+      createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
+      expiresAt:   firebase.firestore.Timestamp.fromDate(expires),
+      views:       []
+    };
+    if (_storyType === 'text') {
+      const text = document.getElementById('story-text-input').value.trim();
+      if (!text) { showToast('Escreva algo no story.'); reset(); return; }
+      if (text.length > 300) { showToast('Story muito longo. Máximo 300 caracteres.'); reset(); return; }
+      base.text = text;
+    } else {
+      if (!_storyImgFile) { showToast('Selecione uma imagem.'); reset(); return; }
+      base.imageURL = await uploadToCloudinary(_storyImgFile);
+    }
+    await db.collection('stories').add(base);
+    showToast('Story publicado! Disponível por 24h.');
+    closeStoryModal();
+    loadStories();
+  } catch(e) {
+    console.error(e);
+    showToast('Erro ao publicar story.');
+  }
+  reset();
+}
+
+// ── Online friends ─────────────────────────────────────────────
+async function loadOnlineFriends() {
+  const el = document.getElementById('online-friends');
+  try {
+    const snap = await db.collection('friendships')
+      .where('users', 'array-contains', currentUser.uid).limit(12).get();
+    if (snap.empty) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhum amigo ainda.</p>`; return; }
+    const ids   = snap.docs.map(d => d.data().users.find(u => u !== currentUser.uid)).filter(Boolean);
+    const users = await Promise.all(ids.slice(0, 8).map(uid => getUserData(uid)));
+    const valid = users.filter(Boolean);
+    if (!valid.length) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhum amigo ainda.</p>`; return; }
+    el.innerHTML = valid.map(u => {
+      const cl     = getAvatarColor(u.uid);
+      const online = isOnline(u);
+      const av     = u.photoURL
+        ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      return `<div class="friend-item" onclick="location.href='pages/perfil.html?uid=${u.uid}'">
+        <div class="avatar avatar-40" style="background:${cl.bg};position:relative">${av}
+          <span class="online-dot" style="background:${online?'#22c55e':'var(--gray-300)'}"></span>
+        </div>
+        <div class="friend-name">${sanitize((u.displayName||'').split(' ')[0]||'Usuário')}</div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = ''; }
+}
+
+// ── Friend suggestions ─────────────────────────────────────────
+async function loadFriendSuggestions() {
   const el = document.getElementById('friend-suggestions');
   try {
-    // Buscar amigos atuais para excluir
-    const fSnap = await db.collection('friendships')
-      .where('users', 'array-contains', currentUser.uid).get();
-    const friendIds = new Set();
-    fSnap.docs.forEach(d => d.data().users.forEach(u => friendIds.add(u)));
-    friendIds.add(currentUser.uid);
-
-    const snap = await db.collection('users').limit(20).get();
-    const suggestions = snap.docs
-      .filter(d => !friendIds.has(d.id))
-      .slice(0, 5);
-
-    if (!suggestions.length) {
-      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões no momento.</p>`;
-      return;
-    }
-    el.innerHTML = suggestions.map(doc => {
-      const u = { uid: doc.id, ...doc.data() };
+    const fSnap = await db.collection('friendships').where('users', 'array-contains', currentUser.uid).get();
+    const excl  = new Set(fSnap.docs.flatMap(d => d.data().users));
+    excl.add(currentUser.uid);
+    const snap  = await db.collection('users').limit(20).get();
+    const sugg  = snap.docs.filter(d => !excl.has(d.id)).slice(0, 5);
+    if (!sugg.length) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões.</p>`; return; }
+    el.innerHTML = sugg.map(doc => {
+      const u  = { uid: doc.id, ...doc.data() };
       const cl = getAvatarColor(u.uid);
       const av = u.photoURL
         ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
-      return `
-        <div class="suggest-item">
-          <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer"
-               onclick="location.href='pages/perfil.html?uid=${u.uid}'">${av}</div>
-          <div class="suggest-info">
-            <div class="suggest-name">${sanitize(u.displayName||'Usuário')}</div>
-            <div class="suggest-sub">${sanitize(u.bio||u.city||'')}</div>
-          </div>
-          <button class="btn btn-sm" id="sug-${u.uid}" onclick="sendFriendRequest('${u.uid}', this)">
-            <i class="ti ti-user-plus" aria-hidden="true"></i>
-          </button>
-        </div>`;
+      return `<div class="suggest-item">
+        <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer"
+             onclick="location.href='pages/perfil.html?uid=${u.uid}'">${av}</div>
+        <div class="suggest-info">
+          <div class="suggest-name">${sanitize(u.displayName||'Usuário')}</div>
+          <div class="suggest-sub">${sanitize(u.bio||u.city||'')}</div>
+        </div>
+        <button class="btn btn-sm" id="sug-${u.uid}" onclick="sendFriendReq('${u.uid}',this)">
+          <i class="ti ti-user-plus" aria-hidden="true"></i>
+        </button>
+      </div>`;
     }).join('');
   } catch(e) {}
 }
 
-async function sendFriendRequest(targetUid, btn) {
+async function sendFriendReq(toUid, btn) {
   try {
-    // Verificar se já existe solicitação
-    const existing = await db.collection('friend_requests')
-      .where('from', '==', currentUser.uid)
-      .where('to', '==', targetUid)
-      .where('status', '==', 'pending')
-      .get();
-    if (!existing.empty) { showToast('Solicitação já enviada.'); return; }
-
+    const snap = await db.collection('friend_requests').where('from', '==', currentUser.uid).get();
+    if (snap.docs.some(d => d.data().to === toUid && d.data().status === 'pending')) {
+      showToast('Solicitação já enviada.'); return;
+    }
     await db.collection('friend_requests').add({
-      from: currentUser.uid,
-      to:   targetUid,
-      status: 'pending',
+      from: currentUser.uid, to: toUid, status: 'pending',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     btn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i>';
-    btn.disabled = true;
+    btn.disabled  = true;
     showToast('Solicitação enviada!');
-
-    // Notificar o destinatário
-    createNotification(targetUid, 'friend_request', {
+    createNotification(toUid, 'friend_request', {
       message: `${currentUser.displayName} enviou uma solicitação de amizade.`,
-      link: `pages/amigos.html`,
+      link: '/pages/amigos.html',
       fromUid: currentUser.uid,
       fromName: currentUser.displayName
     });
-  } catch(e) { showToast('Erro ao enviar solicitação.'); }
+  } catch(e) { showToast('Erro ao enviar.'); }
 }
 
-// ── Trending communities ──────────────────────────────────────
+// ── Trending communities ───────────────────────────────────────
 async function loadTrendingCommunities() {
   const el = document.getElementById('trending-communities');
   try {
-    const snap = await db.collection('communities')
-      .orderBy('membersCount', 'desc')
-      .limit(5).get();
-
-    if (snap.empty) {
-      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhuma comunidade ainda.</p>`;
-      return;
-    }
-    const icons = ['ti-code','ti-camera','ti-music','ti-book','ti-plant','ti-rocket','ti-brain'];
-    const colors = [
-      {bg:'#EEEDFE',c:'#534AB7'},{bg:'#E1F5EE',c:'#0F6E56'},{bg:'#FAEEDA',c:'#854F0B'},
-      {bg:'#FAECE7',c:'#993C1D'},{bg:'#FBEAF0',c:'#993556'}
-    ];
-    el.innerHTML = snap.docs.map((doc, i) => {
-      const d = doc.data();
-      const ic = icons[i % icons.length];
-      const cl = colors[i % colors.length];
-      return `
-        <div class="comm-item" onclick="location.href='pages/comunidade.html?id=${doc.id}'">
-          <div class="comm-icon" style="background:${cl.bg}">
-            <i class="ti ${ic}" style="color:${cl.c}" aria-hidden="true"></i>
-          </div>
-          <div>
-            <div class="comm-name">${sanitize(d.name)}</div>
-            <div class="comm-members">${d.membersCount||0} membros</div>
-          </div>
-        </div>`;
+    const snap = await db.collection('communities').orderBy('membersCount','desc').limit(5).get();
+    if (snap.empty) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhuma comunidade ainda.</p>`; return; }
+    const CAT = {
+      tecnologia:{bg:'#EEEDFE',c:'#534AB7',icon:'ti-code'},
+      musica:{bg:'#FAEEDA',c:'#854F0B',icon:'ti-music'},
+      arte:{bg:'#FBEAF0',c:'#993556',icon:'ti-palette'},
+      esportes:{bg:'#E1F5EE',c:'#0F6E56',icon:'ti-ball-football'},
+      jogos:{bg:'#FAECE7',c:'#993C1D',icon:'ti-device-gamepad'},
+      livros:{bg:'#E6F1FB',c:'#185FA5',icon:'ti-book'},
+      outros:{bg:'#F1EFE8',c:'#5F5E5A',icon:'ti-users-group'}
+    };
+    el.innerHTML = snap.docs.map(doc => {
+      const d  = doc.data();
+      const cl = CAT[d.category] || CAT.outros;
+      return `<div class="comm-item" onclick="location.href='pages/comunidade.html?id=${doc.id}'">
+        <div class="comm-icon" style="background:${cl.bg}">
+          <i class="ti ${cl.icon}" style="color:${cl.c}" aria-hidden="true"></i>
+        </div>
+        <div>
+          <div class="comm-name">${sanitize(d.name)}</div>
+          <div class="comm-members">${d.membersCount||0} membros</div>
+        </div>
+      </div>`;
     }).join('');
   } catch(e) {}
 }

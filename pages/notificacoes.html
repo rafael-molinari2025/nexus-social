@@ -6,6 +6,7 @@
   <title>Nexus — Notificações</title>
   <meta name="description" content="Suas notificações no Nexus.">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     .notif-page { max-width: 640px; margin: 0 auto; padding: 1.5rem .75rem; }
@@ -47,7 +48,7 @@
       transition: all var(--transition);
     }
     .notif-filter-btn.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
       .notif-page { padding: 1rem .5rem calc(80px + 1rem); }
       .page-header { flex-wrap: wrap; gap: .5rem; }
     }

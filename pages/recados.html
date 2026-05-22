@@ -6,6 +6,7 @@
   <title>Nexus — Recados</title>
   <meta name="description" content="Envie e receba recados de amigos no Nexus.">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     .recados-page { max-width: 680px; margin: 0 auto; padding: 1.5rem .75rem; }
@@ -40,7 +41,7 @@
       cursor: pointer; transition: background var(--transition);
     }
     .friend-result-item:hover { background: var(--gray-50); }
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
       .recados-page { padding: 1rem .5rem calc(80px + 1rem); }
     }
   </style>
@@ -233,7 +234,7 @@ async function sendScrap() {
     // Notificar destinatário
     createNotification(selectedFriend.uid, 'scrap', {
       message: `${currentUser.displayName} te enviou um recado.`,
-      link: `recados.html`,
+      link: `/pages/recados.html`,
       fromUid: currentUser.uid,
       fromName: currentUser.displayName
     });

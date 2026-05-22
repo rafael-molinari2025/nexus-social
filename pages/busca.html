@@ -6,10 +6,11 @@
   <title>Nexus — Busca</title>
   <meta name="description" content="Busque pessoas e comunidades no Nexus.">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     .busca-page { max-width: 720px; margin: 0 auto; padding: 1.5rem .75rem; }
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
       .busca-page { padding: 1rem .5rem calc(80px + 1rem); }
       .people-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
     }
@@ -191,35 +192,24 @@ async function doSearch() {
   }
 }
 
+let _buscarUsersCache = null;
+
 async function searchPeople(q, el) {
   try {
-    // Busca case-insensitive: tentar tanto o original quanto lowercase/uppercase
-    const qLower = q.toLowerCase();
-    const qCapitalized = q.charAt(0).toUpperCase() + q.slice(1).toLowerCase();
-
-    // Buscamos por displayName e por displayNameLower se disponível
-    const [snap1, snap2] = await Promise.all([
-      db.collection('users')
-        .orderBy('displayName')
-        .startAt(qCapitalized)
-        .endAt(qCapitalized + '\uf8ff')
-        .limit(15).get(),
-      db.collection('users')
-        .orderBy('displayName')
-        .startAt(q)
-        .endAt(q + '\uf8ff')
-        .limit(15).get()
-    ]);
-
-    // Mesclar resultados (deduplicate por uid)
-    const seen = new Set();
-    const allDocs = [...snap1.docs, ...snap2.docs].filter(d => {
-      if (seen.has(d.id)) return false;
-      seen.add(d.id);
-      return d.id !== currentUser.uid;
-    });
-
-    const results = allDocs.map(d => ({ uid: d.id, ...d.data() }));
+    const qLower = q.toLowerCase().trim();
+    if (!_buscarUsersCache) {
+      _buscarUsersCache = await db.collection('users').limit(500).get();
+    }
+    const results = _buscarUsersCache.docs
+      .filter(d => {
+        if (d.id === currentUser.uid) return false;
+        const u = d.data();
+        return (u.displayName || '').toLowerCase().includes(qLower) ||
+               (u.username    || '').toLowerCase().includes(qLower) ||
+               (u.email       || '').toLowerCase().includes(qLower);
+      })
+      .slice(0, 20)
+      .map(d => ({ uid: d.id, ...d.data() }));
 
     if (!results.length) {
       el.innerHTML = `<div class="empty-search">
@@ -274,11 +264,12 @@ async function sendRequest(targetUid) {
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   try {
     // Verificar duplicata
-    const existing = await db.collection('friend_requests')
-      .where('from', '==', currentUser.uid)
-      .where('to', '==', targetUid)
-      .where('status', '==', 'pending').get();
-    if (!existing.empty) { if (btn) btn.innerHTML = '<i class="ti ti-check"></i> Enviado'; return; }
+    const existingSnap = await db.collection('friend_requests')
+      .where('from', '==', currentUser.uid).get();
+    const hasPending = existingSnap.docs.some(
+      d => d.data().to === targetUid && d.data().status === 'pending'
+    );
+    if (hasPending) { if (btn) btn.innerHTML = '<i class="ti ti-check"></i> Enviado'; return; }
 
     await db.collection('friend_requests').add({
       from: currentUser.uid,
@@ -293,7 +284,7 @@ async function sendRequest(targetUid) {
     // Notificar
     createNotification(targetUid, 'friend_request', {
       message: `${currentUser.displayName} enviou uma solicitação de amizade.`,
-      link: 'amigos.html',
+      link: '/pages/amigos.html',
       fromUid: currentUser.uid,
       fromName: currentUser.displayName
     });
@@ -306,10 +297,12 @@ async function sendRequest(targetUid) {
 async function searchCommunities(q, el) {
   try {
     const qCapitalized = q.charAt(0).toUpperCase() + q.slice(1).toLowerCase();
-    const [snap1, snap2] = await Promise.all([
-      db.collection('communities').orderBy('name').startAt(qCapitalized).endAt(qCapitalized + '\uf8ff').limit(15).get(),
-      db.collection('communities').orderBy('name').startAt(q).endAt(q + '\uf8ff').limit(15).get()
-    ]);
+    const commSnap = await db.collection('communities').limit(100).get();
+    const snap1 = { docs: commSnap.docs.filter(d => {
+      const n = (d.data().name || '').toLowerCase();
+      return n.includes(q.toLowerCase());
+    }) };
+    const snap2 = { docs: [] };
 
     const seen = new Set();
     const allDocs = [...snap1.docs, ...snap2.docs].filter(d => {
