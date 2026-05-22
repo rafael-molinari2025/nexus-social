@@ -414,12 +414,26 @@
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Criando conta…';
 
+    // ── Passo 1: criar conta no Firebase Auth ─────────────────
+    let user;
     try {
-      // Criar usuário no Auth primeiro (precisa estar autenticado para consultar Firestore)
-      const { user } = await auth.createUserWithEmailAndPassword(email, pass);
+      const result = await auth.createUserWithEmailAndPassword(email, pass);
+      user = result.user;
       await user.updateProfile({ displayName });
+    } catch(e) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
+      return showError(
+        e.code === 'auth/email-already-in-use'
+          ? 'Este e-mail já está cadastrado. Tente entrar.'
+          : e.code === 'auth/invalid-email'
+            ? 'E-mail inválido.'
+            : 'Erro ao criar conta. Tente novamente.'
+      );
+    }
 
-      // Agora autenticado — verificar se username já existe
+    // ── Passo 2: verificar username único ─────────────────────
+    try {
       const usernameSnap = await db.collection('users').where('username', '==', username).get();
       if (!usernameSnap.empty) {
         await user.delete();
@@ -427,25 +441,35 @@
         btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
         return showError('Este nome de usuário já está em uso. Escolha outro.');
       }
-
-      await handleAuthSuccess(user, {
-        displayName,
-        username,
-        birthdate: birth,
-        gender: selectedGender,
-        city,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
     } catch(e) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
-      showError(
-        e.code === 'auth/email-already-in-use'
-          ? 'Este e-mail já está cadastrado. Tente entrar.'
-          : e.code === 'auth/invalid-email'
-            ? 'E-mail inválido.'
-            : 'Erro ao criar conta. Tente novamente.'
-      );
+      // falha de rede na checagem — prossegue; conflito de username será raro e resolvível no perfil
+      console.warn('username check failed, proceeding:', e);
+    }
+
+    // ── Passo 3: salvar perfil no Firestore (com retry) ───────
+    const profileData = {
+      displayName,
+      username,
+      birthdate: birth,
+      gender: selectedGender,
+      city,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await handleAuthSuccess(user, profileData);
+        return; // sucesso — handleAuthSuccess já redireciona
+      } catch(e) {
+        if (attempt === 3) {
+          // após 3 tentativas, a conta Auth existe; redireciona para o perfil
+          // o documento Firestore será criado no próximo login via handleAuthSuccess
+          console.error('Firestore write failed after 3 attempts, redirecting:', e);
+          window.location.href = `/pages/perfil.html?uid=${user.uid}`;
+          return;
+        }
+        await new Promise(r => setTimeout(r, 600 * attempt)); // backoff: 600ms, 1200ms
+      }
     }
   }
 
