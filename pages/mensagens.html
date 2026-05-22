@@ -245,20 +245,35 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      .chat-layout { grid-template-columns: 280px 1fr; }
+      .chat-layout { grid-template-columns: 1fr; }
     }
     @media (max-width: 768px) {
       body { overflow: hidden; }
       .chat-layout {
         grid-template-columns: 1fr;
-        height: calc(100vh - var(--topbar-h) - 60px); /* 60px = bottom nav */
+        /* svh = small viewport height: exclui a barra de endereço do browser mobile */
+        height: calc(100svh - var(--topbar-h) - 60px);
       }
-      /* No mobile, mostrar apenas sidebar OU chat */
       .chat-sidebar { width: 100%; }
       .chat-main { display: none; }
       .chat-sidebar.hidden { display: none; }
-      .chat-main.show { display: flex; }
-      /* Botão de voltar no header do chat */
+
+      /* position:fixed garante que o chat ocupe exatamente o espaço visível,
+         independente de 100vh incluir chrome do browser ou não */
+      .chat-main.show {
+        display: flex;
+        position: fixed;
+        top: var(--topbar-h);
+        bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: var(--bg);
+        height: auto;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
       .chat-back-btn {
         display: flex !important;
         width: 36px; height: 36px; border: none; background: none;
