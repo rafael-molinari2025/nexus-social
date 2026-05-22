@@ -368,18 +368,10 @@
   async function handleAuthSuccess(user, extraData = {}) {
     const base = { uid: user.uid, email: user.email };
     if (user.photoURL)    base.photoURL    = user.photoURL;
-    const displayName = (extraData.displayName || user.displayName || '').trim();
-    if (displayName) {
-      base.displayName       = displayName;
-      base.displayName_lower = displayName.toLowerCase();
-    }
-    // Remove displayName from extraData para não duplicar
-    const { displayName: _dn, ...restExtra } = extraData;
-    await updateUserData(user.uid, {
-      ...base,
-      ...restExtra,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    if (user.displayName) base.displayName = user.displayName;
+    const data = { ...base, ...extraData, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    if (data.displayName) data.displayName_lower = data.displayName.toLowerCase();
+    await updateUserData(user.uid, data);
     window.location.href = `/pages/perfil.html?uid=${user.uid}`;
   }
 
