@@ -343,17 +343,16 @@ let _friendSearchTimer = null;
 let _searchAllUsers    = null;   // todos os usuários (exceto o próprio)
 let _searchFriendIds   = new Set();
 let _searchPendingIds  = new Set();
-let _searchCacheLoading = false;
+let _searchCachePromise = null;  // promise compartilhada para evitar corrida
 
-async function loadSearchCache() {
-  if (_searchAllUsers || _searchCacheLoading) return;
-  _searchCacheLoading = true;
-  try {
-    const [usersSnap, fSnap, rSnap] = await Promise.all([
-      db.collection('users').limit(500).get(),
-      db.collection('friendships').where('users', 'array-contains', currentUser.uid).get(),
-      db.collection('friend_requests').where('from', '==', currentUser.uid).get()
-    ]);
+function loadSearchCache() {
+  if (_searchAllUsers !== null) return Promise.resolve();
+  if (_searchCachePromise) return _searchCachePromise;   // reutiliza se já estiver carregando
+  _searchCachePromise = Promise.all([
+    db.collection('users').get(),                         // sem limit: busca todos os usuários
+    db.collection('friendships').where('users', 'array-contains', currentUser.uid).get(),
+    db.collection('friend_requests').where('from', '==', currentUser.uid).get()
+  ]).then(([usersSnap, fSnap, rSnap]) => {
     _searchAllUsers   = usersSnap.docs
       .filter(d => d.id !== currentUser.uid)
       .map(d => ({ uid: d.id, ...d.data() }));
@@ -361,12 +360,12 @@ async function loadSearchCache() {
     _searchPendingIds = new Set(
       rSnap.docs.filter(d => d.data().status === 'pending').map(d => d.data().to)
     );
-  } catch(e) {
+  }).catch(e => {
     console.error('loadSearchCache:', e);
     _searchAllUsers = [];
-  } finally {
-    _searchCacheLoading = false;
-  }
+    _searchCachePromise = null;  // permite nova tentativa em caso de erro
+  });
+  return _searchCachePromise;
 }
 
 function onFriendSearch(q) {
@@ -374,10 +373,11 @@ function onFriendSearch(q) {
   const dd = document.getElementById('friend-search-dropdown');
   if (!q.trim()) { dd.style.display = 'none'; return; }
 
-  if (!_searchAllUsers) {
+  if (_searchAllUsers === null) {
     dd.innerHTML = `<div style="padding:.75rem 1rem;font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:.5rem">
       <div class="spinner" style="width:16px;height:16px"></div> Carregando…</div>`;
     dd.style.display = 'block';
+    // aguarda a MESMA promise (evita corrida de múltiplos carregamentos paralelos)
     loadSearchCache().then(() => doFriendSearch(q));
     return;
   }
@@ -391,10 +391,11 @@ function doFriendSearch(q) {
   dd.style.display = 'block';
 
   const users = (_searchAllUsers || []).filter(u => {
-    const name  = (u.displayName || '').toLowerCase();
-    const uname = (u.username    || '').toLowerCase();
-    const mail  = (u.email       || '').toLowerCase();
-    return name.includes(qLower) || uname.includes(qLower) || mail.includes(qLower);
+    // busca em displayName_lower (campo indexado), displayName, username e email
+    const nameLower = (u.displayName_lower || (u.displayName || '').toLowerCase());
+    const uname     = (u.username    || '').toLowerCase();
+    const mail      = (u.email       || '').toLowerCase();
+    return nameLower.includes(qLower) || uname.includes(qLower) || mail.includes(qLower);
   }).slice(0, 10);
 
   if (!users.length) {
