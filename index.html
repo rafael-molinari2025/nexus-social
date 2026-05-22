@@ -735,7 +735,7 @@ function postHTML(id, p) {
       </div>
     </div>
     ${p.text ? `<div class="post-body">${parsePostText(p.text)}</div>` : ''}
-    ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" onerror="this.style.display='none'">` : ''}
+    ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" onerror="this.style.display='none'" onclick="openLightbox(this.src)" style="cursor:zoom-in">` : ''}
     ${topEmoji.length || totalRxn ? `
       <div class="reaction-summary">
         ${topEmoji.map(e => `<span>${e}</span>`).join('')}

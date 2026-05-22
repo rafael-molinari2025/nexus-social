@@ -968,6 +968,36 @@ ul, ol { list-style: none; }
   .user-dropdown { right: 0; min-width: 160px; }
 }
 
+/* ── Photos grid (perfil + galeria) ── */
+.photos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+.photos-grid-item {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--gray-100);
+  border-radius: 4px;
+}
+.photos-grid-item img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform .22s, opacity .22s;
+  display: block;
+}
+.photos-grid-item:hover img { transform: scale(1.06); opacity: .88; }
+.photos-grid-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.28);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .18s;
+  color: #fff; font-size: 26px;
+}
+.photos-grid-item:hover .photos-grid-overlay { opacity: 1; }
+
 /* ═══════════════════════════════════════════════════════════
    RESPONSIVE — MUITO PEQUENO (≤ 380px)
    ═══════════════════════════════════════════════════════════ */

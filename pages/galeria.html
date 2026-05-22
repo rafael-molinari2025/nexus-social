@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Galeria</title>
+  <meta name="description" content="Sua galeria de fotos no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    .gallery-page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 1.5rem .75rem calc(80px + 1.5rem);
+    }
+    .gallery-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.25rem; gap: .75rem;
+    }
+    .gallery-title { font-size: 20px; font-weight: 700; }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+      margin-bottom: 1.5rem;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--purple-400);
+      background: #EEEDFE;
+    }
+    .upload-zone i  { font-size: 38px; color: var(--purple-400); display: block; margin-bottom: .5rem; }
+    .upload-zone p  { font-size: 14px; color: var(--text-secondary); margin: .2rem 0; }
+    .upload-zone small { font-size: 12px; color: var(--text-muted); }
+
+    /* Tabs */
+    .gallery-tabs {
+      display: flex; border-bottom: 0.5px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+    .gallery-tab {
+      padding: .65rem 1.1rem; font-size: 14px; font-weight: 500;
+      border: none; background: none; cursor: pointer;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      transition: color var(--transition), border-color var(--transition);
+      display: flex; align-items: center; gap: .35rem;
+    }
+    .gallery-tab.active { color: var(--purple-600); border-bottom-color: var(--purple-600); }
+
+    /* Gallery grid */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+    }
+    .gallery-item {
+      position: relative; aspect-ratio: 1; overflow: hidden;
+      border-radius: 6px; cursor: zoom-in;
+      background: var(--gray-100);
+    }
+    .gallery-item img {
+      width: 100%; height: 100%; object-fit: cover;
+      transition: transform .22s, opacity .22s;
+      display: block;
+    }
+    .gallery-item:hover img { transform: scale(1.06); opacity: .88; }
+    .gallery-item-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.28);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .18s;
+      color: #fff; font-size: 28px;
+    }
+    .gallery-item:hover .gallery-item-overlay { opacity: 1; }
+    .gallery-item-del {
+      position: absolute; top: .4rem; right: .4rem;
+      background: rgba(0,0,0,.55); border: none; color: #fff;
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; opacity: 0; transition: opacity .18s;
+      font-size: 13px; z-index: 2;
+    }
+    .gallery-item:hover .gallery-item-del { opacity: 1; }
+
+    /* Upload progress overlay */
+    .upload-progress {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem; display: none;
+    }
+    .upload-progress-bar {
+      height: 6px; background: var(--gray-200); border-radius: 3px;
+      overflow: hidden; margin-top: .5rem;
+    }
+    .upload-progress-fill {
+      height: 100%; background: var(--purple-600);
+      border-radius: 3px; transition: width .3s;
+    }
+
+    @media (max-width: 480px) {
+      .gallery-grid { gap: 2px; }
+      .gallery-page { padding: 1rem .5rem calc(80px + 1rem); }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div class="toast" id="toast"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="gallery-page">
+
+    <div class="gallery-header">
+      <h1 class="gallery-title">Galeria de Fotos</h1>
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('file-input').click()">
+        <i class="ti ti-plus" aria-hidden="true"></i> Adicionar fotos
+      </button>
+      <input type="file" id="file-input" accept="image/*" multiple style="display:none" onchange="handleUpload(this)">
+    </div>
+
+    <!-- Upload zone (arrastar ou clicar) -->
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <i class="ti ti-cloud-upload" aria-hidden="true"></i>
+      <p><strong>Clique aqui</strong> ou arraste fotos para adicionar</p>
+      <small>JPG, PNG, GIF, WEBP · Máximo 8 MB por foto · Até 10 por vez</small>
+    </div>
+
+    <!-- Progresso de upload -->
+    <div class="upload-progress" id="upload-progress">
+      <div id="upload-progress-label" style="font-size:13px;font-weight:500"></div>
+      <div class="upload-progress-bar">
+        <div class="upload-progress-fill" id="upload-progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="gallery-tabs">
+      <button class="gallery-tab active" id="tab-btn-galeria" onclick="switchTab('galeria')">
+        <i class="ti ti-photo" aria-hidden="true"></i> Minha galeria
+      </button>
+      <button class="gallery-tab" id="tab-btn-posts" onclick="switchTab('posts')">
+        <i class="ti ti-news" aria-hidden="true"></i> Fotos de posts
+      </button>
+    </div>
+
+    <!-- Conteúdo -->
+    <div id="gallery-content">
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let _activeTab  = 'galeria';
+let _gallerySrcs = [];
+
+requireAuth(async user => {
+  currentUser = user;
+  const ud = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(ud, 'gallery');
+  loadContent();
+  setupDragDrop();
+});
+
+// ── Tabs ──────────────────────────────────────────────────────
+function switchTab(tab) {
+  _activeTab = tab;
+  ['galeria','posts'].forEach(t => {
+    document.getElementById(`tab-btn-${t}`).classList.toggle('active', t === tab);
+  });
+  document.getElementById('upload-zone').style.display = tab === 'galeria' ? '' : 'none';
+  loadContent();
+}
+
+// ── Carregar conteúdo ─────────────────────────────────────────
+async function loadContent() {
+  const el = document.getElementById('gallery-content');
+  el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+
+  try {
+    let items = [];
+
+    if (_activeTab === 'galeria') {
+      let snap;
+      try {
+        snap = await db.collection('photos')
+          .where('uid','==', currentUser.uid)
+          .orderBy('createdAt','desc')
+          .get();
+      } catch(_) {
+        snap = await db.collection('photos').where('uid','==', currentUser.uid).get();
+      }
+      items = snap.docs.map(d => ({ id: d.id, url: d.data().imageURL, deletable: true }));
+    } else {
+      let snap;
+      try {
+        snap = await db.collection('posts')
+          .where('authorId','==', currentUser.uid)
+          .orderBy('createdAt','desc')
+          .get();
+      } catch(_) {
+        snap = await db.collection('posts').where('authorId','==', currentUser.uid).get();
+      }
+      items = snap.docs
+        .filter(d => d.data().imageURL)
+        .map(d => ({ id: d.id, url: d.data().imageURL, deletable: false }));
+    }
+
+    if (!items.length) {
+      el.innerHTML = `<div class="empty-state">
+        <i class="ti ti-photo-off" aria-hidden="true"></i>
+        <p>${_activeTab === 'galeria'
+          ? 'Sua galeria está vazia.<br>Adicione fotos clicando em <strong>Adicionar fotos</strong>!'
+          : 'Nenhum post com foto ainda.'}</p>
+      </div>`;
+      return;
+    }
+
+    _gallerySrcs = items.map(p => p.url);
+
+    el.innerHTML = `<div class="gallery-grid" id="gallery-grid">
+      ${items.map((p, i) => `
+        <div class="gallery-item" data-idx="${i}">
+          <img src="${sanitize(p.url)}" alt="Foto ${i+1}" loading="lazy"
+               onerror="this.closest('.gallery-item').remove()">
+          <div class="gallery-item-overlay"><i class="ti ti-zoom-in" aria-hidden="true"></i></div>
+          ${p.deletable
+            ? `<button class="gallery-item-del" data-id="${p.id}" title="Excluir foto" aria-label="Excluir foto">
+                 <i class="ti ti-trash" aria-hidden="true"></i>
+               </button>`
+            : ''}
+        </div>`).join('')}
+    </div>`;
+
+    // Abrir lightbox ao clicar na foto
+    document.getElementById('gallery-grid').addEventListener('click', e => {
+      const delBtn = e.target.closest('.gallery-item-del');
+      if (delBtn) { deletePhoto(delBtn.dataset.id); return; }
+      const item = e.target.closest('.gallery-item[data-idx]');
+      if (item) openLightbox(_gallerySrcs, parseInt(item.dataset.idx));
+    });
+
+  } catch(e) {
+    console.error('loadContent:', e);
+    el.innerHTML = `<div class="empty-state">
+      <i class="ti ti-wifi-off" aria-hidden="true"></i>
+      <p>Erro ao carregar fotos.<br>Recarregue a página.</p>
+    </div>`;
+  }
+}
+
+// ── Upload ────────────────────────────────────────────────────
+async function handleUpload(input) {
+  const files = Array.from(input.files || [])
+    .filter(f => f.type.startsWith('image/'))
+    .slice(0, 10);
+  input.value = '';
+  if (!files.length) return;
+
+  const progressEl = document.getElementById('upload-progress');
+  const labelEl    = document.getElementById('upload-progress-label');
+  const fillEl     = document.getElementById('upload-progress-fill');
+  progressEl.style.display = 'block';
+
+  let done = 0;
+  let errors = 0;
+
+  for (const file of files) {
+    if (file.size > 8 * 1024 * 1024) {
+      showToast(`"${file.name}" excede 8 MB e foi ignorado.`);
+      errors++;
+      continue;
+    }
+    labelEl.textContent = `Enviando ${done + 1} de ${files.length}…`;
+    fillEl.style.width = `${Math.round((done / files.length) * 100)}%`;
+    try {
+      const imageURL = await uploadToCloudinary(file);
+      await db.collection('photos').add({
+        uid:       currentUser.uid,
+        imageURL,
+        caption:   '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      done++;
+    } catch(e) {
+      console.error('Upload error:', e);
+      errors++;
+      showToast(`Erro ao enviar "${file.name}".`);
+    }
+  }
+
+  fillEl.style.width = '100%';
+  labelEl.textContent = `${done} foto${done !== 1 ? 's' : ''} adicionada${done !== 1 ? 's' : ''}!`;
+
+  setTimeout(() => {
+    progressEl.style.display = 'none';
+    fillEl.style.width = '0%';
+  }, 1800);
+
+  if (done > 0) {
+    showToast(`${done} foto${done !== 1 ? 's' : ''} salva${done !== 1 ? 's' : ''} na galeria!`);
+    if (_activeTab === 'galeria') loadContent();
+  }
+}
+
+// ── Excluir foto ──────────────────────────────────────────────
+async function deletePhoto(photoId) {
+  if (!confirm('Excluir esta foto da galeria?')) return;
+  try {
+    await db.collection('photos').doc(photoId).delete();
+    showToast('Foto excluída.');
+    loadContent();
+  } catch(e) {
+    showToast('Erro ao excluir foto.');
+  }
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────
+function setupDragDrop() {
+  const zone = document.getElementById('upload-zone');
+  if (!zone) return;
+
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (!files.length) return showToast('Nenhuma imagem detectada.');
+    handleUpload({ files, value: '' });
+  });
+}
+</script>
+</body>
+</html>

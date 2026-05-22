@@ -233,6 +233,9 @@ function renderTopbar(user, activePage = 'feed') {
         <a href="${PAGES}perfil.html?uid=${user.uid}" class="user-dropdown-item">
           <i class="ti ti-user-circle" aria-hidden="true"></i> Meu perfil
         </a>
+        <a href="${PAGES}galeria.html" class="user-dropdown-item">
+          <i class="ti ti-photo" aria-hidden="true"></i> Minha galeria
+        </a>
         <a href="${PAGES}configuracoes.html" class="user-dropdown-item">
           <i class="ti ti-settings" aria-hidden="true"></i> Configurações
         </a>
@@ -446,4 +449,89 @@ function updateOnlineStatus(uid) {
     .catch(() => {});
   ping();
   setInterval(ping, 2 * 60 * 1000);
+}
+
+// ── Lightbox ──────────────────────────────────────────────────
+function openLightbox(srcs, startIdx = 0) {
+  if (typeof srcs === 'string') srcs = [srcs];
+  window._lbList = srcs;
+  window._lbIdx  = Math.max(0, Math.min(startIdx, srcs.length - 1));
+
+  let lb = document.getElementById('_lb');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = '_lb';
+    lb.style.cssText = [
+      'position:fixed;inset:0;z-index:3000',
+      'background:rgba(0,0,0,.93)',
+      'display:flex;align-items:center;justify-content:center',
+      'cursor:zoom-out;-webkit-tap-highlight-color:transparent'
+    ].join(';');
+    lb.innerHTML = `
+      <button id="_lb_close" onclick="closeLightbox()" aria-label="Fechar"
+        style="position:absolute;top:.75rem;right:.75rem;width:40px;height:40px;
+               border-radius:50%;background:rgba(255,255,255,.18);border:none;
+               color:#fff;font-size:20px;cursor:pointer;display:flex;
+               align-items:center;justify-content:center;z-index:1">
+        <i class="ti ti-x"></i>
+      </button>
+      <button id="_lb_prev" onclick="event.stopPropagation();_lbNav(-1)" aria-label="Anterior"
+        style="position:absolute;left:.75rem;width:44px;height:44px;border-radius:50%;
+               background:rgba(255,255,255,.18);border:none;color:#fff;font-size:22px;
+               cursor:pointer;display:none;align-items:center;justify-content:center;z-index:1">
+        <i class="ti ti-chevron-left"></i>
+      </button>
+      <img id="_lb_img" src="" alt="Foto"
+        style="max-width:92vw;max-height:88vh;object-fit:contain;border-radius:8px;
+               cursor:default;user-select:none;display:block;box-shadow:0 8px 40px rgba(0,0,0,.5)"
+        onclick="event.stopPropagation()" draggable="false">
+      <button id="_lb_next" onclick="event.stopPropagation();_lbNav(1)" aria-label="Próxima"
+        style="position:absolute;right:.75rem;width:44px;height:44px;border-radius:50%;
+               background:rgba(255,255,255,.18);border:none;color:#fff;font-size:22px;
+               cursor:pointer;display:none;align-items:center;justify-content:center;z-index:1">
+        <i class="ti ti-chevron-right"></i>
+      </button>
+      <div id="_lb_counter"
+        style="position:absolute;bottom:1.25rem;left:50%;transform:translateX(-50%);
+               color:rgba(255,255,255,.65);font-size:12px;font-weight:500;pointer-events:none">
+      </div>`;
+    lb.addEventListener('click', closeLightbox);
+    document.body.appendChild(lb);
+    document.addEventListener('keydown', e => {
+      const el = document.getElementById('_lb');
+      if (!el || el.style.display === 'none') return;
+      if (e.key === 'Escape')      closeLightbox();
+      if (e.key === 'ArrowLeft')   _lbNav(-1);
+      if (e.key === 'ArrowRight')  _lbNav(1);
+    });
+  }
+
+  lb.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  _lbRender();
+}
+
+function _lbRender() {
+  const img     = document.getElementById('_lb_img');
+  const prev    = document.getElementById('_lb_prev');
+  const next    = document.getElementById('_lb_next');
+  const counter = document.getElementById('_lb_counter');
+  if (!img) return;
+  img.src = window._lbList[window._lbIdx];
+  const multi = window._lbList.length > 1;
+  if (prev)    prev.style.display    = multi ? 'flex' : 'none';
+  if (next)    next.style.display    = multi ? 'flex' : 'none';
+  if (counter) counter.textContent   = multi ? `${window._lbIdx + 1} / ${window._lbList.length}` : '';
+}
+
+function _lbNav(dir) {
+  if (!window._lbList) return;
+  window._lbIdx = (window._lbIdx + dir + window._lbList.length) % window._lbList.length;
+  _lbRender();
+}
+
+function closeLightbox() {
+  const lb = document.getElementById('_lb');
+  if (lb) lb.style.display = 'none';
+  document.body.style.overflow = '';
 }

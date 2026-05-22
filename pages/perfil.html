@@ -352,22 +352,52 @@ function switchTab(tab) {
 
 async function loadGallery(uid) {
   const el = document.getElementById('tab-fotos');
+  const isOwn = currentUser && currentUser.uid === uid;
   el.innerHTML = '<div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div>';
   try {
-    let snap;
-    try {
-      snap = await db.collection('posts').where('authorId','==',uid).orderBy('createdAt','desc').get();
-    } catch(_) {
-      snap = await db.collection('posts').where('authorId','==',uid).get();
-    }
-    const photos = snap.docs.map(d => d.data()).filter(p => p.imageURL);
-    if (!photos.length) {
-      el.innerHTML = `<div class="empty-state"><i class="ti ti-photo-off" aria-hidden="true"></i><p>Nenhuma foto publicada ainda.</p></div>`;
+    // Busca na coleção photos (uploads diretos) + posts com imagem
+    const [photosSnap, postsSnap] = await Promise.all([
+      db.collection('photos').where('uid','==',uid).get().catch(() => ({ docs: [] })),
+      db.collection('posts').where('authorId','==',uid).get()
+    ]);
+
+    const fromGallery = photosSnap.docs.map(d => ({ id: d.id, url: d.data().imageURL, src: 'gallery' }));
+    const fromPosts   = postsSnap.docs
+      .filter(d => d.data().imageURL)
+      .map(d => ({ id: d.id, url: d.data().imageURL, src: 'post' }));
+
+    // Combina, remove duplicatas por URL
+    const seen = new Set();
+    const all = [...fromGallery, ...fromPosts].filter(p => {
+      if (!p.url || seen.has(p.url)) return false;
+      seen.add(p.url); return true;
+    });
+
+    const btnUpload = isOwn
+      ? `<a href="galeria.html" class="btn btn-sm btn-primary" style="margin-bottom:1rem;display:inline-flex;align-items:center;gap:.35rem">
+           <i class="ti ti-photo-plus" aria-hidden="true"></i> Gerenciar galeria
+         </a>`
+      : '';
+
+    if (!all.length) {
+      el.innerHTML = btnUpload + `<div class="empty-state"><i class="ti ti-photo-off" aria-hidden="true"></i><p>Nenhuma foto ainda.</p></div>`;
       return;
     }
-    el.innerHTML = `<div class="photos-grid">${photos.map(p =>
-      `<img src="${p.imageURL}" alt="Foto" loading="lazy" onclick="window.open('${p.imageURL}','_blank')">`
-    ).join('')}</div>`;
+
+    const srcs = all.map(p => p.url);
+    el.innerHTML = btnUpload + `<div class="photos-grid" id="profile-photos-grid">
+      ${all.map((p, i) => `
+        <div class="photos-grid-item" data-idx="${i}">
+          <img src="${sanitize(p.url)}" alt="Foto" loading="lazy" onerror="this.closest('.photos-grid-item').remove()">
+          <div class="photos-grid-overlay"><i class="ti ti-zoom-in"></i></div>
+        </div>`).join('')}
+    </div>`;
+
+    window._profilePhotoSrcs = srcs;
+    document.getElementById('profile-photos-grid').addEventListener('click', e => {
+      const item = e.target.closest('.photos-grid-item[data-idx]');
+      if (item) openLightbox(window._profilePhotoSrcs, parseInt(item.dataset.idx));
+    });
   } catch(e) {
     el.innerHTML = `<div class="empty-state"><i class="ti ti-wifi-off" aria-hidden="true"></i><p>Erro ao carregar fotos.</p></div>`;
   }
@@ -414,7 +444,7 @@ async function loadProfilePosts(uid) {
       const liked = p.likes && p.likes.includes(currentUser.uid);
       return `<div class="post" id="post-${doc.id}">
         ${p.text ? `<div class="post-body" style="padding:.75rem 0">${sanitize(p.text).replace(/\n/g,'<br>')}</div>` : ''}
-        ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem do post" loading="lazy" style="border-radius:var(--radius-md);margin-bottom:.5rem">` : ''}
+        ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem do post" loading="lazy" style="border-radius:var(--radius-md);margin-bottom:.5rem;cursor:zoom-in" onclick="openLightbox(this.src)">` : ''}
         <div class="post-actions" style="padding:.35rem 0">
           <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${doc.id}')">
             <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
