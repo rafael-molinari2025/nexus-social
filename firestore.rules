@@ -150,8 +150,11 @@ service cloud.firestore {
       // Criar nova conversa
       allow create: if request.auth != null
         && request.auth.uid in request.resource.data.participants;
-      // Ler/atualizar apenas participantes
-      allow read, update: if request.auth != null
+      // Ler: participante OU documento ainda não existe (necessário para checar antes de criar)
+      allow read: if request.auth != null
+        && (resource == null || request.auth.uid in resource.data.participants);
+      // Atualizar: somente participantes de documentos existentes
+      allow update: if request.auth != null
         && request.auth.uid in resource.data.participants;
       allow delete: if false;
 
