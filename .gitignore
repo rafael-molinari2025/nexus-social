@@ -14,11 +14,12 @@ ui-debug.log
 Thumbs.db
 desktop.ini
 
-# === Editor ===
+# === Editor / Ferramentas locais ===
 .vscode/
 .idea/
 *.swp
 *.swo
+.claude/
 
 # === Arquivos temporários/desnecessários ===
 files.zip

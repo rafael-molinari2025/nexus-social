@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -7,7 +7,7 @@
   <meta name="description" content="Veja o perfil de um usuário no Nexus.">
   <link rel="stylesheet" href="../css/style.css">
   <link rel="manifest" href="/manifest.json">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
   <style>
     .profile-page { max-width: 760px; margin: 0 auto; padding: 1.5rem .75rem; }
     .profile-cover {
@@ -446,7 +446,7 @@ async function loadProfilePosts(uid) {
         ${p.text ? `<div class="post-body" style="padding:.75rem 0">${sanitize(p.text).replace(/\n/g,'<br>')}</div>` : ''}
         ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem do post" loading="lazy" style="border-radius:var(--radius-md);margin-bottom:.5rem;cursor:zoom-in" onclick="openLightbox(this.src)">` : ''}
         <div class="post-actions" style="padding:.35rem 0">
-          <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${doc.id}')">
+          <button class="post-action-btn${liked?' liked':''}" id="like-btn-${doc.id}" onclick="toggleLike('${doc.id}')">
             <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
           </button>
           <button class="post-action-btn" onclick="location.href='post.html?id=${doc.id}'">
@@ -464,15 +464,27 @@ async function loadProfilePosts(uid) {
 
 async function toggleLike(postId) {
   if (!currentUser) return;
-  const ref = db.collection('posts').doc(postId);
-  const snap = await ref.get();
-  const likes = snap.data().likes || [];
-  await ref.update({
-    likes: likes.includes(currentUser.uid)
-      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
-      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
-  });
-  loadProfilePosts(profileUid || currentUser.uid);
+  const btn = document.getElementById(`like-btn-${postId}`);
+  if (btn) btn.disabled = true;
+  try {
+    const ref = db.collection('posts').doc(postId);
+    const snap = await ref.get();
+    const likes = snap.data().likes || [];
+    const isLiked = likes.includes(currentUser.uid);
+    await ref.update({
+      likes: isLiked
+        ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+        : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+    });
+    if (btn) {
+      const newCount = isLiked ? likes.length - 1 : likes.length + 1;
+      btn.className = `post-action-btn${!isLiked ? ' liked' : ''}`;
+      btn.innerHTML = `<i class="ti ti-heart" aria-hidden="true"></i> ${newCount}`;
+    }
+  } catch(e) {
+    showToast('Erro ao curtir.');
+  }
+  if (btn) btn.disabled = false;
 }
 
 async function loadProfileFriends(uid) {
@@ -513,9 +525,13 @@ async function loadScraps(uid) {
   const el = document.getElementById('tab-scraps');
   const isOwn = currentUser.uid === uid;
   let html = '';
-  if (isOwn) {
+  if (!isOwn) {
+    const cl = getAvatarColor(currentUser.uid);
+    const myAv = currentUser.photoURL
+      ? `<img src="${currentUser.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : getInitials(currentUser.displayName);
     html = `<div style="display:flex;gap:.65rem;margin-bottom:1rem">
-      <div class="avatar avatar-40" style="background:${getAvatarColor(currentUser.uid).bg};color:${getAvatarColor(currentUser.uid).color};flex-shrink:0">${getInitials(currentUser.displayName)}</div>
+      <div class="avatar avatar-40" style="background:${cl.bg};color:${cl.color};flex-shrink:0">${myAv}</div>
       <div style="flex:1;display:flex;flex-direction:column;gap:.4rem">
         <textarea class="composer-textarea" id="scrap-text" placeholder="Escreva um recado…" style="min-height:60px"></textarea>
         <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="postScrap('${uid}')">Enviar recado</button>

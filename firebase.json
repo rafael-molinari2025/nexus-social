@@ -8,7 +8,13 @@
       "*.zip",
       "**/node_modules/**",
       ".firebase/**",
-      "nexus/**"
+      "nexus/**",
+      "audit-report.md",
+      "package.json",
+      "package-lock.json",
+      ".eslintrc.json",
+      "eslint.config.js",
+      "stylelint.config.js"
     ],
     "rewrites": [
       {
@@ -22,17 +28,27 @@
     ],
     "headers": [
       {
-        "source": "**/*.@(js|css|html)",
+        "source": "**/*.@(js|css)",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
+            "value": "public, max-age=3600, stale-while-revalidate=86400"
+          }
+        ]
+      },
+      {
+        "source": "**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
           }
         ]
       }
     ],
     "cleanUrls": false,
-    "trailingSlash": false
+    "trailingSlash": false,
+    "404": "/404.html"
   },
   "firestore": {
     "rules": "firestore.rules",

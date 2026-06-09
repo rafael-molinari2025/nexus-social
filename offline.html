@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Sem conexão</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .offline-page {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: var(--bg); flex-direction: column; gap: 1.25rem; padding: 2rem;
+      text-align: center;
+    }
+    .offline-logo { font-family: var(--font-display); font-size: 28px; color: var(--purple-600); }
+    .offline-icon { font-size: 64px; opacity: .25; color: var(--text-primary); line-height: 1; }
+    .offline-title { font-size: 22px; font-weight: 600; color: var(--text-primary); }
+    .offline-sub { font-size: 14px; color: var(--text-muted); max-width: 300px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+<div class="offline-page">
+  <div class="offline-logo">nexus</div>
+  <div class="offline-icon">📡</div>
+  <div class="offline-title">Você está offline</div>
+  <p class="offline-sub">Verifique sua conexão com a internet e tente novamente.</p>
+  <button class="btn btn-primary" onclick="location.reload()">
+    Tentar novamente
+  </button>
+</div>
+</body>
+</html>

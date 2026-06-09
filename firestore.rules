@@ -40,9 +40,11 @@ service cloud.firestore {
            && request.auth.uid in resource.data.bookmarks
            && request.resource.data.bookmarks.size() == resource.data.bookmarks.size() - 1)
         );
-      // Incremento/decremento de commentsCount por qualquer usuário autenticado
+      // Incremento/decremento de commentsCount por qualquer usuário autenticado (somente ±1)
       allow update: if request.auth != null
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount'])
+        && (request.resource.data.commentsCount == resource.data.commentsCount + 1
+            || request.resource.data.commentsCount == resource.data.commentsCount - 1);
       allow delete: if request.auth != null
         && resource.data.authorId == request.auth.uid;
 
