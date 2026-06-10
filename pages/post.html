@@ -73,6 +73,7 @@
 const params = new URLSearchParams(location.search);
 const postId = params.get('id');
 let currentUser = null;
+let _viewIncremented = false;
 
 requireAuth(async user => {
   currentUser = user;
@@ -105,7 +106,7 @@ function loadPost() {
         </div>
         ${p.authorId === currentUser.uid ? `<button class="btn btn-icon" onclick="deletePost()" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
       </div>
-      <div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" style="color:#0ea5e9;text-decoration:none;font-weight:500">@$1</a>')}</div>
+      <div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" style="color:#0ea5e9;text-decoration:none;font-weight:500">@$1</a>')}</div>
       <div class="post-actions" style="border-top:0.5px solid var(--border)">
         <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike()">
           <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length} curtidas
@@ -114,6 +115,9 @@ function loadPost() {
         <button class="post-action-btn" onclick="openShareModal()">
           <i class="ti ti-share-3" aria-hidden="true"></i> compartilhar
         </button>
+        <span class="post-action-btn" style="cursor:default;pointer-events:none;opacity:.6;font-size:11.5px;margin-left:auto">
+          <i class="ti ti-eye" aria-hidden="true"></i> ${p.views||0}
+        </span>
       </div>
 
       <!-- Compositor de comentário -->
@@ -131,6 +135,12 @@ function loadPost() {
         </button>
       </div>
     `;
+
+    // Incrementa views uma única vez
+    if (!_viewIncremented) {
+      _viewIncremented = true;
+      db.collection('posts').doc(postId).update({ views: firebase.firestore.FieldValue.increment(1) }).catch(() => {});
+    }
 
     // Avatar do compositor
     const cl2 = getAvatarColor(currentUser.uid);
@@ -203,6 +213,8 @@ function commentHTML(id, c) {
   const likeCount = (c.likes || []).length;
   const parsedText = sanitize(c.text)
     .replace(/\n/g,'<br>')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/_(.*?)_/g,'<em>$1</em>')
     .replace(/@(\w+)/g, '<span style="color:var(--purple-600);font-weight:500">@$1</span>');
   return `<div class="comment" id="comment-${id}">
     <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer;flex-shrink:0"
@@ -252,7 +264,7 @@ async function editComment(commentId) {
   try {
     await db.collection('posts').doc(postId).collection('comments').doc(commentId)
       .update({ text: newText.trim(), editedAt: firebase.firestore.FieldValue.serverTimestamp() });
-    textEl.innerHTML = sanitize(newText.trim()).replace(/\n/g,'<br>').replace(/@(\w+)/g, '<span style="color:var(--purple-600);font-weight:500">@$1</span>');
+    textEl.innerHTML = sanitize(newText.trim()).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/@(\w+)/g, '<span style="color:var(--purple-600);font-weight:500">@$1</span>');
     showToast('Comentário editado.');
   } catch(e) { showToast('Erro ao editar comentário.'); }
 }

@@ -310,6 +310,12 @@
               <button class="composer-action-btn" title="Emoji" onclick="insertEmoji()">
                 <i class="ti ti-mood-smile" aria-hidden="true"></i>
               </button>
+              <button class="composer-action-btn" title="Negrito (**texto**)" onclick="insertBold()">
+                <i class="ti ti-bold" aria-hidden="true"></i>
+              </button>
+              <button class="composer-action-btn" title="Itálico (_texto_)" onclick="insertItalic()">
+                <i class="ti ti-italic" aria-hidden="true"></i>
+              </button>
               <button class="composer-privacy-btn" id="privacy-btn" onclick="cyclePrivacy()" title="Privacidade">
                 <i class="ti ti-world" id="privacy-icon" aria-hidden="true"></i>
                 <span id="privacy-label">Público</span>
@@ -620,6 +626,18 @@ function cyclePrivacy() {
   document.getElementById('privacy-label').textContent = p.label;
 }
 
+function insertFormat(before, after) {
+  const ta = document.getElementById('post-text');
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  const sel = ta.value.slice(start, end) || 'texto';
+  ta.value = ta.value.slice(0, start) + before + sel + after + ta.value.slice(end);
+  ta.setSelectionRange(start + before.length, start + before.length + sel.length);
+  ta.focus();
+  updateCharCount();
+}
+function insertBold() { insertFormat('**', '**'); }
+function insertItalic() { insertFormat('_', '_'); }
+
 function insertEmoji() {
   const emojis = ['😊','🔥','😂','❤️','👍','🎉','😍','🤔','👏','✨','🙌','💯'];
   const e = emojis[Math.floor(Math.random() * emojis.length)];
@@ -749,10 +767,12 @@ async function createPost() {
   reset();
 }
 
-// ── Parse post text (hashtags + mentions) ──────────────────────
+// ── Parse post text (rich text + hashtags + mentions) ──────────
 function parsePostText(text) {
   return sanitize(text)
     .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
     .replace(/#(\w+)/g, `<a href="${PAGES}busca.html?tab=posts&q=%23$1" class="hashtag">#$1</a>`)
     .replace(/@(\w+)/g, `<a href="${PAGES}busca.html?q=$1" class="mention">@$1</a>`);
 }
@@ -934,6 +954,9 @@ function postHTML(id, p) {
       <button class="post-action-btn" onclick="sharePost('${id}')">
         <i class="ti ti-share-3" aria-hidden="true"></i>
       </button>
+      <span class="post-action-btn" style="cursor:default;pointer-events:none;opacity:.6;font-size:11.5px;margin-left:auto">
+        <i class="ti ti-eye" aria-hidden="true"></i> ${p.views||0}
+      </span>
     </div>
   </div>`;
 }

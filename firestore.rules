@@ -49,6 +49,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount'])
         && (request.resource.data.commentsCount == resource.data.commentsCount + 1
             || request.resource.data.commentsCount == resource.data.commentsCount - 1);
+      // Incremento de views por qualquer usuário autenticado (somente +1)
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+        && request.resource.data.views == resource.data.get('views', 0) + 1;
       allow delete: if request.auth != null
         && resource.data.authorId == request.auth.uid;
       // Admin da comunidade pode fixar/desafixar post (apenas campo isPinned)
