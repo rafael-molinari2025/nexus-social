@@ -100,16 +100,21 @@
     }
     /* Emoji picker rápido */
     .emoji-quick-grid {
-      display: flex; flex-wrap: wrap; gap: 4px; margin-top: .5rem;
-      background: var(--surface); border: 0.5px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 2px; margin-top: .5rem;
+      background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius-md); padding: .5rem;
+      position: relative; z-index: 10;
+      box-shadow: var(--shadow-md);
     }
     .emoji-quick-btn {
-      font-size: 20px; padding: .25rem; border: none; background: none;
+      font-size: 22px; padding: .3rem; border: none; background: none;
       cursor: pointer; border-radius: 6px; transition: background var(--transition);
-      line-height: 1;
+      line-height: 1; min-width: 38px; min-height: 38px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     }
-    .emoji-quick-btn:hover { background: var(--gray-100); }
+    .emoji-quick-btn:hover, .emoji-quick-btn:active { background: var(--gray-100); }
     /* Sobrescreve o bottom-sheet global para o edit modal — sempre centralizado */
     @media (max-width: 768px) {
       .profile-page { padding: 1rem .5rem calc(80px + 1rem); }
@@ -469,7 +474,9 @@ async function renderProfile(uid) {
     document.getElementById('edit-city').value      = d.city      || '';
     document.getElementById('edit-website').value      = d.website        || '';
     document.getElementById('edit-status-text').value  = d.status?.text   || '';
-    const savedEmoji = d.status?.emoji || '😊';
+    const rawEmoji = d.status?.emoji || '😊';
+    // Valida: aceita só se tiver caractere emoji real (descarta texto como "Me S")
+    const savedEmoji = (rawEmoji.length <= 8 && /\p{Emoji}/u.test(rawEmoji)) ? rawEmoji : '😊';
     document.getElementById('edit-status-emoji').value = savedEmoji;
     const disp = document.getElementById('emoji-display');
     if (disp) disp.textContent = savedEmoji;
@@ -911,19 +918,33 @@ const _STATUS_EMOJIS = [
 function toggleEmojiPicker() {
   const grid = document.getElementById('emoji-quick-grid');
   if (!grid) return;
-  if (grid.style.display !== 'none') { grid.style.display = 'none'; return; }
-  if (!grid.innerHTML.trim()) {
+  if (grid.style.display === 'flex') { grid.style.display = 'none'; return; }
+  // Renderiza só uma vez e usa event delegation (sem inline onclick)
+  if (!grid.dataset.ready) {
     grid.innerHTML = _STATUS_EMOJIS.map(e =>
-      `<button type="button" class="emoji-quick-btn" onclick="selectStatusEmoji('${e}')" title="${e}">${e}</button>`
+      `<button type="button" class="emoji-quick-btn" data-emoji="${e}" title="${e}" aria-label="${e}">${e}</button>`
     ).join('');
+    grid.dataset.ready = '1';
+    grid.addEventListener('click', ev => {
+      const btn = ev.target.closest('[data-emoji]');
+      if (btn) selectStatusEmoji(btn.dataset.emoji);
+    });
+    grid.addEventListener('touchend', ev => {
+      ev.preventDefault();
+      const btn = ev.target.closest('[data-emoji]');
+      if (btn) selectStatusEmoji(btn.dataset.emoji);
+    });
   }
   grid.style.display = 'flex';
 }
 
 function selectStatusEmoji(emoji) {
-  document.getElementById('emoji-display').textContent = emoji;
-  document.getElementById('edit-status-emoji').value   = emoji;
-  document.getElementById('emoji-quick-grid').style.display = 'none';
+  const disp = document.getElementById('emoji-display');
+  const inp  = document.getElementById('edit-status-emoji');
+  const grid = document.getElementById('emoji-quick-grid');
+  if (disp) disp.textContent = emoji;
+  if (inp)  inp.value = emoji;
+  if (grid) grid.style.display = 'none';
 }
 
 async function showMutualFriendsModal() {

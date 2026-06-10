@@ -387,8 +387,11 @@ ul, ol { list-style: none; }
 .profile-banner {
   height: 76px;
   background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 60%, #A855F7 100%);
+  background-size: cover;
+  background-position: center top;
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .profile-banner::after {
   content: '';
