@@ -113,7 +113,7 @@
     /* Sobrescreve o bottom-sheet global para o edit modal — sempre centralizado */
     @media (max-width: 768px) {
       .profile-page { padding: 1rem .5rem calc(80px + 1rem); }
-      .profile-cover { height: 130px; }
+      .profile-cover { height: 110px; overflow: hidden; }
       .friends-big-grid { grid-template-columns: repeat(3, 1fr); }
       .profile-info-top { flex-direction: column; align-items: flex-start; gap: .75rem; }
       .fields-row-2 { grid-template-columns: 1fr; }
@@ -233,9 +233,9 @@
         <div style="display:flex;gap:.5rem;align-items:center">
           <button type="button" id="emoji-pick-btn" onclick="toggleEmojiPicker()"
                   title="Escolher emoji"
-                  style="min-width:46px;height:42px;font-size:22px;background:var(--gray-50);border:0.5px solid var(--border);border-radius:var(--radius-md);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color var(--transition)"
-                  onmouseover="this.style.borderColor='var(--purple-400)'" onmouseout="this.style.borderColor='var(--border)'">
-            <span id="emoji-display">😊</span>
+                  style="min-width:50px;height:42px;font-size:24px;background:rgba(83,74,183,0.12);border:1.5px solid var(--purple-400);border-radius:var(--radius-md);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color var(--transition),background var(--transition)"
+                  onmouseover="this.style.background='rgba(83,74,183,0.22)'" onmouseout="this.style.background='rgba(83,74,183,0.12)'">
+            <span id="emoji-display" style="line-height:1;font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif">😊</span>
           </button>
           <input class="form-input" type="text" id="edit-status-text" placeholder="Ex: Disponível, Trabalhando…" maxlength="60" style="flex:1">
         </div>
