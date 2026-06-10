@@ -467,6 +467,26 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
+
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type !== 'SW_UPDATED') return;
+    const existing = document.getElementById('sw-update-banner');
+    if (existing) return;
+    const banner = document.createElement('div');
+    banner.id = 'sw-update-banner';
+    banner.style.cssText = [
+      'position:fixed;bottom:80px;left:50%;transform:translateX(-50%)',
+      'background:var(--purple-600);color:#fff',
+      'padding:.6rem 1.1rem;border-radius:var(--radius-full)',
+      'font-size:13px;font-weight:600;z-index:9999',
+      'display:flex;align-items:center;gap:.75rem;box-shadow:var(--shadow-lg)',
+      'white-space:nowrap'
+    ].join(';');
+    banner.innerHTML = `<i class="ti ti-refresh" aria-hidden="true"></i> Nova versão disponível
+      <button onclick="location.reload()" style="background:rgba(255,255,255,.25);border:none;color:#fff;border-radius:var(--radius-sm);padding:.25rem .65rem;cursor:pointer;font-size:12px;font-weight:600">Atualizar</button>
+      <button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:16px;line-height:1;padding:0">×</button>`;
+    document.body.appendChild(banner);
+  });
 }
 
 // ── Sanitize text (basic XSS prevention) ─────────────────────

@@ -235,6 +235,37 @@ requireAuth(async user => {
   renderProfile(uid);
 });
 
+function profileCompletenessHTML(d) {
+  const fields = [
+    { key: 'photoURL',   label: 'Foto de perfil' },
+    { key: 'coverURL',   label: 'Foto de capa' },
+    { key: 'bio',        label: 'Bio' },
+    { key: 'city',       label: 'Cidade' },
+    { key: 'gender',     label: 'Gênero' },
+    { key: 'birthdate',  label: 'Data de nascimento' },
+    { key: 'website',    label: 'Website' },
+    { key: 'username',   label: 'Nome de usuário' },
+  ];
+  const filled = fields.filter(f => d[f.key]).length;
+  const pct = Math.round((filled / fields.length) * 100);
+  if (pct === 100) return '';
+  const missing = fields.filter(f => !d[f.key]).map(f => f.label);
+  const color = pct < 50 ? 'var(--coral-400)' : pct < 80 ? '#f59e0b' : 'var(--green-500, #22c55e)';
+  return `<div style="margin-top:.75rem;padding:.7rem .9rem;background:var(--gray-50);border-radius:var(--radius-md);border:0.5px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+      <span style="font-size:12px;font-weight:600;color:var(--text-secondary)">Completude do perfil</span>
+      <span style="font-size:12px;font-weight:700;color:${color}">${pct}%</span>
+    </div>
+    <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .4s"></div>
+    </div>
+    <div style="margin-top:.5rem;font-size:11px;color:var(--text-muted)">
+      Faltando: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? ` e mais ${missing.length - 3}` : ''}.
+      <a href="#" onclick="event.preventDefault();openModal()" style="color:var(--purple-600);font-weight:500">Completar →</a>
+    </div>
+  </div>`;
+}
+
 async function renderProfile(uid) {
   const isOwn = currentUser.uid === uid;
   const d = profileData;
@@ -310,6 +341,7 @@ async function renderProfile(uid) {
       <div class="profile-fullname">${sanitize(d.displayName || 'Usuário')}</div>
       ${d.city ? `<div class="profile-location"><i class="ti ti-map-pin" aria-hidden="true"></i>${sanitize(d.city)}</div>` : ''}
       ${d.bio  ? `<div class="profile-bio-text">${sanitize(d.bio)}</div>` : ''}
+      ${isOwn ? profileCompletenessHTML(d) : ''}
       <div class="profile-stats" style="margin-top:.75rem" id="pstats">
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">amigos</span></div>
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">comunidades</span></div>

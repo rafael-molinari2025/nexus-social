@@ -396,6 +396,7 @@ let currentUser   = null;
 let _postImageFile = null;
 let _feedTab      = 'all';
 let _friendIds    = new Set();
+let _hashtagFilter = new URLSearchParams(location.search).get('hashtag') || '';
 let _privacyIdx   = 0;
 let _editingPostId = null;
 let _reportPostId = null;
@@ -433,6 +434,7 @@ requireAuth(async user => {
   renderComposerAvatar(userData);
   initStoryColors();
   loadStories();
+  renderHashtagBanner();
   loadPosts();
   loadOnlineFriends();
   loadFriendSuggestions();
@@ -450,8 +452,35 @@ requireAuth(async user => {
 // ── Feed tabs ──────────────────────────────────────────────────
 function switchFeedTab(tab) {
   _feedTab = tab;
+  _hashtagFilter = '';
+  history.replaceState(null, '', location.pathname);
   document.getElementById('tab-all').classList.toggle('active', tab === 'all');
   document.getElementById('tab-friends').classList.toggle('active', tab === 'friends');
+  renderHashtagBanner();
+  loadPosts();
+}
+
+function renderHashtagBanner() {
+  const existing = document.getElementById('hashtag-banner');
+  if (existing) existing.remove();
+  if (!_hashtagFilter) return;
+  const list = document.getElementById('posts-list');
+  const banner = document.createElement('div');
+  banner.id = 'hashtag-banner';
+  banner.style.cssText = 'display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap';
+  banner.innerHTML = `<span style="font-size:13px;color:var(--text-secondary)">Filtrando por</span>
+    <span style="background:var(--purple-50);color:var(--purple-600);font-weight:600;border-radius:var(--radius-full);padding:.2rem .7rem;font-size:13px">#${sanitize(_hashtagFilter)}</span>
+    <button onclick="_hashtagFilter='';history.replaceState(null,'',location.pathname);renderHashtagBanner();loadPosts()"
+      style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px;padding:.1rem .4rem;border-radius:var(--radius-sm)">
+      ✕ Limpar filtro
+    </button>`;
+  list.parentNode.insertBefore(banner, list);
+}
+
+function clearHashtagFilter() {
+  _hashtagFilter = '';
+  history.replaceState(null, '', location.pathname);
+  renderHashtagBanner();
   loadPosts();
 }
 
@@ -602,7 +631,7 @@ async function createPost() {
 function parsePostText(text) {
   return sanitize(text)
     .replace(/\n/g, '<br>')
-    .replace(/#(\w+)/g, '<a href="/pages/busca.html?q=$1" class="hashtag">#$1</a>')
+    .replace(/#(\w+)/g, '<a href="/index.html?hashtag=$1" class="hashtag">#$1</a>')
     .replace(/@(\w+)/g, '<a href="/pages/busca.html?q=$1" class="mention">@$1</a>');
 }
 
@@ -630,8 +659,14 @@ function loadPosts() {
   const list = document.getElementById('posts-list');
   list.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
 
-  _postsUnsub = db.collection('posts').orderBy('createdAt', 'desc').limit(20)
-    .onSnapshot(snap => {
+  let baseQuery = db.collection('posts').orderBy('createdAt', 'desc');
+  if (_hashtagFilter) {
+    baseQuery = db.collection('posts')
+      .where('hashtags', 'array-contains', _hashtagFilter.toLowerCase())
+      .orderBy('createdAt', 'desc');
+  }
+
+  _postsUnsub = baseQuery.limit(20).onSnapshot(snap => {
       _lastPostDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
       const docs = filterPostDocs(snap.docs);
 
@@ -671,11 +706,10 @@ async function loadMorePosts() {
   const sentinel = document.getElementById('infinite-sentinel');
   if (sentinel) sentinel.innerHTML = '<i class="ti ti-loader-2 ti-spin" style="display:block;text-align:center;padding:.75rem;font-size:1.25rem;color:var(--text-muted)"></i>';
   try {
-    const snap = await db.collection('posts')
-      .orderBy('createdAt', 'desc')
-      .startAfter(_lastPostDoc)
-      .limit(20)
-      .get();
+    let moreQuery = _hashtagFilter
+      ? db.collection('posts').where('hashtags', 'array-contains', _hashtagFilter.toLowerCase()).orderBy('createdAt', 'desc')
+      : db.collection('posts').orderBy('createdAt', 'desc');
+    const snap = await moreQuery.startAfter(_lastPostDoc).limit(20).get();
 
     _lastPostDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
     const docs = filterPostDocs(snap.docs);

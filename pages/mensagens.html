@@ -337,6 +337,9 @@ let messagesUnsub   = null;
 let convsUnsub      = null;
 let typingUnsub     = null;
 let searchTimer     = null;
+let _firstMsgDoc    = null;
+let _loadingOldMsgs = false;
+const MSG_PAGE_SIZE = 50;
 
 requireAuth(async user => {
   currentUser = user;
@@ -365,14 +368,18 @@ function loadConversations() {
 
   const renderConvs = async snap => {
     const list = document.getElementById('conv-list');
-    if (snap.empty) {
+    const activeDocs = snap.docs.filter(doc => {
+      const deleted = doc.data().deletedFor || [];
+      return !deleted.includes(currentUser.uid);
+    });
+    if (activeDocs.length === 0) {
       list.innerHTML = `<div class="chat-empty-sidebar">
         <i class="ti ti-message-off"></i>
         <p>Nenhuma conversa ainda.<br>Busque um usuário para começar!</p>
       </div>`;
       return;
     }
-    const convs = await Promise.all(snap.docs.map(async doc => {
+    const convs = await Promise.all(activeDocs.map(async doc => {
       const d = doc.data();
       const otherUid = d.participants.find(u => u !== currentUser.uid);
       const other = await getUserData(otherUid) || { displayName: 'Usuário', uid: otherUid };
@@ -491,6 +498,9 @@ async function openConversation(cid, otherUid) {
       <a href="perfil.html?uid=${other.uid}" class="btn btn-sm" title="Ver perfil">
         <i class="ti ti-user"></i>
       </a>
+      <button class="btn btn-sm" onclick="deleteConversation('${cid}')" title="Excluir conversa" style="color:var(--coral-400)">
+        <i class="ti ti-trash"></i>
+      </button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="typing-indicator" id="typing-indicator" style="display:none;padding:.25rem 1.25rem;align-items:center;gap:.5rem">
@@ -538,33 +548,60 @@ async function openConversation(cid, otherUid) {
     }
   });
 
-  // Subscribe to messages
+  // Subscribe to messages (limited, most recent first)
   if (messagesUnsub) messagesUnsub();
+  _firstMsgDoc = null; _loadingOldMsgs = false;
   let firstLoad = true;
   messagesUnsub = db.collection('conversations').doc(cid)
     .collection('messages')
     .orderBy('createdAt', 'asc')
+    .limitToLast(MSG_PAGE_SIZE)
     .onSnapshot(snap => {
-      renderMessages(snap.docs, other);
-      if (firstLoad) { scrollToBottom(); firstLoad = false; }
-      else scrollToBottom();
-      // Mark unread when new messages arrive
+      if (snap.docs.length) _firstMsgDoc = snap.docs[0];
+      const msgContainer = document.getElementById('chat-messages');
+      const wasAtBottom = msgContainer
+        ? msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight < 60
+        : true;
+      renderMessages(snap.docs, other, snap.docs.length >= MSG_PAGE_SIZE);
+      if (firstLoad || wasAtBottom) { scrollToBottom(); firstLoad = false; }
       db.collection('conversations').doc(cid).update({
         [`unread.${currentUser.uid}`]: 0
       }).catch(() => {});
     });
 }
 
-function renderMessages(docs, other) {
-  const container = document.getElementById('chat-messages');
-  if (!container) return;
-  if (docs.length === 0) {
-    container.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">
-      Nenhuma mensagem ainda. Diga olá! 👋
-    </div>`;
-    return;
-  }
-  let html = '';
+async function loadOlderMessages(cid, other) {
+  if (!_firstMsgDoc || _loadingOldMsgs) return;
+  _loadingOldMsgs = true;
+  const btn = document.getElementById('load-older-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i>'; }
+  try {
+    const snap = await db.collection('conversations').doc(cid)
+      .collection('messages')
+      .orderBy('createdAt', 'asc')
+      .endBefore(_firstMsgDoc)
+      .limitToLast(MSG_PAGE_SIZE)
+      .get();
+    if (!snap.docs.length) { btn?.remove(); _loadingOldMsgs = false; return; }
+    _firstMsgDoc = snap.docs[0];
+    const container = document.getElementById('chat-messages');
+    const oldScrollHeight = container.scrollHeight;
+    const olderHTML = buildMessagesHTML(snap.docs, other, false);
+    container.insertAdjacentHTML('afterbegin', olderHTML);
+    // Keep scroll position stable after prepend
+    container.scrollTop = container.scrollHeight - oldScrollHeight;
+    if (snap.docs.length < MSG_PAGE_SIZE) btn?.remove();
+    else if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-history"></i> Ver mensagens anteriores'; }
+  } catch(e) { showToast('Erro ao carregar mensagens anteriores.'); }
+  _loadingOldMsgs = false;
+}
+
+function buildMessagesHTML(docs, other, showLoadOlder) {
+  let html = showLoadOlder
+    ? `<button id="load-older-btn" onclick="loadOlderMessages(activeConvId, ${JSON.stringify(other).replace(/"/g,'&quot;')})"
+         style="display:flex;align-items:center;gap:.4rem;margin:.25rem auto .75rem;font-size:12px;color:var(--text-muted);background:none;border:0.5px solid var(--border);border-radius:var(--radius-full);padding:.3rem .8rem;cursor:pointer">
+         <i class="ti ti-history"></i> Ver mensagens anteriores
+       </button>` : '';
   let lastDate = '';
   docs.forEach(doc => {
     const m = doc.data();
@@ -576,25 +613,35 @@ function renderMessages(docs, other) {
     }
     const time = m.createdAt ? m.createdAt.toDate().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '';
     const cl = getAvatarColor(m.senderId);
-    const av = isMine
-      ? ''
+    const av = isMine ? ''
       : (other.photoURL
           ? `<img src="${other.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
           : `<span style="color:${cl.color}">${getInitials(other.displayName)}</span>`);
     const avatarHtml = isMine ? '' : `<div class="avatar avatar-28" style="background:${cl.bg};flex-shrink:0">${av}</div>`;
-    html += `
-      <div class="msg-row${isMine ? ' mine' : ''}">
+    html += `<div class="msg-row${isMine ? ' mine' : ''}">
         ${avatarHtml}
         <div>
           <div class="msg-bubble">
-            ${m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}">` : ''}
+            ${m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : ''}
             ${m.text ? sanitize(m.text).replace(/\n/g,'<br>') : ''}
           </div>
           <div class="msg-time">${time}${isMine ? ' <i class="ti ti-checks msg-read-check"></i>' : ''}</div>
         </div>
       </div>`;
   });
-  container.innerHTML = html;
+  return html;
+}
+
+function renderMessages(docs, other, showLoadOlder = false) {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  if (docs.length === 0) {
+    container.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">
+      Nenhuma mensagem ainda. Diga olá! 👋
+    </div>`;
+    return;
+  }
+  container.innerHTML = buildMessagesHTML(docs, other, showLoadOlder);
 }
 
 function scrollToBottom() {
@@ -790,6 +837,18 @@ document.addEventListener('visibilitychange', () => {
     clearTyping(activeConvId);
   }
 });
+
+// ── Deletar conversa ────────────────────────────────────────────
+async function deleteConversation(cid) {
+  if (!confirm('Excluir esta conversa? Ela sumirá apenas para você.')) return;
+  try {
+    await db.collection('conversations').doc(cid).update({
+      deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+    });
+    showToast('Conversa excluída.');
+    mobileBackToList();
+  } catch(e) { showToast('Erro ao excluir conversa.'); }
+}
 
 // ── Mobile: voltar para lista de conversas ───────────────────────
 function mobileBackToList() {

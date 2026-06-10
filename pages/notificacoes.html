@@ -88,9 +88,11 @@
 <script src="../js/firebase-config.js"></script>
 <script src="../js/utils.js"></script>
 <script>
-let currentUser = null;
-let allNotifs = [];
-let currentFilter = 'all';
+let currentUser    = null;
+let allNotifs      = [];
+let currentFilter  = 'all';
+let _lastNotifDoc  = null;
+const NOTIF_PAGE   = 30;
 
 requireAuth(async user => {
   currentUser = user;
@@ -99,21 +101,52 @@ requireAuth(async user => {
   loadNotifs();
 });
 
-async function loadNotifs() {
-  const el = document.getElementById('notif-list');
-  el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+function notifLink(n) {
+  if (n.link) return n.link;
+  switch (n.type) {
+    case 'post_like':
+    case 'post_comment':
+    case 'post_reaction': return n.postId ? `post.html?id=${n.postId}` : '#';
+    case 'friend_request':
+    case 'friend_accept':  return 'amigos.html';
+    case 'scrap':          return n.fromUid ? `perfil.html?uid=${n.fromUid}` : 'recados.html';
+    case 'message':        return 'mensagens.html';
+    default:               return '#';
+  }
+}
 
+async function loadNotifs(reset = true) {
+  const el = document.getElementById('notif-list');
+  if (reset) {
+    _lastNotifDoc = null;
+    allNotifs = [];
+    el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+  }
   try {
-    allNotifs = await loadNotifications(currentUser.uid);
-    renderNotifs();
-    // Marcar como lidas ao entrar na página
-    markAllNotificationsRead(currentUser.uid).catch(() => {});
+    let query = db.collection('notifications').doc(currentUser.uid)
+      .collection('items')
+      .orderBy('createdAt', 'desc')
+      .limit(NOTIF_PAGE);
+    if (_lastNotifDoc) query = query.startAfter(_lastNotifDoc);
+    const snap = await query.get();
+    if (snap.docs.length) _lastNotifDoc = snap.docs[snap.docs.length - 1];
+    const newNotifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allNotifs = reset ? newNotifs : [...allNotifs, ...newNotifs];
+    renderNotifs(snap.docs.length === NOTIF_PAGE);
+    if (reset) markAllNotificationsRead(currentUser.uid).catch(() => {});
   } catch(e) {
     el.innerHTML = `<div class="empty-state" style="padding:3rem"><i class="ti ti-alert-circle"></i><p>Erro ao carregar notificações.</p></div>`;
   }
 }
 
-function renderNotifs() {
+async function loadMoreNotifs() {
+  if (!_lastNotifDoc) return;
+  const btn = document.getElementById('notif-load-more');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Carregando…'; }
+  await loadNotifs(false);
+}
+
+function renderNotifs(hasMore = false) {
   const el = document.getElementById('notif-list');
   const filtered = currentFilter === 'all'
     ? allNotifs
@@ -127,11 +160,10 @@ function renderNotifs() {
     return;
   }
 
-  el.innerHTML = filtered.map(n => {
-    const ic = notifIcon(n.type);
-    const href = n.link || '#';
-    return `
-      <div class="notif-full-item${n.read ? '' : ' unread'}" onclick="location.href='${href}'">
+  const items = filtered.map(n => {
+    const ic   = notifIcon(n.type);
+    const href = notifLink(n);
+    return `<div class="notif-full-item${n.read ? '' : ' unread'}" onclick="location.href='${href}'">
         <div class="notif-full-icon" style="background:${ic.bg}">
           <i class="ti ${ic.icon}" style="color:${ic.color}"></i>
         </div>
@@ -141,20 +173,29 @@ function renderNotifs() {
         </div>
       </div>`;
   }).join('');
+
+  const loadMoreBtn = hasMore
+    ? `<div style="padding:.75rem;text-align:center">
+         <button id="notif-load-more" class="btn btn-sm" onclick="loadMoreNotifs()" style="width:100%">
+           <i class="ti ti-refresh"></i> Ver mais
+         </button>
+       </div>` : '';
+
+  el.innerHTML = items + loadMoreBtn;
 }
 
 function filterNotifs(type, btn) {
   currentFilter = type;
   document.querySelectorAll('.notif-filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  renderNotifs();
+  renderNotifs(_lastNotifDoc !== null);
 }
 
 async function markAllRead() {
   try {
     await markAllNotificationsRead(currentUser.uid);
     allNotifs = allNotifs.map(n => ({ ...n, read: true }));
-    renderNotifs();
+    renderNotifs(_lastNotifDoc !== null);
     showToast('Tudo marcado como lido!');
   } catch(e) {
     showToast('Erro ao marcar notificações.');

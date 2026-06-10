@@ -10,7 +10,11 @@ service cloud.firestore {
 
     // ── Posts ────────────────────────────────────────────────────
     match /posts/{postId} {
-      allow read: if request.auth != null;
+      // public: qualquer autenticado lê; private: só autor; friends: qualquer autenticado (sem consulta de amizade possível em rules)
+      allow read: if request.auth != null
+        && (resource.data.privacy == 'public'
+            || resource.data.privacy == 'friends'
+            || resource.data.authorId == request.auth.uid);
       allow create: if request.auth != null
         && request.resource.data.authorId == request.auth.uid;
       // Autor pode editar o próprio post
@@ -171,10 +175,10 @@ service cloud.firestore {
       // Ler: participante OU documento ainda não existe (necessário para checar antes de criar)
       allow read: if request.auth != null
         && (resource == null || request.auth.uid in resource.data.participants);
-      // Atualizar: somente participantes de documentos existentes
+      // Atualizar: somente participantes; deletedFor só pode adicionar o próprio UID
       allow update: if request.auth != null
         && request.auth.uid in resource.data.participants;
-      allow delete: if false;
+      allow delete: if false; // soft delete via deletedFor[]
 
       // Mensagens (subcollection)
       match /messages/{msgId} {
