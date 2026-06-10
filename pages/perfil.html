@@ -355,21 +355,20 @@ async function renderProfile(uid) {
   }
 
   const blockBtn = isOwn ? '' :
-    `<button class="btn" id="block-btn" onclick="toggleBlock('${uid}', this)" title="${isBlocked ? 'Desbloquear' : 'Bloquear'}" style="padding:.4rem .6rem;${isBlocked ? 'color:var(--coral-400);border-color:var(--coral-400)' : ''}">
-       <i class="ti ti-${isBlocked ? 'lock-open' : 'ban'}" aria-hidden="true"></i>
+    `<button class="btn btn-sm" id="block-btn" onclick="toggleBlock('${uid}', this)"
+       style="${isBlocked ? 'color:var(--coral-400);border-color:var(--coral-400)' : ''}">
+       ${isBlocked ? '🔓 Desbloquear' : '🚫 Bloquear'}
      </button>`;
 
   const reportBtn = isOwn ? '' :
-    `<button class="btn" onclick="openUserReportModal('${uid}')" title="Denunciar usuário" style="padding:.4rem .6rem">
-       <i class="ti ti-flag" aria-hidden="true"></i>
-     </button>`;
+    `<button class="btn btn-sm" onclick="openUserReportModal('${uid}')">⚑ Denunciar</button>`;
 
-  const shareBtn = `<button class="btn btn-icon" onclick="shareProfile('${uid}')" title="Compartilhar perfil" style="flex-shrink:0"><i class="ti ti-share-3" aria-hidden="true"></i></button>`;
+  const shareBtn = `<button class="btn btn-sm" onclick="shareProfile('${uid}')">&#8679; Compartilhar</button>`;
 
   const actionBtn = isOwn
     ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
-         <button class="btn" onclick="openModal()"><i class="ti ti-pencil" aria-hidden="true"></i> Editar perfil</button>
-         <button class="btn btn-danger" onclick="handleSignOut()" style="gap:.4rem"><i class="ti ti-logout" aria-hidden="true"></i> Sair</button>
+         <button class="btn" onclick="openModal()">✎ Editar perfil</button>
+         <button class="btn btn-danger" onclick="handleSignOut()">Sair</button>
          ${shareBtn}
        </div>`
     : isBlocked
@@ -379,15 +378,15 @@ async function renderProfile(uid) {
          </div>`
       : isFriend
         ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
-             <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
-             <button class="btn" disabled><i class="ti ti-check" aria-hidden="true"></i> Amigos</button>
+             <button class="btn btn-primary btn-sm" onclick="location.href='mensagens.html?with=${uid}'">✉ Mensagem</button>
+             <button class="btn btn-sm" disabled>✓ Amigos</button>
              ${blockBtn}${reportBtn}${shareBtn}
            </div>`
         : hasPendingRequest
-          ? `<div style="display:flex;gap:.5rem">${blockBtn}${reportBtn}${shareBtn}<button class="btn" disabled>Solicitação enviada</button></div>`
+          ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">${blockBtn}${reportBtn}${shareBtn}<button class="btn btn-sm" disabled>Solicitação enviada</button></div>`
           : `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
-               <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
-               <button class="btn" onclick="sendFriendRequest('${uid}', this)"><i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar</button>
+               <button class="btn btn-primary btn-sm" onclick="location.href='mensagens.html?with=${uid}'">✉ Mensagem</button>
+               <button class="btn btn-sm" onclick="sendFriendRequest('${uid}', this)">+ Adicionar</button>
                ${blockBtn}${reportBtn}${shareBtn}
              </div>`;
 
@@ -548,17 +547,26 @@ async function loadGallery(uid) {
 }
 
 async function loadProfileStats(uid) {
-  const [friends, comms, posts] = await Promise.all([
-    db.collection('friendships').where('users', 'array-contains', uid).get(),
-    db.collection('community_members').where('uid', '==', uid).get(),
-    db.collection('posts').where('authorId', '==', uid).get()
-  ]);
-  const el = document.getElementById('pstats');
-  if (el) el.innerHTML = `
-    <div class="profile-stat"><span class="profile-stat-num">${friends.size}</span><span class="profile-stat-label">amigos</span></div>
-    <div class="profile-stat"><span class="profile-stat-num">${comms.size}</span><span class="profile-stat-label">comunidades</span></div>
-    <div class="profile-stat"><span class="profile-stat-num">${posts.size}</span><span class="profile-stat-label">posts</span></div>
-  `;
+  try {
+    const [friends, comms, posts] = await Promise.all([
+      db.collection('friendships').where('users', 'array-contains', uid).get(),
+      db.collection('community_members').where('uid', '==', uid).get(),
+      db.collection('posts').where('authorId', '==', uid).get()
+    ]);
+    const el = document.getElementById('pstats');
+    if (el) el.innerHTML = `
+      <div class="profile-stat"><span class="profile-stat-num">${friends.size}</span><span class="profile-stat-label">amigos</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">${comms.size}</span><span class="profile-stat-label">comunidades</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">${posts.size}</span><span class="profile-stat-label">posts</span></div>
+    `;
+  } catch(e) {
+    const el = document.getElementById('pstats');
+    if (el) el.innerHTML = `
+      <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">amigos</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">comunidades</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">posts</span></div>
+    `;
+  }
 }
 
 function _profilePostImageHTML(p) {

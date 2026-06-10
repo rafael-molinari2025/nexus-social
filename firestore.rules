@@ -15,10 +15,10 @@ service cloud.firestore {
 
     // ── Posts ────────────────────────────────────────────────────
     match /posts/{postId} {
-      // public: qualquer autenticado lê; private: só autor; friends: qualquer autenticado (sem consulta de amizade possível em rules)
+      // public/friends: qualquer autenticado; private: só autor.
+      // Usa get() com default 'public' para posts antigos sem campo privacy.
       allow read: if request.auth != null
-        && (resource.data.privacy == 'public'
-            || resource.data.privacy == 'friends'
+        && (resource.data.get('privacy', 'public') in ['public', 'friends']
             || resource.data.authorId == request.auth.uid);
       allow create: if request.auth != null
         && request.resource.data.authorId == request.auth.uid;
