@@ -171,6 +171,26 @@
       font-size: 12px; color: rgba(255,255,255,.7);
       margin-left: .25rem;
     }
+    .msg-reactions { display: flex; flex-wrap: wrap; gap: .2rem; margin-top: .25rem; }
+    .msg-reaction-pill {
+      font-size: 12px; background: var(--gray-100); border: 0.5px solid var(--border);
+      border-radius: var(--radius-full); padding: .1rem .45rem; cursor: pointer;
+      display: inline-flex; align-items: center; gap: .2rem;
+      transition: background var(--transition), transform var(--transition);
+    }
+    .msg-reaction-pill:hover { background: var(--gray-200); transform: scale(1.1); }
+    .msg-reaction-pill.mine { background: var(--indigo-50); border-color: var(--indigo-300); }
+    .msg-reaction-picker-wrap {
+      position: fixed; background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-full); box-shadow: var(--shadow-lg);
+      display: flex; gap: .05rem; padding: .3rem .5rem; z-index: 500;
+    }
+    .msg-react-emoji-btn {
+      font-size: 21px; padding: .1rem .2rem; border: none; background: none;
+      cursor: pointer; border-radius: var(--radius-sm);
+      transition: transform .15s ease;
+    }
+    .msg-react-emoji-btn:hover { transform: scale(1.35); }
 
     /* Typing indicator */
     .typing-indicator {
@@ -634,13 +654,22 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
           ? `<img src="${other.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
           : `<span style="color:${cl.color}">${getInitials(other.displayName)}</span>`);
     const avatarHtml = isMine ? '' : `<div class="avatar avatar-28" style="background:${cl.bg};flex-shrink:0">${av}</div>`;
-    html += `<div class="msg-row${isMine ? ' mine' : ''}">
+    const reactions = m.reactions || {};
+    const reactKeys = Object.keys(reactions).filter(e => (reactions[e]||[]).length > 0);
+    const reactionsHtml = reactKeys.length
+      ? `<div class="msg-reactions">${reactKeys.map(e => {
+          const arr = reactions[e];
+          const isMineReact = arr.includes(currentUser.uid);
+          return `<button class="msg-reaction-pill${isMineReact?' mine':''}" onclick="reactMsg('${doc.id}','${e}')" title="${arr.length} ${isMineReact?'(você)':''}">${e} <span>${arr.length}</span></button>`;
+        }).join('')}</div>` : '';
+    html += `<div class="msg-row${isMine ? ' mine' : ''}" id="msg-${doc.id}">
         ${avatarHtml}
         <div>
-          <div class="msg-bubble">
+          <div class="msg-bubble" ondblclick="showMsgReactionPicker(event,'${doc.id}')" style="cursor:default">
             ${m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : ''}
             ${m.text ? sanitize(m.text).replace(/\n/g,'<br>') : ''}
           </div>
+          ${reactionsHtml}
           <div class="msg-time">${time}${isMine ? ' <i class="ti ti-checks msg-read-check"></i>' : ''}</div>
         </div>
       </div>`;
@@ -663,6 +692,43 @@ function renderMessages(docs, other, showLoadOlder = false) {
 function scrollToBottom() {
   const el = document.getElementById('chat-messages');
   if (el) el.scrollTop = el.scrollHeight;
+}
+
+// ── Message reactions ──────────────────────────────────────────
+const MSG_REACT_EMOJIS = ['❤️','😂','😮','😢','👍','🔥'];
+
+function showMsgReactionPicker(event, msgId) {
+  event.stopPropagation();
+  document.getElementById('msg-rpicker')?.remove();
+  const picker = document.createElement('div');
+  picker.id = 'msg-rpicker';
+  picker.className = 'msg-reaction-picker-wrap';
+  const rect = event.currentTarget.getBoundingClientRect();
+  picker.style.top = `${rect.top - 55}px`;
+  picker.style.left = `${Math.min(rect.left, window.innerWidth - 270)}px`;
+  picker.innerHTML = MSG_REACT_EMOJIS.map(e =>
+    `<button class="msg-react-emoji-btn" onclick="event.stopPropagation();reactMsg('${msgId}','${e}');document.getElementById('msg-rpicker')?.remove()">${e}</button>`
+  ).join('');
+  document.body.appendChild(picker);
+  setTimeout(() => {
+    function closeH(e) { if (!e.target.closest('#msg-rpicker')) { picker.remove(); document.removeEventListener('click', closeH); } }
+    document.addEventListener('click', closeH);
+  }, 50);
+}
+
+async function reactMsg(msgId, emoji) {
+  if (!activeConvId) return;
+  const ref = db.collection('conversations').doc(activeConvId).collection('messages').doc(msgId);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const reactions = snap.data().reactions || {};
+  const arr = reactions[emoji] || [];
+  const hasReacted = arr.includes(currentUser.uid);
+  await ref.update({
+    [`reactions.${emoji}`]: hasReacted
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
 }
 
 // ── Typing indicator ────────────────────────────────────────

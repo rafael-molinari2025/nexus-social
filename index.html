@@ -1581,10 +1581,17 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
           <div style="font-size:13px;font-weight:600;color:#fff">${sanitize(s.displayName||'Usuário')}</div>
           <div style="font-size:11px;color:rgba(255,255,255,.65)">${timeAgo(s.createdAt)}</div>
         </div>
-        <button onclick="clearTimeout(_storyTimer);document.getElementById('story-view-overlay').remove()"
-                style="margin-left:auto;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;z-index:10;position:relative">
-          <i class="ti ti-x" aria-hidden="true"></i>
-        </button>
+        <div style="margin-left:auto;display:flex;gap:.25rem;z-index:10;position:relative">
+          ${s.uid === currentUser?.uid ? `
+          <button onclick="deleteOwnStory('${storyId}')"
+                  style="background:rgba(0,0,0,.35);border:none;color:#fff;font-size:16px;cursor:pointer;padding:.3rem .45rem;border-radius:var(--radius-sm)" title="Excluir story">
+            <i class="ti ti-trash" aria-hidden="true"></i>
+          </button>` : ''}
+          <button onclick="clearTimeout(_storyTimer);document.getElementById('story-view-overlay').remove()"
+                  style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1" title="Fechar">
+            <i class="ti ti-x" aria-hidden="true"></i>
+          </button>
+        </div>
       </div>
       <div style="position:absolute;inset:0;display:flex;z-index:4;pointer-events:none">
         <div style="flex:0 0 35%;height:100%;pointer-events:auto;cursor:pointer" onclick="storyNavPrev()"></div>
@@ -1635,6 +1642,18 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
   db.collection('stories').doc(storyId).update({
     views: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
   }).catch(() => {});
+}
+
+async function deleteOwnStory(storyId) {
+  if (!confirm('Excluir este story permanentemente?')) return;
+  clearTimeout(_storyTimer);
+  document.getElementById('story-view-overlay')?.remove();
+  try {
+    await db.collection('stories').doc(storyId).delete();
+    showToast('Story excluído.');
+    // Remove from cache so it doesn't re-appear
+    try { sessionStorage.removeItem('nx_stories_cache'); } catch {}
+  } catch(e) { showToast('Erro ao excluir story.'); }
 }
 
 // ── Story creation ─────────────────────────────────────────────

@@ -203,7 +203,14 @@ service cloud.firestore {
           && request.resource.data.senderId == request.auth.uid
           && request.auth.uid in
              get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
-        allow update, delete: if request.auth != null
+        allow update: if request.auth != null
+          && resource.data.senderId == request.auth.uid;
+        // Qualquer participante pode reagir (atualiza apenas reactions.*)
+        allow update: if request.auth != null
+          && request.auth.uid in
+             get(/databases/$(database)/documents/conversations/$(convId)).data.participants
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+        allow delete: if request.auth != null
           && resource.data.senderId == request.auth.uid;
       }
     }

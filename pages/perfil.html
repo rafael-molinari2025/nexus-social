@@ -327,7 +327,9 @@ async function renderProfile(uid) {
     }
     const myFriendUids    = new Set(fSnap.docs.flatMap(d => d.data().users).filter(u => u !== currentUser.uid));
     const theirFriendUids = new Set(theirFSnap.docs.flatMap(d => d.data().users).filter(u => u !== uid));
-    mutualCount = [...myFriendUids].filter(u => theirFriendUids.has(u)).length;
+    const mutualUids = [...myFriendUids].filter(u => theirFriendUids.has(u));
+    mutualCount = mutualUids.length;
+    window._mutualFriendUids = mutualUids;
   }
 
   const blockBtn = isOwn ? '' :
@@ -390,7 +392,7 @@ async function renderProfile(uid) {
       </div>
       <div class="profile-fullname">${sanitize(d.displayName || 'Usuário')}</div>
       ${d.status && (d.status.emoji || d.status.text) ? `<div style="font-size:13px;color:var(--text-secondary);margin-top:.2rem">${sanitize(d.status.emoji||'')} ${sanitize(d.status.text||'')}</div>` : ''}
-      ${!isOwn && mutualCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:.2rem"><i class="ti ti-users" aria-hidden="true"></i> ${mutualCount} amigo${mutualCount!==1?'s':''} em comum</div>` : ''}
+      ${!isOwn && mutualCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:.2rem;cursor:pointer;display:inline-flex;align-items:center;gap:.25rem" onclick="showMutualFriendsModal()" title="Ver amigos em comum"><i class="ti ti-users" aria-hidden="true"></i> ${mutualCount} amigo${mutualCount!==1?'s':''} em comum <i class="ti ti-chevron-right" style="font-size:10px"></i></div>` : ''}
       ${d.city ? `<div class="profile-location"><i class="ti ti-map-pin" aria-hidden="true"></i>${sanitize(d.city)}</div>` : ''}
       ${d.website ? `<div class="profile-location"><i class="ti ti-world" aria-hidden="true"></i><a href="${sanitize(d.website)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none" onclick="event.stopPropagation()">${sanitize(d.website.replace(/^https?:\/\//,''))}</a></div>` : ''}
       ${d.bio  ? `<div class="profile-bio-text">${sanitize(d.bio)}</div>` : ''}
@@ -847,6 +849,48 @@ function selectEditGender(g) {
 
 function openModal() { document.getElementById('edit-modal').classList.add('open'); }
 function closeModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+async function showMutualFriendsModal() {
+  const uids = window._mutualFriendUids || [];
+  if (!uids.length) return;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  modal.innerHTML = `<div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-users"></i> Amigos em comum</span>
+      <button class="btn btn-icon" onclick="this.closest('.modal-overlay').remove()"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="mutual-list" style="display:flex;flex-direction:column;gap:.3rem;max-height:60vh;overflow-y:auto">
+      <div class="loading-screen" style="min-height:80px"><div class="spinner"></div></div>
+    </div>
+  </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  const users = await Promise.all(uids.map(uid => getUserData(uid)));
+  const listEl = document.getElementById('mutual-list');
+  if (!listEl) return;
+  listEl.innerHTML = users.filter(Boolean).map(u => {
+    const cl = getAvatarColor(u.uid);
+    const av = u.photoURL
+      ? `<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+    const online = isOnline(u);
+    return `<div style="display:flex;align-items:center;gap:.65rem;padding:.45rem .35rem;border-radius:var(--radius-md);cursor:pointer;transition:background var(--transition)"
+         onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''"
+         onclick="this.closest('.modal-overlay').remove();location.href='perfil.html?uid=${u.uid}'">
+      <div style="position:relative">
+        <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+        ${online ? `<span style="position:absolute;bottom:1px;right:1px;width:9px;height:9px;background:#22c55e;border-radius:50%;border:2px solid var(--surface)"></span>` : ''}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:500">${sanitize(u.displayName||'Usuário')}</div>
+        ${u.bio ? `<div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sanitize(u.bio)}</div>` : ''}
+      </div>
+      <i class="ti ti-chevron-right" style="color:var(--text-muted);font-size:14px"></i>
+    </div>`;
+  }).join('');
+}
 
 function shareProfile(uid) {
   const url = `${location.origin}/pages/perfil.html?uid=${uid}`;
