@@ -40,6 +40,12 @@
     }
     .share-opt:hover { background: var(--gray-50); border-color: var(--purple-400); }
     .share-opt i { font-size: 24px; }
+    /* ── Poll ── */
+    .poll-bar { display:flex;align-items:center;width:100%;position:relative;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:.4rem .75rem;text-align:left;cursor:pointer;overflow:hidden;font-family:var(--font-sans);margin-bottom:.25rem; }
+    .poll-bar.my-vote { border-color:var(--purple-600); }
+    .poll-bar-fill { position:absolute;inset:0;background:var(--purple-50);pointer-events:none;transition:width .3s; }
+    .poll-bar-text { position:relative;font-size:13px;flex:1; }
+    .poll-bar-pct { position:relative;font-size:12px;color:var(--text-muted); }
     @media (max-width: 768px) {
       .post-page { padding: 1rem .5rem calc(80px + 1rem); }
       .back-btn { margin-bottom: .5rem; }
@@ -64,6 +70,22 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- ── Editar post ── -->
+<div class="modal-overlay" id="edit-post-modal" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title">Editar post</span>
+      <button class="btn btn-icon" onclick="closeEditModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <textarea class="composer-textarea" id="edit-post-ta"
+              style="min-height:120px;margin-bottom:1rem"
+              placeholder="O que você está pensando?" maxlength="2000"></textarea>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px" onclick="saveEditPost()">
+      <i class="ti ti-device-floppy" aria-hidden="true"></i> Salvar alterações
+    </button>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -74,6 +96,7 @@ const params = new URLSearchParams(location.search);
 const postId = params.get('id');
 let currentUser = null;
 let _viewIncremented = false;
+let _postData = null;
 
 requireAuth(async user => {
   currentUser = user;
@@ -87,6 +110,7 @@ function loadPost() {
   db.collection('posts').doc(postId).onSnapshot(async snap => {
     if (!snap.exists) { showError('Post não encontrado.'); return; }
     const p = snap.data();
+    _postData = p;
     const cl = getAvatarColor(p.authorId);
     const av = p.authorPhoto
       ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
@@ -104,9 +128,13 @@ function loadPost() {
           <div class="post-author">${sanitize(p.authorName||'Usuário')}</div>
           <div class="post-time">${timeAgo(p.createdAt)}</div>
         </div>
-        ${p.authorId === currentUser.uid ? `<button class="btn btn-icon" onclick="deletePost()" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
+        ${p.authorId === currentUser.uid ? `
+          <button class="btn btn-icon" onclick="startEditPost()" title="Editar"><i class="ti ti-pencil" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>
+          <button class="btn btn-icon" onclick="deletePost()" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
       </div>
-      <div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" style="color:#0ea5e9;text-decoration:none;font-weight:500">@$1</a>')}</div>
+      ${p.text ? `<div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" style="color:#0ea5e9;text-decoration:none;font-weight:500">@$1</a>')}</div>` : ''}
+      ${(p.images && p.images.length > 1) ? `<div style="display:flex;gap:.25rem;flex-wrap:wrap;padding:0 1rem .75rem">${p.images.map(url=>`<img src="${url}" style="flex:1;min-width:120px;max-height:320px;object-fit:cover;border-radius:var(--radius-md);cursor:zoom-in" onclick="openLightbox(${JSON.stringify(p.images).replace(/"/g,'&quot;')})">`).join('')}</div>` : (p.imageURL ? `<img src="${p.imageURL}" style="width:100%;max-height:420px;object-fit:cover;cursor:zoom-in;display:block" onclick="openLightbox(['${p.imageURL}'])">` : '')}
+      ${p.poll ? pollHTML(p.poll) : ''}
       <div class="post-actions" style="border-top:0.5px solid var(--border)">
         <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike()">
           <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length} curtidas
@@ -413,6 +441,61 @@ async function showLikers() {
     </div>
   </div>`;
   document.body.appendChild(overlay);
+}
+
+// ── Poll ──────────────────────────────────────────────────────
+function pollHTML(poll) {
+  const totalVotes = (poll.options||[]).reduce((s, o) => s + (o.votes||[]).length, 0);
+  const myVoteIdx  = (poll.options||[]).findIndex(o => (o.votes||[]).includes(currentUser?.uid));
+  const bars = (poll.options||[]).map((opt, i) => {
+    const cnt = (opt.votes||[]).length;
+    const pct = totalVotes ? Math.round(cnt / totalVotes * 100) : 0;
+    const isMine = i === myVoteIdx;
+    return `<button class="poll-bar${isMine?' my-vote':''}" onclick="votePoll(${i})">
+      <div class="poll-bar-fill" style="width:${pct}%"></div>
+      <span class="poll-bar-text">${sanitize(opt.text)}</span>
+      <span class="poll-bar-pct">${pct}%</span>
+    </button>`;
+  }).join('');
+  return `<div style="margin:.4rem 1rem .6rem">${bars}
+    <div style="font-size:11px;color:var(--text-muted)">${totalVotes} voto${totalVotes!==1?'s':''}</div>
+  </div>`;
+}
+
+async function votePoll(optionIdx) {
+  const ref  = db.collection('posts').doc(postId);
+  const snap = await ref.get();
+  const poll = snap.data()?.poll;
+  if (!poll) return;
+  const updates = {};
+  (poll.options||[]).forEach((opt, i) => {
+    if ((opt.votes||[]).includes(currentUser.uid))
+      updates[`poll.options.${i}.votes`] = firebase.firestore.FieldValue.arrayRemove(currentUser.uid);
+  });
+  updates[`poll.options.${optionIdx}.votes`] = firebase.firestore.FieldValue.arrayUnion(currentUser.uid);
+  await ref.update(updates);
+}
+
+// ── Edit post ──────────────────────────────────────────────────
+function startEditPost() {
+  if (!_postData) return;
+  document.getElementById('edit-post-ta').value = _postData.text || '';
+  document.getElementById('edit-post-modal').classList.add('open');
+  document.getElementById('edit-post-ta').focus();
+}
+function closeEditModal() {
+  document.getElementById('edit-post-modal').classList.remove('open');
+}
+async function saveEditPost() {
+  const text = document.getElementById('edit-post-ta').value.trim();
+  if (!text) return showToast('O post não pode estar vazio.');
+  if (text.length > 2000) return showToast('Post muito longo. Máximo 2000 caracteres.');
+  const hashtags = [...new Set((text.match(/#(\w+)/g)||[]).map(t => t.slice(1).toLowerCase()))];
+  try {
+    await db.collection('posts').doc(postId).update({ text, hashtags });
+    showToast('Post atualizado!');
+    closeEditModal();
+  } catch(e) { showToast('Erro ao salvar.'); }
 }
 
 function showError(msg) {

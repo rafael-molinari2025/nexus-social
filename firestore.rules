@@ -58,6 +58,10 @@ service cloud.firestore {
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
         && request.resource.data.views == resource.data.get('views', 0) + 1;
+      // Votação em enquete: qualquer autenticado pode modificar o campo poll (votes arrays)
+      allow update: if request.auth != null
+        && resource.data.get('poll', null) != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['poll']);
       allow delete: if request.auth != null
         && resource.data.authorId == request.auth.uid;
       // Admin da comunidade pode fixar/desafixar post (apenas campo isPinned)
