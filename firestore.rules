@@ -63,7 +63,8 @@ service cloud.firestore {
         && resource.data.get('poll', null) != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['poll']);
       allow delete: if request.auth != null
-        && resource.data.authorId == request.auth.uid;
+        && (resource.data.authorId == request.auth.uid
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
       // Admin da comunidade pode fixar/desafixar post (apenas campo isPinned)
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned'])
