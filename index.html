@@ -710,7 +710,25 @@ async function createPost() {
       if (opts.length < 2) { showToast('A enquete precisa de pelo menos 2 opções.'); reset(); return; }
       postData.poll = { options: opts.map(t => ({ text: t, votes: [] })) };
     }
-    await db.collection('posts').add(postData);
+    const docRef = await db.collection('posts').add(postData);
+    // @mention notifications
+    const mentionWords = [...new Set((text.match(/@(\w+)/g)||[]).map(m => m.slice(1).toLowerCase()))];
+    if (mentionWords.length && _friendsList.length) {
+      const postLink = `${location.origin}/${PAGES}post.html?id=${docRef.id}`;
+      for (const f of _friendsList) {
+        if (f.uid === currentUser.uid) continue;
+        const nameParts = (f.displayName||'').toLowerCase().split(/\s+/);
+        const username  = (f.username||'').toLowerCase();
+        if (mentionWords.some(m => nameParts.some(p => p.startsWith(m)) || username === m)) {
+          createNotification(f.uid, 'mention', {
+            message: `${currentUser.displayName} mencionou você em um post.`,
+            link: postLink,
+            fromUid:  currentUser.uid,
+            fromName: currentUser.displayName
+          });
+        }
+      }
+    }
     document.getElementById('post-text').value = '';
     removePostImage();
     // Reset poll
@@ -735,7 +753,7 @@ function parsePostText(text) {
   return sanitize(text)
     .replace(/\n/g, '<br>')
     .replace(/#(\w+)/g, `<a href="${PAGES}busca.html?tab=posts&q=%23$1" class="hashtag">#$1</a>`)
-    .replace(/@(\w+)/g, '<a href="/pages/busca.html?q=$1" class="mention">@$1</a>');
+    .replace(/@(\w+)/g, `<a href="${PAGES}busca.html?q=$1" class="mention">@$1</a>`);
 }
 
 // ── Load posts (realtime, first 20) ───────────────────────────

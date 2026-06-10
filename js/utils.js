@@ -126,18 +126,41 @@ let _notifUnsub = null;
 
 function initNotifications(uid) {
   if (_notifUnsub) _notifUnsub();
+  let _inited = false;
   _notifUnsub = db.collection('notifications').doc(uid)
     .collection('items')
     .where('read', '==', false)
     .onSnapshot(snap => {
       const count = snap.size;
-      // Badge no topbar (desktop)
       const badge = document.getElementById('notif-badge');
       if (badge) badge.style.display = count > 0 ? 'block' : 'none';
-      // Dot no bottom nav (mobile)
       const dot = document.getElementById('notif-dot');
       if (dot) dot.style.display = count > 0 ? 'block' : 'none';
+      if (_inited) {
+        snap.docChanges().forEach(change => {
+          if (change.type === 'added') _fireBrowserNotif(change.doc.data());
+        });
+      }
+      _inited = true;
     }, () => {});
+}
+
+function _fireBrowserNotif(notif) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification('Nexus', {
+      body: notif.message || 'Você tem uma nova notificação',
+      icon: '/icons/icon-192.png',
+      tag: `nexus-${notif.type || 'notif'}`,
+      renotify: true
+    });
+    if (notif.link) n.onclick = () => { window.focus(); location.href = notif.link; };
+  } catch(e) {}
+}
+
+function requestBrowserNotifications() {
+  if (!('Notification' in window) || Notification.permission !== 'default') return;
+  Notification.requestPermission();
 }
 
 async function createNotification(toUid, type, data) {
@@ -172,12 +195,14 @@ async function markAllNotificationsRead(uid) {
 
 function notifIcon(type) {
   const map = {
-    friend_request: { icon: 'ti-user-plus', bg: '#EEF2FF', color: '#6366F1' },
-    friend_accept:  { icon: 'ti-users',     bg: '#E1F5EE', color: '#0F6E56' },
-    post_like:      { icon: 'ti-heart',     bg: '#FBEAF0', color: '#993556' },
+    friend_request: { icon: 'ti-user-plus',      bg: '#EEF2FF', color: '#6366F1' },
+    friend_accept:  { icon: 'ti-users',          bg: '#E1F5EE', color: '#0F6E56' },
+    post_like:      { icon: 'ti-heart',          bg: '#FBEAF0', color: '#993556' },
     post_comment:   { icon: 'ti-message-circle', bg: '#FAEEDA', color: '#854F0B' },
-    scrap:          { icon: 'ti-mail',      bg: '#E6F1FB', color: '#185FA5' },
-    community_join: { icon: 'ti-users-group', bg: '#E1F5EE', color: '#0F6E56' },
+    scrap:          { icon: 'ti-mail',           bg: '#E6F1FB', color: '#185FA5' },
+    community_join: { icon: 'ti-users-group',    bg: '#E1F5EE', color: '#0F6E56' },
+    mention:        { icon: 'ti-at',             bg: '#E0F2FE', color: '#0369A1' },
+    poll_vote:      { icon: 'ti-chart-bar',      bg: '#F5F3FF', color: '#7C3AED' },
   };
   return map[type] || { icon: 'ti-bell', bg: '#F1EFE8', color: '#5F5E5A' };
 }
@@ -204,6 +229,7 @@ function renderTopbar(user, activePage = 'feed') {
       <button class="topbar-nav-btn${activePage==='friends'?' active':''}" title="Amigos" onclick="location.href='${PAGES}amigos.html'"><i class="ti ti-users" aria-hidden="true"></i></button>
       <button class="topbar-nav-btn${activePage==='messages'?' active':''}" title="Mensagens" onclick="location.href='${PAGES}mensagens.html'"><i class="ti ti-message-circle-2" aria-hidden="true"></i></button>
       <button class="topbar-nav-btn${activePage==='communities'?' active':''}" title="Comunidades" onclick="location.href='${PAGES}comunidades.html'"><i class="ti ti-users-group" aria-hidden="true"></i></button>
+      <button class="topbar-nav-btn${activePage==='trends'?' active':''}" title="Tendências" onclick="location.href='${PAGES}tendencias.html'"><i class="ti ti-trending-up" aria-hidden="true"></i></button>
       <div class="notif-topbar-wrap">
         <button class="topbar-nav-btn${activePage==='notifications'?' active':''}" title="Notificações" id="notif-btn" onclick="toggleNotifPanel('${user.uid}')">
           <i class="ti ti-bell" aria-hidden="true"></i>
@@ -239,6 +265,9 @@ function renderTopbar(user, activePage = 'feed') {
         </a>
         <a href="${PAGES}salvos.html" class="user-dropdown-item">
           <i class="ti ti-bookmark" aria-hidden="true"></i> Posts salvos
+        </a>
+        <a href="${PAGES}tendencias.html" class="user-dropdown-item">
+          <i class="ti ti-trending-up" aria-hidden="true"></i> Tendências
         </a>
         <a href="${PAGES}configuracoes.html" class="user-dropdown-item">
           <i class="ti ti-settings" aria-hidden="true"></i> Configurações
@@ -393,6 +422,16 @@ async function toggleNotifPanel(uid) {
   `;
   // Appended to body so position:fixed works on mobile (topbar-nav is hidden)
   document.body.appendChild(panel);
+
+  // Prompt to enable browser notifications if not yet decided
+  if ('Notification' in window && Notification.permission === 'default') {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.6rem 1rem;background:var(--indigo-50);font-size:12.5px;color:var(--indigo-700);border-bottom:1px solid var(--border)';
+    hint.innerHTML = `<i class="ti ti-bell-ringing" style="font-size:16px;flex-shrink:0"></i>
+      <span style="flex:1">Ative as notificações do browser para ser alertado mesmo fora da aba.</span>
+      <button onclick="requestBrowserNotifications();this.closest('div').remove()" style="background:var(--indigo-600);color:#fff;border:none;border-radius:var(--radius-sm);padding:.25rem .65rem;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">Ativar</button>`;
+    panel.querySelector('.notif-panel-body').before(hint);
+  }
 
   panel.querySelector('#_notif-mark-btn').addEventListener('click', () => {
     markAllNotificationsRead(uid).then(() => {

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Tendências</title>
+  <meta name="description" content="Veja o que está em alta no Nexus: hashtags, posts populares e comunidades.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <style>
+    .trends-page { max-width: 900px; margin: 0 auto; padding: 1.5rem .75rem; }
+    @media (max-width: 768px) { .trends-page { padding: 1rem .5rem calc(80px + 1rem); } }
+
+    .trends-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+    @media (max-width: 700px) { .trends-grid { grid-template-columns: 1fr; } }
+
+    .page-header { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
+    .page-title  { font-size: 20px; font-weight: 700; flex: 1; }
+
+    /* ── Section cards ── */
+    .section-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem;
+    }
+    .section-header {
+      padding: .875rem 1.125rem .5rem;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-muted);
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .section-header i { font-size: 14px; color: var(--purple-600); }
+
+    /* ── Hashtag list ── */
+    .hashtag-item {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .6rem 1.125rem; cursor: pointer;
+      transition: background var(--transition); border-bottom: 0.5px solid var(--border);
+      text-decoration: none; color: inherit;
+    }
+    .hashtag-item:last-child { border-bottom: none; }
+    .hashtag-item:hover { background: var(--gray-50); }
+    .hashtag-rank {
+      width: 22px; font-size: 13px; font-weight: 700;
+      color: var(--text-muted); flex-shrink: 0; text-align: center;
+    }
+    .hashtag-rank.top3 { color: var(--purple-600); }
+    .hashtag-name { font-size: 14.5px; font-weight: 600; color: var(--purple-600); flex: 1; }
+    .hashtag-count { font-size: 12px; color: var(--text-muted); }
+
+    /* ── Post card ── */
+    .trend-post {
+      padding: 1rem 1.125rem; border-bottom: 0.5px solid var(--border);
+    }
+    .trend-post:last-child { border-bottom: none; }
+    .trend-post-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+    .trend-post-author { font-size: 13px; font-weight: 600; cursor: pointer; }
+    .trend-post-author:hover { text-decoration: underline; }
+    .trend-post-time { font-size: 11px; color: var(--text-muted); }
+    .trend-post-text {
+      font-size: 14px; line-height: 1.5; color: var(--text-primary);
+      margin-bottom: .5rem; word-break: break-word;
+      display: -webkit-box; -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .trend-post-img {
+      width: 100%; border-radius: var(--radius-md); max-height: 240px;
+      object-fit: cover; cursor: zoom-in; margin-bottom: .5rem;
+    }
+    .trend-post-stats {
+      display: flex; align-items: center; gap: 1rem;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .trend-post-stats span { display: flex; align-items: center; gap: .3rem; }
+    .trend-post-stats i { font-size: 14px; }
+
+    /* ── Community item ── */
+    .community-item {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .65rem 1.125rem; border-bottom: 0.5px solid var(--border);
+      cursor: pointer; transition: background var(--transition); text-decoration: none; color: inherit;
+    }
+    .community-item:last-child { border-bottom: none; }
+    .community-item:hover { background: var(--gray-50); }
+    .community-icon {
+      width: 38px; height: 38px; border-radius: var(--radius-md);
+      background: var(--gradient-primary); display: flex;
+      align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .community-info { flex: 1; min-width: 0; }
+    .community-name { font-size: 13.5px; font-weight: 600; }
+    .community-members { font-size: 12px; color: var(--text-muted); }
+
+    /* ── Tabs ── */
+    .tab-row {
+      display: flex; gap: .25rem; padding: .5rem 1.125rem .25rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .tab-btn {
+      padding: .35rem .75rem; border-radius: var(--radius-sm);
+      border: none; cursor: pointer; font-size: 13px; font-weight: 500;
+      background: transparent; color: var(--text-secondary);
+      transition: background var(--transition);
+    }
+    .tab-btn.active { background: var(--purple-600); color: #fff; }
+    .tab-btn:hover:not(.active) { background: var(--gray-100); }
+
+    /* ── Skeleton ── */
+    .skel { background: var(--gray-100); border-radius: 6px; animation: pulse 1.4s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div class="toast" id="toast"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="trends-page">
+    <div class="page-header">
+      <h1 class="page-title"><i class="ti ti-trending-up" style="color:var(--purple-600)"></i> Tendências</h1>
+    </div>
+
+    <div class="trends-grid">
+      <!-- Left column: hashtags + communities -->
+      <div>
+        <div class="section-card">
+          <div class="section-header"><i class="ti ti-hash"></i> Hashtags em alta</div>
+          <div id="hashtag-list">
+            <div style="padding:1rem 1.125rem">
+              <div class="skel" style="height:14px;width:80%;margin-bottom:.5rem"></div>
+              <div class="skel" style="height:14px;width:65%;margin-bottom:.5rem"></div>
+              <div class="skel" style="height:14px;width:70%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-header"><i class="ti ti-users-group"></i> Comunidades em alta</div>
+          <div id="communities-list">
+            <div style="padding:1rem 1.125rem">
+              <div class="skel" style="height:14px;width:75%;margin-bottom:.5rem"></div>
+              <div class="skel" style="height:14px;width:60%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: popular posts -->
+      <div>
+        <div class="section-card">
+          <div class="section-header"><i class="ti ti-flame"></i> Posts populares</div>
+          <div class="tab-row">
+            <button class="tab-btn active" id="tab-popular" onclick="switchTab('popular')">Mais curtidos</button>
+            <button class="tab-btn" id="tab-recent" onclick="switchTab('recent')">Recentes em alta</button>
+          </div>
+          <div id="popular-posts">
+            <div style="padding:1rem 1.125rem">
+              <div class="skel" style="height:14px;width:60%;margin-bottom:.5rem"></div>
+              <div class="skel" style="height:80px;width:100%;margin-bottom:.5rem"></div>
+              <div class="skel" style="height:14px;width:40%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let _activeTab  = 'popular';
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'trends');
+  updateOnlineStatus(user.uid);
+  loadHashtags();
+  loadCommunities();
+  loadPopularPosts();
+});
+
+// ── Hashtags ────────────────────────────────────────────────────
+async function loadHashtags() {
+  const el = document.getElementById('hashtag-list');
+  try {
+    const since = new Date(Date.now() - 48 * 3600 * 1000);
+    const snap  = await db.collection('posts')
+      .orderBy('createdAt', 'desc')
+      .limit(200)
+      .get();
+
+    const counts = {};
+    snap.docs.forEach(d => {
+      const p = d.data();
+      if (p.createdAt && p.createdAt.toDate() < since) return;
+      (p.hashtags || []).forEach(t => { counts[t] = (counts[t] || 0) + 1; });
+    });
+
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+
+    if (!sorted.length) {
+      el.innerHTML = `<div style="padding:1rem 1.125rem;font-size:13px;color:var(--text-muted)">Nenhuma hashtag nas últimas 48h.</div>`;
+      return;
+    }
+
+    el.innerHTML = sorted.map(([tag, count], i) => `
+      <a class="hashtag-item" href="busca.html?tab=posts&q=%23${encodeURIComponent(tag)}">
+        <span class="hashtag-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
+        <span class="hashtag-name">#${sanitize(tag)}</span>
+        <span class="hashtag-count">${count} post${count !== 1 ? 's' : ''}</span>
+      </a>`).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="padding:1rem 1.125rem;font-size:13px;color:var(--text-muted)">Erro ao carregar hashtags.</div>`;
+  }
+}
+
+// ── Communities ─────────────────────────────────────────────────
+async function loadCommunities() {
+  const el = document.getElementById('communities-list');
+  try {
+    const snap = await db.collection('communities').orderBy('membersCount', 'desc').limit(6).get();
+    if (snap.empty) {
+      el.innerHTML = `<div style="padding:1rem 1.125rem;font-size:13px;color:var(--text-muted)">Nenhuma comunidade ainda.</div>`;
+      return;
+    }
+    const EMOJIS = ['🌐','🎯','🔥','💡','🎮','🎵','📚','🚀','🏆','🎨'];
+    el.innerHTML = snap.docs.map((d, i) => {
+      const c = d.data();
+      const emoji = EMOJIS[i % EMOJIS.length];
+      return `
+        <a class="community-item" href="comunidade.html?id=${d.id}">
+          <div class="community-icon">${emoji}</div>
+          <div class="community-info">
+            <div class="community-name">${sanitize(c.name || 'Comunidade')}</div>
+            <div class="community-members"><i class="ti ti-users" style="font-size:11px"></i> ${c.membersCount || 0} membros</div>
+          </div>
+          <i class="ti ti-chevron-right" style="font-size:15px;color:var(--text-muted)"></i>
+        </a>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="padding:1rem 1.125rem;font-size:13px;color:var(--text-muted)">Erro ao carregar comunidades.</div>`;
+  }
+}
+
+// ── Popular posts ────────────────────────────────────────────────
+async function loadPopularPosts() {
+  const el = document.getElementById('popular-posts');
+  el.innerHTML = `<div style="padding:1rem 1.125rem"><div class="skel" style="height:80px;width:100%"></div></div>`;
+  try {
+    let snap;
+    if (_activeTab === 'popular') {
+      snap = await db.collection('posts')
+        .where('privacy', '==', 'public')
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get();
+    } else {
+      const since = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 3600 * 1000));
+      snap = await db.collection('posts')
+        .where('privacy', '==', 'public')
+        .where('createdAt', '>=', since)
+        .orderBy('createdAt', 'desc')
+        .limit(80)
+        .get();
+    }
+
+    let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Sort by total engagement (likes + reactions + comments)
+    docs = docs.map(p => ({
+      ...p,
+      _score: (p.likes||[]).length
+        + Object.values(p.reactions||{}).reduce((s, arr) => s + (arr||[]).length, 0)
+        + (p.commentsCount || 0) * 1.5
+    })).sort((a, b) => b._score - a._score).slice(0, 15);
+
+    if (!docs.length) {
+      el.innerHTML = `<div style="padding:1.5rem 1.125rem;text-align:center;font-size:13px;color:var(--text-muted)">Nenhum post ainda.</div>`;
+      return;
+    }
+
+    el.innerHTML = docs.map(p => {
+      const cl = getAvatarColor(p.authorId);
+      const av = p.authorPhoto
+        ? `<img src="${sanitize(p.authorPhoto)}" style="width:30px;height:30px;border-radius:50%;object-fit:cover">`
+        : `<div style="width:30px;height:30px;border-radius:50%;background:${cl.bg};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${cl.color}">${sanitize(getInitials(p.authorName))}</div>`;
+      const totalLikes = (p.likes||[]).length + Object.values(p.reactions||{}).reduce((s, a) => s + (a||[]).length, 0);
+      const postText   = (p.text||'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+      return `
+        <div class="trend-post" onclick="location.href='post.html?id=${p.id}'" style="cursor:pointer">
+          <div class="trend-post-header">
+            <div style="cursor:pointer" onclick="event.stopPropagation();location.href='perfil.html?uid=${sanitize(p.authorId)}'">
+              ${av}
+            </div>
+            <div>
+              <div class="trend-post-author" onclick="event.stopPropagation();location.href='perfil.html?uid=${sanitize(p.authorId)}'">${sanitize(p.authorName||'Usuário')}</div>
+              <div class="trend-post-time">${timeAgo(p.createdAt)}</div>
+            </div>
+          </div>
+          ${postText ? `<div class="trend-post-text">${sanitize(postText)}</div>` : ''}
+          ${p.imageURL ? `<img class="trend-post-img" src="${sanitize(p.imageURL)}" alt="" loading="lazy" onclick="event.stopPropagation();openLightbox(['${sanitize(p.imageURL)}'])">` : ''}
+          <div class="trend-post-stats">
+            <span><i class="ti ti-heart" style="color:var(--rose-500)"></i> ${totalLikes}</span>
+            <span><i class="ti ti-message-circle" style="color:var(--indigo-400)"></i> ${p.commentsCount||0}</span>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="padding:1rem 1.125rem;font-size:13px;color:var(--text-muted)">Erro ao carregar posts.</div>`;
+    console.error(e);
+  }
+}
+
+function switchTab(tab) {
+  _activeTab = tab;
+  document.getElementById('tab-popular').className = `tab-btn${tab === 'popular' ? ' active' : ''}`;
+  document.getElementById('tab-recent').className  = `tab-btn${tab === 'recent'  ? ' active' : ''}`;
+  loadPopularPosts();
+}
+</script>
+</body>
+</html>
