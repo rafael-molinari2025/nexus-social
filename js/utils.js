@@ -64,8 +64,9 @@ function showToast(msg, duration = 3500) {
 
 // ── Theme (dark / light) ──────────────────────────────────────
 function initTheme() {
-  const saved = localStorage.getItem('nexus-theme') || 'light';
-  document.documentElement.setAttribute('data-theme', saved);
+  const saved = localStorage.getItem('nexus-theme');
+  const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
 }
 
 function toggleTheme() {

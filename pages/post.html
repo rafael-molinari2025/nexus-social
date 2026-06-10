@@ -105,7 +105,7 @@ function loadPost() {
         </div>
         ${p.authorId === currentUser.uid ? `<button class="btn btn-icon" onclick="deletePost()" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
       </div>
-      <div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>')}</div>
+      <div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" style="color:#0ea5e9;text-decoration:none;font-weight:500">@$1</a>')}</div>
       <div class="post-actions" style="border-top:0.5px solid var(--border)">
         <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike()">
           <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length} curtidas

@@ -144,6 +144,9 @@ async function loadScraps(type) {
         ? `<img src="${authorPhoto}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : `<span style="color:${cl.color}">${getInitials(authorName)}</span>`;
 
+      const likes = s.likes || [];
+      const liked = likes.includes(currentUser.uid);
+      const canDelete = currentUser.uid === s.toUid || currentUser.uid === s.fromUid;
       return `
       <div class="scrap-full" id="scrap-${doc.id}">
         <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer;flex-shrink:0"
@@ -154,13 +157,20 @@ async function loadScraps(type) {
             ${isSent ? `<span class="scrap-full-arrow">→</span><span class="scrap-full-to" onclick="location.href='perfil.html?uid=${toUid}'">${sanitize(toName)}</span>` : ''}
           </div>
           <div class="scrap-full-text">${sanitize(s.text).replace(/\n/g,'<br>')}</div>
-          <div class="scrap-full-time">${timeAgo(s.createdAt)}</div>
+          <div style="display:flex;align-items:center;gap:.75rem;margin-top:.35rem">
+            <span class="scrap-full-time">${timeAgo(s.createdAt)}</span>
+            <button id="scrap-like-${doc.id}" onclick="toggleScrapLike('${doc.id}',this)"
+              style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:.25rem;font-size:12px;padding:.15rem .3rem;border-radius:var(--radius-sm);transition:color var(--transition);color:${liked?'var(--coral-400)':'var(--text-muted)'}">
+              <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" style="font-size:14px"></i>
+              <span>${likes.length || ''}</span>
+            </button>
+          </div>
         </div>
-        <button onclick="deleteScrap('${doc.id}')" title="Excluir recado"
+        ${canDelete ? `<button onclick="deleteScrap('${doc.id}')" title="Excluir recado"
           style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:.25rem;flex-shrink:0;align-self:flex-start;margin-top:.1rem;border-radius:var(--radius-sm);transition:color var(--transition)"
           onmouseover="this.style.color='var(--coral-400)'" onmouseout="this.style.color='var(--text-muted)'">
           <i class="ti ti-trash" style="font-size:15px"></i>
-        </button>
+        </button>` : ''}
       </div>`;
     }).join('');
   } catch(e) {
@@ -262,6 +272,30 @@ async function deleteScrap(id) {
   } catch(e) {
     showToast('Erro ao excluir recado.');
   }
+}
+
+async function toggleScrapLike(id, btn) {
+  const ref = db.collection('scraps').doc(id);
+  const doc = await ref.get();
+  if (!doc.exists) return;
+  const likes = doc.data().likes || [];
+  const liked = likes.includes(currentUser.uid);
+  await ref.update({
+    likes: liked
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+  const newCount = liked ? likes.length - 1 : likes.length + 1;
+  const icon = btn.querySelector('i');
+  const countEl = btn.querySelector('span');
+  if (liked) {
+    icon.className = 'ti ti-heart';
+    btn.style.color = 'var(--text-muted)';
+  } else {
+    icon.className = 'ti ti-heart-filled';
+    btn.style.color = 'var(--coral-400)';
+  }
+  countEl.textContent = newCount > 0 ? newCount : '';
 }
 
 // Fechar resultados ao clicar fora

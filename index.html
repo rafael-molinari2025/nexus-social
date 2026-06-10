@@ -733,7 +733,7 @@ async function createPost() {
 function parsePostText(text) {
   return sanitize(text)
     .replace(/\n/g, '<br>')
-    .replace(/#(\w+)/g, '<a href="/index.html?hashtag=$1" class="hashtag">#$1</a>')
+    .replace(/#(\w+)/g, `<a href="${PAGES}busca.html?tab=posts&q=%23$1" class="hashtag">#$1</a>`)
     .replace(/@(\w+)/g, '<a href="/pages/busca.html?q=$1" class="mention">@$1</a>');
 }
 

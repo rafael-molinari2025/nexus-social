@@ -155,9 +155,11 @@ requireAuth(async user => {
   fSnap.docs.forEach(d => d.data().users.forEach(u => myFriendIds.add(u)));
   rSnap.docs.forEach(d => pendingRequests.add(d.data().to));
 
-  // Pegar query da URL
+  // Pegar query e tab da URL
   const params = new URLSearchParams(location.search);
   const q = params.get('q') || '';
+  const tabParam = params.get('tab');
+  if (tabParam && ['people','communities','posts'].includes(tabParam)) switchTab(tabParam);
   if (q) {
     document.getElementById('main-search').value = q;
     currentQuery = q;

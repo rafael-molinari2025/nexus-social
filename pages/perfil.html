@@ -329,10 +329,13 @@ async function renderProfile(uid) {
        <i class="ti ti-flag" aria-hidden="true"></i>
      </button>`;
 
+  const shareBtn = `<button class="btn btn-icon" onclick="shareProfile('${uid}')" title="Compartilhar perfil" style="flex-shrink:0"><i class="ti ti-share-3" aria-hidden="true"></i></button>`;
+
   const actionBtn = isOwn
     ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
          <button class="btn" onclick="openModal()"><i class="ti ti-pencil" aria-hidden="true"></i> Editar perfil</button>
          <button class="btn btn-danger" onclick="handleSignOut()" style="gap:.4rem"><i class="ti ti-logout" aria-hidden="true"></i> Sair</button>
+         ${shareBtn}
        </div>`
     : isBlocked
       ? `<div style="display:flex;gap:.5rem;align-items:center">
@@ -343,14 +346,14 @@ async function renderProfile(uid) {
         ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
              <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
              <button class="btn" disabled><i class="ti ti-check" aria-hidden="true"></i> Amigos</button>
-             ${blockBtn}${reportBtn}
+             ${blockBtn}${reportBtn}${shareBtn}
            </div>`
         : hasPendingRequest
-          ? `<div style="display:flex;gap:.5rem">${blockBtn}${reportBtn}<button class="btn" disabled>Solicitação enviada</button></div>`
+          ? `<div style="display:flex;gap:.5rem">${blockBtn}${reportBtn}${shareBtn}<button class="btn" disabled>Solicitação enviada</button></div>`
           : `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
                <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
                <button class="btn" onclick="sendFriendRequest('${uid}', this)"><i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar</button>
-               ${blockBtn}${reportBtn}
+               ${blockBtn}${reportBtn}${shareBtn}
              </div>`;
 
   const coverStyle = d.coverURL
@@ -378,6 +381,7 @@ async function renderProfile(uid) {
       ${d.status && (d.status.emoji || d.status.text) ? `<div style="font-size:13px;color:var(--text-secondary);margin-top:.2rem">${sanitize(d.status.emoji||'')} ${sanitize(d.status.text||'')}</div>` : ''}
       ${!isOwn && mutualCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:.2rem"><i class="ti ti-users" aria-hidden="true"></i> ${mutualCount} amigo${mutualCount!==1?'s':''} em comum</div>` : ''}
       ${d.city ? `<div class="profile-location"><i class="ti ti-map-pin" aria-hidden="true"></i>${sanitize(d.city)}</div>` : ''}
+      ${d.website ? `<div class="profile-location"><i class="ti ti-world" aria-hidden="true"></i><a href="${sanitize(d.website)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none" onclick="event.stopPropagation()">${sanitize(d.website.replace(/^https?:\/\//,''))}</a></div>` : ''}
       ${d.bio  ? `<div class="profile-bio-text">${sanitize(d.bio)}</div>` : ''}
       ${isOwn ? profileCompletenessHTML(d) : ''}
       <div class="profile-stats" style="margin-top:.75rem" id="pstats">
@@ -677,13 +681,22 @@ async function loadScraps(uid) {
       ? `<img src="${s.fromPhoto}" alt="${s.fromName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       : `<span style="color:${cl.color}">${getInitials(s.fromName)}</span>`;
     const canDelete = isOwn || s.fromUid === currentUser.uid;
+    const likes = s.likes || [];
+    const liked = likes.includes(currentUser.uid);
     return `<div class="scrap" id="pscrap-${doc.id}" style="position:relative">
       <div class="scrap-author">
         <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer" onclick="location.href='perfil.html?uid=${s.fromUid}'">${av}</div>
         ${sanitize(s.fromName)}
       </div>
       <div class="scrap-text">${sanitize(s.text).replace(/\n/g,'<br>')}</div>
-      <div class="scrap-time">${timeAgo(s.createdAt)}</div>
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <span class="scrap-time">${timeAgo(s.createdAt)}</span>
+        <button id="pscrap-like-${doc.id}" onclick="toggleProfileScrapLike('${doc.id}',this)"
+          style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:.2rem;font-size:11px;padding:.1rem .2rem;border-radius:4px;color:${liked?'var(--coral-400)':'var(--text-muted)'}">
+          <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" style="font-size:13px"></i>
+          <span>${likes.length || ''}</span>
+        </button>
+      </div>
       ${canDelete ? `<button onclick="deleteProfileScrap('${doc.id}')" title="Excluir"
         style="position:absolute;top:.35rem;right:.35rem;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:.2rem;border-radius:4px"
         onmouseover="this.style.color='var(--coral-400)'" onmouseout="this.style.color='var(--text-muted)'">
@@ -703,6 +716,25 @@ async function deleteProfileScrap(id) {
   } catch(e) {
     showToast('Erro ao excluir recado.');
   }
+}
+
+async function toggleProfileScrapLike(id, btn) {
+  const ref = db.collection('scraps').doc(id);
+  const doc = await ref.get();
+  if (!doc.exists) return;
+  const likes = doc.data().likes || [];
+  const liked = likes.includes(currentUser.uid);
+  await ref.update({
+    likes: liked
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+  const newCount = liked ? likes.length - 1 : likes.length + 1;
+  const icon = btn.querySelector('i');
+  const countEl = btn.querySelector('span');
+  if (liked) { icon.className = 'ti ti-heart'; btn.style.color = 'var(--text-muted)'; }
+  else       { icon.className = 'ti ti-heart-filled'; btn.style.color = 'var(--coral-400)'; }
+  countEl.textContent = newCount > 0 ? newCount : '';
 }
 
 async function postScrap(toUid) {
@@ -802,6 +834,15 @@ function selectEditGender(g) {
 
 function openModal() { document.getElementById('edit-modal').classList.add('open'); }
 function closeModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+function shareProfile(uid) {
+  const url = `${location.origin}/pages/perfil.html?uid=${uid}`;
+  if (navigator.share) {
+    navigator.share({ title: 'Perfil no Nexus', url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => showToast('Link do perfil copiado!')).catch(() => showToast('Não foi possível copiar.'));
+  }
+}
 
 async function saveProfile() {
   const first    = document.getElementById('edit-firstname').value.trim();
