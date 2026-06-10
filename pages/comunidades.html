@@ -220,7 +220,7 @@ async function createCommunity() {
   if (!name) return showToast('O nome é obrigatório.');
 
   const ref = await db.collection('communities').add({
-    name, description: desc, category: cat,
+    name, name_lower: name.toLowerCase(), description: desc, category: cat,
     createdBy: currentUser.uid,
     membersCount: 1,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -267,7 +267,7 @@ async function saveEditCommunity() {
   const cat  = document.getElementById('edit-comm-category').value;
   if (!name) return showToast('O nome é obrigatório.');
   try {
-    await db.collection('communities').doc(_editingCommId).update({ name, description: desc, category: cat });
+    await db.collection('communities').doc(_editingCommId).update({ name, name_lower: name.toLowerCase(), description: desc, category: cat });
     closeEditCommModal();
     showToast('Comunidade atualizada!');
     loadMyCommunities();

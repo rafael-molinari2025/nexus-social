@@ -30,7 +30,7 @@ function avatarHTML(user, size = 40) {
   const cl = getAvatarColor(user.uid || user.displayName || '');
   const cls = `avatar avatar-${size}`;
   if (user.photoURL) {
-    return `<div class="${cls}" style="background:${cl.bg}"><img src="${user.photoURL}" alt="${user.displayName}"></div>`;
+    return `<div class="${cls}" style="background:${cl.bg}"><img src="${user.photoURL}" alt="${sanitize(user.displayName)}"></div>`;
   }
   return `<div class="${cls}" style="background:${cl.bg};color:${cl.color}">${getInitials(user.displayName)}</div>`;
 }
@@ -213,7 +213,7 @@ function renderTopbar(user, activePage = 'feed') {
   if (!nav) return;
   const cl = getAvatarColor(user.uid);
   const av = user.photoURL
-    ? `<img src="${user.photoURL}" alt="${user.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${user.photoURL}" alt="${sanitize(user.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(user.displayName)}</span>`;
 
   const themeIcon = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'ti-sun' : 'ti-moon';

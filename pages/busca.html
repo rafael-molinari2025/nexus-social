@@ -315,10 +315,11 @@ async function sendRequest(targetUid) {
 async function searchCommunities(q, el) {
   try {
     const qCapitalized = q.charAt(0).toUpperCase() + q.slice(1).toLowerCase();
-    const commSnap = await db.collection('communities').limit(100).get();
+    const qLower2 = q.toLowerCase().trim();
+    const commSnap = await db.collection('communities').orderBy('name').limit(300).get();
     const snap1 = { docs: commSnap.docs.filter(d => {
       const n = (d.data().name || '').toLowerCase();
-      return n.includes(q.toLowerCase());
+      return n.includes(qLower2);
     }) };
     const snap2 = { docs: [] };
 
