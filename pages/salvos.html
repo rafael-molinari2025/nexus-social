@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Posts Salvos</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    .salvos-page { max-width: 640px; margin: 0 auto; padding: 1.5rem .75rem; }
+    @media (max-width: 768px) { .salvos-page { padding: 1rem .5rem calc(80px + 1rem); } }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div class="toast" id="toast"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="salvos-page">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem">
+      <h1 style="font-size:20px;font-weight:600;margin:0">Posts salvos</h1>
+      <span id="saved-count" style="font-size:13px;color:var(--text-muted)"></span>
+    </div>
+    <div id="salvos-list">
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+    <div id="salvos-load-more"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let _lastSavedDoc = null;
+let _loading = false;
+const PAGE_SIZE = 20;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, '');
+  loadSaved();
+});
+
+async function loadSaved(reset = true) {
+  if (_loading) return;
+  _loading = true;
+  const el  = document.getElementById('salvos-list');
+  const lm  = document.getElementById('salvos-load-more');
+  if (reset) { _lastSavedDoc = null; el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>'; }
+  try {
+    let query = db.collection('posts')
+      .where('bookmarks', 'array-contains', currentUser.uid)
+      .orderBy('createdAt', 'desc')
+      .limit(PAGE_SIZE);
+    if (_lastSavedDoc) query = query.startAfter(_lastSavedDoc);
+    const snap = await query.get();
+
+    if (snap.docs.length) _lastSavedDoc = snap.docs[snap.docs.length - 1];
+
+    if (snap.empty && reset) {
+      el.innerHTML = `<div class="empty-state card">
+        <i class="ti ti-bookmark-off" style="font-size:2.5rem;color:var(--text-muted)"></i>
+        <p>Nenhum post salvo ainda.<br>Clique no ícone <i class="ti ti-bookmark"></i> em qualquer post para salvar.</p>
+      </div>`;
+      document.getElementById('saved-count').textContent = '';
+      _loading = false; return;
+    }
+
+    const html = snap.docs.map(doc => postHTML(doc.id, doc.data())).join('');
+    if (reset) {
+      el.innerHTML = `<div class="card">${html}</div>`;
+    } else {
+      el.querySelector('.card')?.insertAdjacentHTML('beforeend', html);
+    }
+
+    if (!reset) document.getElementById('saved-count').textContent = '';
+
+    lm.innerHTML = snap.docs.length === PAGE_SIZE
+      ? `<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:.5rem" onclick="loadSaved(false)">
+           <i class="ti ti-refresh"></i> Ver mais
+         </button>` : '';
+  } catch(e) {
+    console.error(e);
+    el.innerHTML = `<div class="empty-state card"><i class="ti ti-alert-circle"></i><p>Erro ao carregar posts salvos.</p></div>`;
+  }
+  _loading = false;
+}
+
+function postHTML(id, p) {
+  const cl  = getAvatarColor(p.authorId);
+  const av  = p.authorPhoto
+    ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(p.authorName)}</span>`;
+  const liked = (p.likes||[]).includes(currentUser.uid);
+  return `<div class="post" id="post-${id}">
+    <div class="post-header">
+      <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer"
+           onclick="location.href='perfil.html?uid=${p.authorId}'">${av}</div>
+      <div class="post-meta">
+        <div class="post-author" style="cursor:pointer" onclick="location.href='perfil.html?uid=${p.authorId}'">${sanitize(p.authorName||'Usuário')}</div>
+        <div class="post-time">${timeAgo(p.createdAt)}</div>
+      </div>
+      <button class="btn btn-icon" onclick="unsavePost('${id}', this)" title="Remover dos salvos" style="margin-left:auto;color:var(--purple-600)">
+        <i class="ti ti-bookmark-filled"></i>
+      </button>
+    </div>
+    ${p.text ? `<div class="post-body" style="padding:.5rem 0">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<span style="color:var(--purple-600)">#$1</span>')}</div>` : ''}
+    ${p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" style="cursor:zoom-in;border-radius:var(--radius-md);margin-bottom:.5rem" onclick="openLightbox(this.src)">` : ''}
+    <div class="post-actions" style="padding:.35rem 0">
+      <button class="post-action-btn${liked?' liked':''}" id="like-${id}" onclick="toggleLike('${id}')">
+        <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
+      </button>
+      <button class="post-action-btn" onclick="location.href='post.html?id=${id}'">
+        <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0}
+      </button>
+    </div>
+  </div>`;
+}
+
+async function toggleLike(postId) {
+  const btn  = document.getElementById(`like-${postId}`);
+  const ref  = db.collection('posts').doc(postId);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const likes  = snap.data().likes || [];
+  const isLiked = likes.includes(currentUser.uid);
+  await ref.update({ likes: isLiked
+    ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+    : firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
+  if (btn) {
+    btn.className = `post-action-btn${!isLiked?' liked':''}`;
+    btn.innerHTML = `<i class="ti ti-heart"></i> ${isLiked ? likes.length - 1 : likes.length + 1}`;
+  }
+}
+
+async function unsavePost(postId, btn) {
+  btn.disabled = true;
+  try {
+    await db.collection('posts').doc(postId).update({
+      bookmarks: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+    });
+    document.getElementById(`post-${postId}`)?.remove();
+    showToast('Post removido dos salvos.');
+  } catch(e) { btn.disabled = false; showToast('Erro ao remover.'); }
+}
+</script>
+</body>
+</html>

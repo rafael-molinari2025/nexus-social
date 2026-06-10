@@ -112,6 +112,14 @@
       .profile-avatar-area { margin-top: -32px; }
       .gender-grid { grid-template-columns: 1fr 1fr; }
     }
+    .report-opt {
+      width: 100%; text-align: left; padding: .6rem .85rem;
+      border: 0.5px solid var(--border); border-radius: var(--radius-md);
+      background: var(--surface); font-size: 13px; color: var(--text-secondary);
+      cursor: pointer; font-family: var(--font-sans);
+      transition: background var(--transition), color var(--transition);
+    }
+    .report-opt:hover { background: var(--gray-50, #fafafa); color: var(--text-primary); }
   </style>
 </head>
 <body>
@@ -211,6 +219,25 @@
   </div>
 </div>
 
+<!-- Report user modal -->
+<div class="modal-overlay" id="user-report-modal" style="display:none"
+     onclick="if(event.target===this)closeUserReportModal()">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <span class="modal-title">Denunciar usuário</span>
+      <button class="btn btn-icon" onclick="closeUserReportModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:.75rem">Por que você está denunciando este usuário?</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem">
+      <button class="report-opt" onclick="submitUserReport('Spam ou conta falsa')">Spam ou conta falsa</button>
+      <button class="report-opt" onclick="submitUserReport('Comportamento abusivo')">Comportamento abusivo</button>
+      <button class="report-opt" onclick="submitUserReport('Conteúdo impróprio')">Conteúdo impróprio</button>
+      <button class="report-opt" onclick="submitUserReport('Assédio ou bullying')">Assédio ou bullying</button>
+      <button class="report-opt" onclick="submitUserReport('Outro')">Outro</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -293,6 +320,11 @@ async function renderProfile(uid) {
        <i class="ti ti-${isBlocked ? 'lock-open' : 'ban'}" aria-hidden="true"></i>
      </button>`;
 
+  const reportBtn = isOwn ? '' :
+    `<button class="btn" onclick="openUserReportModal('${uid}')" title="Denunciar usuário" style="padding:.4rem .6rem">
+       <i class="ti ti-flag" aria-hidden="true"></i>
+     </button>`;
+
   const actionBtn = isOwn
     ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
          <button class="btn" onclick="openModal()"><i class="ti ti-pencil" aria-hidden="true"></i> Editar perfil</button>
@@ -304,17 +336,17 @@ async function renderProfile(uid) {
            ${blockBtn}
          </div>`
       : isFriend
-        ? `<div style="display:flex;gap:.5rem">
+        ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
              <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
              <button class="btn" disabled><i class="ti ti-check" aria-hidden="true"></i> Amigos</button>
-             ${blockBtn}
+             ${blockBtn}${reportBtn}
            </div>`
         : hasPendingRequest
-          ? `<div style="display:flex;gap:.5rem">${blockBtn}<button class="btn" disabled>Solicitação enviada</button></div>`
-          : `<div style="display:flex;gap:.5rem">
+          ? `<div style="display:flex;gap:.5rem">${blockBtn}${reportBtn}<button class="btn" disabled>Solicitação enviada</button></div>`
+          : `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
                <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
                <button class="btn" onclick="sendFriendRequest('${uid}', this)"><i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar</button>
-               ${blockBtn}
+               ${blockBtn}${reportBtn}
              </div>`;
 
   const coverStyle = d.coverURL
@@ -769,6 +801,35 @@ async function saveProfile() {
 document.getElementById('edit-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
+
+// ── Report user ───────────────────────────────────────────────
+let _reportUserUid = null;
+
+function openUserReportModal(uid) {
+  _reportUserUid = uid;
+  document.getElementById('user-report-modal').style.display = 'flex';
+}
+
+function closeUserReportModal() {
+  _reportUserUid = null;
+  document.getElementById('user-report-modal').style.display = 'none';
+}
+
+async function submitUserReport(reason) {
+  if (!_reportUserUid) return;
+  try {
+    await db.collection('reports').add({
+      type: 'user',
+      reportedUid: _reportUserUid,
+      reason,
+      reportedBy: currentUser.uid,
+      status: 'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Denúncia enviada. Obrigado!');
+  } catch(e) { showToast('Erro ao denunciar.'); }
+  closeUserReportModal();
+}
 
 // ── Cover upload ──────────────────────────────────────────────
 async function uploadCover(input) {

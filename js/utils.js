@@ -236,6 +236,9 @@ function renderTopbar(user, activePage = 'feed') {
         <a href="${PAGES}galeria.html" class="user-dropdown-item">
           <i class="ti ti-photo" aria-hidden="true"></i> Minha galeria
         </a>
+        <a href="${PAGES}salvos.html" class="user-dropdown-item">
+          <i class="ti ti-bookmark" aria-hidden="true"></i> Posts salvos
+        </a>
         <a href="${PAGES}configuracoes.html" class="user-dropdown-item">
           <i class="ti ti-settings" aria-hidden="true"></i> Configurações
         </a>

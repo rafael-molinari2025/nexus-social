@@ -168,6 +168,18 @@
     .hashtag:hover { text-decoration: underline; }
     .mention { color: #0ea5e9; text-decoration: none; font-weight: 500; }
     .mention:hover { text-decoration: underline; }
+    .mention-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+      max-height: 200px; overflow-y: auto; margin-top: 2px;
+    }
+    .mention-item {
+      display: flex; align-items: center; gap: .6rem;
+      padding: .45rem .85rem; cursor: pointer; font-size: 13px;
+      transition: background var(--transition);
+    }
+    .mention-item:hover { background: var(--gray-50, #fafafa); }
 
     /* ── Online dot ───────────────────────────────────────────────── */
     .online-dot {
@@ -246,9 +258,12 @@
       <div class="composer">
         <div id="composer-avatar"></div>
         <div class="composer-box">
-          <textarea class="composer-textarea" id="post-text"
-            placeholder="O que você está pensando? Use #hashtags e @menções"
-            oninput="updateCharCount()" maxlength="2000"></textarea>
+          <div style="position:relative">
+            <textarea class="composer-textarea" id="post-text"
+              placeholder="O que você está pensando? Use #hashtags e @menções"
+              oninput="updateCharCount();checkMentionInput(this)" maxlength="2000"></textarea>
+            <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
+          </div>
           <div class="composer-char-count" id="post-char-count"></div>
           <div id="image-preview-wrap" style="display:none"></div>
           <div class="composer-footer">
@@ -293,6 +308,12 @@
       <div class="card-body">
         <div class="card-title">comunidades em alta</div>
         <div id="trending-communities"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">hashtags em alta</div>
+        <div id="trending-hashtags"></div>
       </div>
     </div>
   </aside>
@@ -396,6 +417,9 @@ let currentUser   = null;
 let _postImageFile = null;
 let _feedTab      = 'all';
 let _friendIds    = new Set();
+let _friendsList  = [];
+let _mentionStart = -1;
+let _mentionQuery = '';
 let _hashtagFilter = new URLSearchParams(location.search).get('hashtag') || '';
 let _privacyIdx   = 0;
 let _editingPostId = null;
@@ -443,8 +467,15 @@ requireAuth(async user => {
   updateOnlineStatus(user.uid);
 
   db.collection('friendships').where('users', 'array-contains', user.uid).get()
-    .then(s => s.docs.forEach(d => d.data().users.forEach(u => _friendIds.add(u))))
+    .then(async s => {
+      const uids = [];
+      s.docs.forEach(d => d.data().users.forEach(u => { _friendIds.add(u); if (u !== user.uid) uids.push(u); }));
+      const friends = await Promise.all(uids.slice(0, 50).map(uid => getUserData(uid)));
+      _friendsList = friends.filter(Boolean);
+    })
     .catch(() => {});
+
+  loadTrendingHashtags();
 
   document.getElementById('auth-loading')?.remove();
 });
@@ -920,6 +951,87 @@ async function submitReport(reason) {
   closeReportModal();
 }
 
+// ── @Mention autocomplete ──────────────────────────────────────
+function checkMentionInput(ta) {
+  const textBefore = ta.value.slice(0, ta.selectionStart);
+  const match = textBefore.match(/@(\w*)$/);
+  if (!match) { hideMentionDropdown(); return; }
+  _mentionQuery = match[1].toLowerCase();
+  _mentionStart = ta.selectionStart - match[0].length;
+  const matches = _mentionQuery
+    ? _friendsList.filter(f => (f.displayName||'').toLowerCase().includes(_mentionQuery)).slice(0, 6)
+    : _friendsList.slice(0, 6);
+  if (!matches.length) { hideMentionDropdown(); return; }
+  showMentionDropdown(matches);
+}
+
+function showMentionDropdown(friends) {
+  const dd = document.getElementById('mention-dropdown');
+  if (!dd) return;
+  dd.innerHTML = friends.map(f => {
+    const cl = getAvatarColor(f.uid);
+    const av = f.photoURL
+      ? `<img src="${f.photoURL}" style="width:24px;height:24px;border-radius:50%;object-fit:cover">`
+      : `<div style="width:24px;height:24px;border-radius:50%;background:${cl.bg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:${cl.color}">${getInitials(f.displayName)}</div>`;
+    const safe = f.displayName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<div class="mention-item" onclick="insertMention('${safe}')">${av}<span>${sanitize(f.displayName)}</span></div>`;
+  }).join('');
+  dd.style.display = 'block';
+}
+
+function hideMentionDropdown() {
+  const dd = document.getElementById('mention-dropdown');
+  if (dd) dd.style.display = 'none';
+  _mentionStart = -1;
+  _mentionQuery = '';
+}
+
+function insertMention(name) {
+  const ta = document.getElementById('post-text');
+  if (!ta || _mentionStart < 0) { hideMentionDropdown(); return; }
+  const cursor = ta.selectionStart;
+  const before = ta.value.slice(0, _mentionStart);
+  const after  = ta.value.slice(cursor);
+  const mention = `@${name}`;
+  ta.value = before + mention + ' ' + after;
+  const newCursor = _mentionStart + mention.length + 1;
+  ta.setSelectionRange(newCursor, newCursor);
+  ta.focus();
+  hideMentionDropdown();
+  updateCharCount();
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.composer-box') && !e.target.closest('#mention-dropdown')) hideMentionDropdown();
+});
+
+// ── Trending hashtags ──────────────────────────────────────────
+async function loadTrendingHashtags() {
+  const el = document.getElementById('trending-hashtags');
+  if (!el) return;
+  try {
+    const snap = await db.collection('posts').orderBy('createdAt', 'desc').limit(100).get();
+    const counts = {};
+    snap.docs.forEach(doc => {
+      (doc.data().hashtags || []).forEach(t => { counts[t] = (counts[t] || 0) + 1; });
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    if (!sorted.length) {
+      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhuma hashtag ainda.</p>`;
+      return;
+    }
+    el.innerHTML = sorted.map(([tag, count]) =>
+      `<div style="display:flex;align-items:center;padding:.3rem 0;cursor:pointer;border-bottom:0.5px solid var(--border)"
+            onclick="location.href='/index.html?hashtag=${encodeURIComponent(tag)}'">
+        <span style="font-size:13px;font-weight:600;color:var(--purple-600)">#${sanitize(tag)}</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${count} post${count > 1 ? 's' : ''}</span>
+      </div>`
+    ).join('');
+  } catch(e) {
+    if (el) el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">—</p>`;
+  }
+}
+
 // ── Stories ────────────────────────────────────────────────────
 const ST_VIEWED_KEY  = 'nx_sv_';
 const ST_CACHE_KEY   = 'nx_stories_cache';
@@ -962,7 +1074,8 @@ async function loadStories() {
     // My story (always first)
     if (myInfo) {
       const seen = localStorage.getItem(ST_VIEWED_KEY + myInfo.ids[0]);
-      html += `<div class="story-thumb" onclick="viewStory('${myInfo.ids[0]}')">
+      const idsJson = JSON.stringify(myInfo.ids).replace(/"/g,'&quot;');
+      html += `<div class="story-thumb" onclick="viewStory('${myInfo.ids[0]}', ${idsJson}, 0)">
         <div class="story-ring${seen?' seen':' unseen'}">
           <div class="story-ring-inner">${myAv}
             <div class="story-add-icon" onclick="event.stopPropagation();openStoryModal()">+</div>
@@ -988,7 +1101,8 @@ async function loadStories() {
         ? `<img src="${d.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : `<div style="width:100%;height:100%;background:${uc.bg};display:flex;align-items:center;justify-content:center"><span style="color:${uc.color};font-weight:600;font-size:16px">${getInitials(d.displayName)}</span></div>`;
       const seen = localStorage.getItem(ST_VIEWED_KEY + u.ids[0]);
-      html += `<div class="story-thumb" onclick="viewStory('${u.ids[0]}')">
+      const idsJson = JSON.stringify(u.ids).replace(/"/g,'&quot;');
+      html += `<div class="story-thumb" onclick="viewStory('${u.ids[0]}', ${idsJson}, 0)">
         <div class="story-ring${seen?' seen':' unseen'}">
           <div class="story-ring-inner">${av}</div>
         </div>
@@ -1008,7 +1122,7 @@ async function loadStories() {
   }
 }
 
-async function viewStory(storyId) {
+async function viewStory(storyId, allIds = [], currentIdx = 0) {
   const snap = await db.collection('stories').doc(storyId).get();
   if (!snap.exists) { showToast('Story não encontrado.'); return; }
   const s  = snap.data();
@@ -1044,12 +1158,16 @@ async function viewStory(storyId) {
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
-  // Animate progress
+  // Animate progress bar and auto-advance
   const fill = document.getElementById('spf');
   if (fill) {
     fill.style.transition = 'width 5s linear';
     requestAnimationFrame(() => { fill.style.width = '100%'; });
-    setTimeout(() => overlay.remove(), 5100);
+    setTimeout(() => {
+      overlay.remove();
+      const nextIdx = currentIdx + 1;
+      if (nextIdx < allIds.length) viewStory(allIds[nextIdx], allIds, nextIdx);
+    }, 5100);
   }
 
   // Mark viewed

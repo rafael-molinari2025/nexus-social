@@ -336,7 +336,8 @@ let activeConvId    = null;
 let messagesUnsub   = null;
 let convsUnsub      = null;
 let typingUnsub     = null;
-let searchTimer     = null;
+let searchTimer        = null;
+let onlineStatusUnsub  = null;
 let _firstMsgDoc    = null;
 let _loadingOldMsgs = false;
 const MSG_PAGE_SIZE = 50;
@@ -533,6 +534,21 @@ async function openConversation(cid, otherUid) {
     sidebar.classList.add('hidden');
     main.classList.add('show');
   }
+
+  // Subscribe to other user's online status
+  if (onlineStatusUnsub) { onlineStatusUnsub(); onlineStatusUnsub = null; }
+  onlineStatusUnsub = db.collection('users').doc(otherUid).onSnapshot(snap => {
+    const statusEl = document.getElementById('chat-status');
+    if (!statusEl || !snap.exists) return;
+    const d = snap.data();
+    if (d && d.lastSeen) {
+      const onlineNow = isOnline(d);
+      statusEl.textContent = onlineNow ? 'Online agora' : `Visto ${timeAgo(d.lastSeen)}`;
+      statusEl.style.color = onlineNow ? '#22c55e' : '';
+    } else {
+      statusEl.textContent = '';
+    }
+  }, () => {});
 
   // Listen for typing indicator from other user
   if (typingUnsub) { typingUnsub(); typingUnsub = null; }
@@ -852,8 +868,9 @@ async function deleteConversation(cid) {
 
 // ── Mobile: voltar para lista de conversas ───────────────────────
 function mobileBackToList() {
-  if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
-  if (typingUnsub)   { typingUnsub();   typingUnsub   = null; }
+  if (messagesUnsub)      { messagesUnsub();      messagesUnsub      = null; }
+  if (typingUnsub)        { typingUnsub();        typingUnsub        = null; }
+  if (onlineStatusUnsub)  { onlineStatusUnsub();  onlineStatusUnsub  = null; }
   const sidebar = document.getElementById('chat-sidebar');
   const main    = document.getElementById('chat-main');
   sidebar.classList.remove('hidden');

@@ -87,7 +87,7 @@
     <!-- Barra de busca principal -->
     <div class="search-hero">
       <i class="ti ti-search" aria-hidden="true"></i>
-      <input type="text" id="main-search" placeholder="Buscar pessoas, comunidades..." autocomplete="off">
+      <input type="text" id="main-search" placeholder="Buscar pessoas, comunidades, posts..." autocomplete="off">
       <button class="btn btn-primary btn-sm" onclick="doSearch()" id="search-btn">
         Buscar
       </button>
@@ -100,6 +100,9 @@
       </button>
       <button class="search-tab" id="tab-communities" onclick="switchTab('communities')">
         <i class="ti ti-users-group" aria-hidden="true"></i> Comunidades
+      </button>
+      <button class="search-tab" id="tab-posts" onclick="switchTab('posts')">
+        <i class="ti ti-hash" aria-hidden="true"></i> Posts
       </button>
     </div>
 
@@ -171,6 +174,7 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-people').classList.toggle('active', tab === 'people');
   document.getElementById('tab-communities').classList.toggle('active', tab === 'communities');
+  document.getElementById('tab-posts').classList.toggle('active', tab === 'posts');
   if (currentQuery) doSearch();
 }
 
@@ -187,6 +191,8 @@ async function doSearch() {
 
   if (currentTab === 'people') {
     await searchPeople(q, el);
+  } else if (currentTab === 'posts') {
+    await searchPosts(q, el);
   } else {
     await searchCommunities(q, el);
   }
@@ -363,6 +369,59 @@ async function searchCommunities(q, el) {
   } catch(e) {
     el.innerHTML = `<div class="empty-search"><div class="empty-search-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-search-title">Erro na busca</div></div>`;
   }
+}
+
+async function searchPosts(q, el) {
+  try {
+    const tag = q.replace(/^#/, '').toLowerCase().trim();
+    if (!tag) {
+      el.innerHTML = `<div class="empty-search">
+        <div class="empty-search-icon"><i class="ti ti-hash" aria-hidden="true"></i></div>
+        <div class="empty-search-title">Busca por hashtag</div>
+        <div class="empty-search-sub">Digite uma hashtag como <strong>#tecnologia</strong> para encontrar posts</div>
+      </div>`;
+      return;
+    }
+    const snap = await db.collection('posts')
+      .where('hashtags', 'array-contains', tag)
+      .orderBy('createdAt', 'desc')
+      .limit(20).get();
+    if (snap.empty) {
+      el.innerHTML = `<div class="empty-search">
+        <div class="empty-search-icon"><i class="ti ti-news-off" aria-hidden="true"></i></div>
+        <div class="empty-search-title">Nenhum post encontrado</div>
+        <div class="empty-search-sub">Nenhum post com a hashtag <strong>#${sanitize(tag)}</strong></div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = `
+      <div class="result-count">${snap.size} post${snap.size !== 1 ? 's' : ''} encontrado${snap.size !== 1 ? 's' : ''} com <strong>#${sanitize(tag)}</strong></div>
+      <div class="card">${snap.docs.map(doc => postCardHTML(doc.id, doc.data())).join('')}</div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-search"><div class="empty-search-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-search-title">Erro na busca</div><div class="empty-search-sub">Tente novamente</div></div>`;
+  }
+}
+
+function postCardHTML(id, p) {
+  const cl = getAvatarColor(p.authorId);
+  const av = p.authorPhoto
+    ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(p.authorName)}</span>`;
+  return `<div class="post" style="cursor:pointer" onclick="location.href='post.html?id=${id}'">
+    <div class="post-header">
+      <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+      <div class="post-meta">
+        <div class="post-author" style="cursor:pointer" onclick="event.stopPropagation();location.href='perfil.html?uid=${p.authorId}'">${sanitize(p.authorName||'Usuário')}</div>
+        <div class="post-time">${timeAgo(p.createdAt)}</div>
+      </div>
+    </div>
+    ${p.text ? `<div class="post-body" style="padding:.5rem 0;max-height:120px;overflow:hidden">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<span style="color:var(--purple-600)">#$1</span>')}</div>` : ''}
+    ${p.imageURL ? `<img src="${p.imageURL}" alt="Imagem" loading="lazy" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-md);margin-bottom:.5rem">` : ''}
+    <div class="post-actions" style="padding:.35rem 0">
+      <span class="post-action-btn"><i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}</span>
+      <span class="post-action-btn"><i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0}</span>
+    </div>
+  </div>`;
 }
 
 async function joinCommunity(commId, btn) {
