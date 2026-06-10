@@ -172,6 +172,29 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
+    // ── Highlights (story permanentes no perfil) ─────────────────
+    match /highlights/{uid}/items/{itemId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── Depoimentos (testimonials) ────────────────────────────────
+    match /testimonials/{uid}/items/{itemId} {
+      allow create: if request.auth != null
+        && request.resource.data.fromUid == request.auth.uid;
+      allow read: if request.auth != null
+        && (request.auth.uid == uid || resource.data.status == 'approved');
+      allow update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null
+        && (request.auth.uid == uid || resource.data.fromUid == request.auth.uid);
+    }
+
+    // ── Visitas ao perfil ─────────────────────────────────────────
+    match /profile_views/{uid}/visitors/{visitorUid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == visitorUid;
+    }
+
     // ── Galeria de fotos ─────────────────────────────────────────
     match /photos/{photoId} {
       allow read: if request.auth != null;

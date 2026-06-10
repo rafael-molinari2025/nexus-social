@@ -390,7 +390,7 @@ async function renderProfile(uid) {
         </div>
         <div style="display:flex;gap:.5rem;padding-top:.5rem">${actionBtn}</div>
       </div>
-      <div class="profile-fullname">${sanitize(d.displayName || 'Usuário')}</div>
+      <div class="profile-fullname">${sanitize(d.displayName || 'Usuário')}${d.isVerified ? '<span class="verified-badge" title="Conta verificada"><i class="ti ti-check" style="font-size:8px"></i></span>' : ''}</div>
       ${d.status && (d.status.emoji || d.status.text) ? `<div style="font-size:13px;color:var(--text-secondary);margin-top:.2rem">${sanitize(d.status.emoji||'')} ${sanitize(d.status.text||'')}</div>` : ''}
       ${!isOwn && mutualCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:.2rem;cursor:pointer;display:inline-flex;align-items:center;gap:.25rem" onclick="showMutualFriendsModal()" title="Ver amigos em comum"><i class="ti ti-users" aria-hidden="true"></i> ${mutualCount} amigo${mutualCount!==1?'s':''} em comum <i class="ti ti-chevron-right" style="font-size:10px"></i></div>` : ''}
       ${d.city ? `<div class="profile-location"><i class="ti ti-map-pin" aria-hidden="true"></i>${sanitize(d.city)}</div>` : ''}
@@ -402,15 +402,24 @@ async function renderProfile(uid) {
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">comunidades</span></div>
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">posts</span></div>
       </div>
+      ${isOwn ? '<div id="profile-viewers-section"></div>' : ''}
+    </div>
+
+    <!-- Story Highlights -->
+    <div class="card" style="padding:0" id="highlights-card">
+      <div class="highlights-row" id="highlights-row">
+        <div class="highlight-item" style="opacity:.4"><div class="highlight-ring add-ring"><div class="highlight-ring-inner"><i class="ti ti-loader-2 ti-spin" style="font-size:18px;color:var(--text-muted)"></i></div></div></div>
+      </div>
     </div>
 
     <div class="card" style="padding:.25rem 0">
-      <div class="profile-tabs">
+      <div class="profile-tabs" style="overflow-x:auto;scrollbar-width:none">
         <button class="profile-tab active" onclick="switchTab('posts')">Posts</button>
         <button class="profile-tab" onclick="switchTab('fotos')"><i class="ti ti-photo" aria-hidden="true"></i> Fotos</button>
         <button class="profile-tab" onclick="switchTab('friends')">Amigos</button>
         <button class="profile-tab" onclick="switchTab('communities')">Comunidades</button>
         <button class="profile-tab" onclick="switchTab('scraps')">Recados</button>
+        <button class="profile-tab" onclick="switchTab('depoimentos')">Depoimentos</button>
       </div>
       <div class="card-body">
         <div class="tab-content active" id="tab-posts"><div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div></div>
@@ -418,12 +427,16 @@ async function renderProfile(uid) {
         <div class="tab-content" id="tab-friends"></div>
         <div class="tab-content" id="tab-communities"></div>
         <div class="tab-content" id="tab-scraps"></div>
+        <div class="tab-content" id="tab-depoimentos"></div>
       </div>
     </div>
   `;
 
   loadProfileStats(uid);
   loadProfilePosts(uid);
+  loadHighlights(uid, isOwn);
+  if (!isOwn) logProfileView(uid);
+  if (isOwn) loadProfileViewers(uid);
 
   if (isOwn) {
     const parts = (d.displayName || '').split(' ');
@@ -440,7 +453,7 @@ async function renderProfile(uid) {
   }
 }
 
-const _tabs = ['posts','fotos','friends','communities','scraps'];
+const _tabs = ['posts','fotos','friends','communities','scraps','depoimentos'];
 function switchTab(tab) {
   document.querySelectorAll('.profile-tab').forEach((b,i) => {
     b.classList.toggle('active', _tabs[i] === tab);
@@ -453,6 +466,7 @@ function switchTab(tab) {
   if (tab === 'friends')      loadProfileFriends(uid);
   if (tab === 'communities')  loadProfileCommunities(uid);
   if (tab === 'scraps')       loadScraps(uid);
+  if (tab === 'depoimentos')  loadDepoimentos(uid);
 }
 
 async function loadGallery(uid) {
@@ -1038,6 +1052,333 @@ async function uploadAvatar(input) {
   }
 
   input.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════
+// STORY HIGHLIGHTS
+// ══════════════════════════════════════════════════════════════
+async function loadHighlights(uid, isOwn) {
+  const row = document.getElementById('highlights-row');
+  if (!row) return;
+  try {
+    const snap = await db.collection('highlights').doc(uid).collection('items')
+      .orderBy('createdAt', 'asc').limit(20).get();
+
+    const addBtn = isOwn
+      ? `<div class="highlight-item" onclick="openCreateHighlightModal()">
+           <div class="highlight-ring add-ring"><div class="highlight-ring-inner"><i class="ti ti-plus" style="font-size:20px;color:var(--text-muted)"></i></div></div>
+           <span class="highlight-name">Novo</span>
+         </div>` : '';
+
+    if (snap.empty && !isOwn) {
+      document.getElementById('highlights-card').style.display = 'none';
+      return;
+    }
+
+    const items = snap.docs.map(d => {
+      const h = d.data();
+      const inner = h.coverURL
+        ? `<img src="${sanitize(h.coverURL)}" alt="${sanitize(h.title)}">`
+        : `<span style="font-size:22px">${sanitize(h.emoji||'⭐')}</span>`;
+      const del = isOwn
+        ? `<button onclick="event.stopPropagation();deleteHighlight('${d.id}','${uid}')" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:var(--rose-500);color:#fff;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;z-index:2" title="Excluir"><i class="ti ti-x"></i></button>` : '';
+      return `<div class="highlight-item" style="position:relative" onclick="openHighlightViewer('${d.id}','${uid}')">
+        ${del}
+        <div class="highlight-ring"><div class="highlight-ring-inner">${inner}</div></div>
+        <span class="highlight-name">${sanitize(h.title||'Destaque')}</span>
+      </div>`;
+    }).join('');
+
+    row.innerHTML = addBtn + items;
+  } catch(e) {
+    if (document.getElementById('highlights-card')) {
+      document.getElementById('highlights-card').style.display = 'none';
+    }
+  }
+}
+
+function openCreateHighlightModal() {
+  const existing = document.getElementById('highlight-create-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'highlight-create-modal';
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-star"></i> Novo destaque</span>
+        <button class="btn btn-icon" onclick="document.getElementById('highlight-create-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div class="form-group">
+          <label class="form-label">Título</label>
+          <input class="form-input" id="hl-title" placeholder="ex: Viagem, Família…" maxlength="24">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Emoji (opcional)</label>
+          <input class="form-input" id="hl-emoji" placeholder="⭐" maxlength="4" style="font-size:20px;text-align:center;width:64px">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Imagem de capa (opcional)</label>
+          <input type="file" id="hl-img" accept="image/*" class="form-input" style="padding:.3rem">
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveHighlight()">
+          <i class="ti ti-check"></i> Criar destaque
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveHighlight() {
+  const title = document.getElementById('hl-title')?.value.trim();
+  if (!title) return showToast('Digite um título.');
+  const emoji  = document.getElementById('hl-emoji')?.value.trim() || '⭐';
+  const imgFile = document.getElementById('hl-img')?.files[0];
+  const btn = document.querySelector('#highlight-create-modal .btn-primary');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Salvando…'; }
+  try {
+    let coverURL = null;
+    if (imgFile) coverURL = await uploadToCloudinary(imgFile);
+    await db.collection('highlights').doc(currentUser.uid).collection('items').add({
+      title, emoji, coverURL,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('highlight-create-modal')?.remove();
+    showToast('Destaque criado!');
+    loadHighlights(currentUser.uid, true);
+  } catch(e) {
+    showToast('Erro ao criar destaque.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Criar destaque'; }
+  }
+}
+
+async function deleteHighlight(itemId, uid) {
+  if (!confirm('Excluir este destaque?')) return;
+  await db.collection('highlights').doc(uid).collection('items').doc(itemId).delete();
+  showToast('Destaque excluído.');
+  loadHighlights(uid, true);
+}
+
+function openHighlightViewer(itemId, uid) {
+  db.collection('highlights').doc(uid).collection('items').doc(itemId).get().then(snap => {
+    if (!snap.exists) return;
+    const h = snap.data();
+    if (h.coverURL) openLightbox([h.coverURL]);
+    else showToast(h.title || 'Destaque');
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// QUEM VIU MEU PERFIL
+// ══════════════════════════════════════════════════════════════
+async function logProfileView(profileUid) {
+  if (!currentUser || currentUser.uid === profileUid) return;
+  try {
+    const me = await getUserData(currentUser.uid);
+    await db.collection('profile_views').doc(profileUid)
+      .collection('visitors').doc(currentUser.uid).set({
+        displayName: me?.displayName || currentUser.displayName || 'Usuário',
+        photoURL:    me?.photoURL    || currentUser.photoURL    || null,
+        viewedAt:    firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+  } catch(e) { /* silencioso */ }
+}
+
+async function loadProfileViewers(uid) {
+  const section = document.getElementById('profile-viewers-section');
+  if (!section) return;
+  try {
+    const snap = await db.collection('profile_views').doc(uid)
+      .collection('visitors')
+      .orderBy('viewedAt', 'desc')
+      .limit(10)
+      .get();
+    if (snap.empty) return;
+    const count = snap.size;
+    const avatars = snap.docs.slice(0, 5).map(d => {
+      const v = d.data();
+      const cl = getAvatarColor(d.id);
+      const av = v.photoURL
+        ? `<img src="${sanitize(v.photoURL)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color};font-size:10px;font-weight:700">${sanitize(getInitials(v.displayName))}</span>`;
+      return `<div class="avatar avatar-24" style="background:${cl.bg};z-index:${5-snap.docs.indexOf(d)}">${av}</div>`;
+    }).join('');
+    section.innerHTML = `
+      <div class="profile-viewers" onclick="showProfileViewersList('${uid}')">
+        <div class="profile-viewers-avatars">${avatars}</div>
+        <span style="font-size:13px;color:var(--text-secondary);margin-left:6px">
+          <strong>${count}</strong> pessoa${count!==1?'s':''} viram seu perfil recentemente
+        </span>
+        <i class="ti ti-chevron-right" style="font-size:14px;color:var(--text-muted);margin-left:auto"></i>
+      </div>`;
+  } catch(e) { /* silencioso */ }
+}
+
+async function showProfileViewersList(uid) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-eye"></i> Quem viu seu perfil</span>
+        <button class="btn btn-icon" onclick="this.closest('.modal-overlay').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div id="viewers-list" style="max-height:360px;overflow-y:auto">
+        <div style="display:flex;justify-content:center;padding:1.5rem"><div class="spinner"></div></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  try {
+    const snap = await db.collection('profile_views').doc(uid)
+      .collection('visitors').orderBy('viewedAt', 'desc').limit(30).get();
+    const el = document.getElementById('viewers-list');
+    if (!el) return;
+    el.innerHTML = snap.docs.map(d => {
+      const v = d.data();
+      const cl = getAvatarColor(d.id);
+      const av = v.photoURL
+        ? `<img src="${sanitize(v.photoURL)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color};font-size:12px;font-weight:700">${sanitize(getInitials(v.displayName))}</span>`;
+      return `<div style="display:flex;align-items:center;gap:.75rem;padding:.65rem 1rem;cursor:pointer;transition:background var(--transition)" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''" onclick="location.href='perfil.html?uid=${d.id}'">
+        <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+        <div>
+          <div style="font-size:14px;font-weight:600">${sanitize(v.displayName||'Usuário')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${timeAgo(v.viewedAt)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    const el = document.getElementById('viewers-list');
+    if (el) el.innerHTML = `<p style="padding:1rem;font-size:13px;color:var(--text-muted);text-align:center">Erro ao carregar.</p>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// DEPOIMENTOS
+// ══════════════════════════════════════════════════════════════
+async function loadDepoimentos(uid) {
+  const el = document.getElementById('tab-depoimentos');
+  if (!el) return;
+  const isOwn = currentUser.uid === uid;
+  el.innerHTML = '<div class="loading-screen" style="min-height:100px"><div class="spinner"></div></div>';
+  try {
+    let query = db.collection('testimonials').doc(uid).collection('items')
+      .orderBy('createdAt', 'desc').limit(30);
+    const snap = await query.get();
+
+    const canWrite = !isOwn;
+    const writeBtn = canWrite
+      ? `<button class="btn btn-primary" style="margin-bottom:1rem;display:inline-flex;align-items:center;gap:.35rem" onclick="openDepoimentoForm('${uid}')">
+           <i class="ti ti-pencil"></i> Escrever depoimento
+         </button>` : '';
+
+    // Filter by visibility
+    const visible = snap.docs.filter(d => {
+      const s = d.data().status;
+      return isOwn || s === 'approved';
+    });
+
+    if (!visible.length) {
+      el.innerHTML = writeBtn + `<div class="empty-state"><i class="ti ti-quote" style="font-size:2rem;opacity:.3"></i><p>Nenhum depoimento ainda.${canWrite ? '<br>Seja o primeiro a deixar um!' : ''}</p></div>`;
+      return;
+    }
+
+    el.innerHTML = writeBtn + visible.map(d => {
+      const t = d.data();
+      const cl = getAvatarColor(t.fromUid);
+      const av = t.fromPhoto
+        ? `<img src="${sanitize(t.fromPhoto)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color};font-size:12px;font-weight:700">${sanitize(getInitials(t.fromName))}</span>`;
+      const badge = isOwn && t.status === 'pending'
+        ? `<span class="testimony-badge pending">Pendente</span>` : '';
+      const ownerActions = isOwn && t.status === 'pending'
+        ? `<div style="display:flex;gap:.4rem;margin-top:.5rem">
+             <button class="btn btn-sm btn-primary" onclick="approveDepoimento('${uid}','${d.id}')"><i class="ti ti-check"></i> Aprovar</button>
+             <button class="btn btn-sm" style="color:var(--rose-500)" onclick="deleteDepoimento('${uid}','${d.id}')"><i class="ti ti-trash"></i> Excluir</button>
+           </div>` : '';
+      const deleteBtn = isOwn && t.status === 'approved'
+        ? `<button class="btn btn-icon" style="margin-left:auto;color:var(--text-muted)" onclick="deleteDepoimento('${uid}','${d.id}')"><i class="ti ti-trash" style="font-size:14px"></i></button>` : '';
+      return `
+        <div class="testimony-card${t.status==='pending'?' testimony-pending':''}">
+          <div class="testimony-header">
+            <div class="avatar avatar-36" style="background:${cl.bg};cursor:pointer" onclick="location.href='perfil.html?uid=${sanitize(t.fromUid)}'">${av}</div>
+            <div style="flex:1">
+              <div style="font-size:13.5px;font-weight:600;cursor:pointer" onclick="location.href='perfil.html?uid=${sanitize(t.fromUid)}'">${sanitize(t.fromName||'Usuário')}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${timeAgo(t.createdAt)}</div>
+            </div>
+            ${badge}${deleteBtn}
+          </div>
+          <p class="testimony-text">${sanitize(t.text||'')}</p>
+          ${ownerActions}
+        </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Erro ao carregar depoimentos.</p></div>`;
+  }
+}
+
+function openDepoimentoForm(toUid) {
+  const existing = document.getElementById('depo-form-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'depo-form-modal';
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-quote"></i> Escrever depoimento</span>
+        <button class="btn btn-icon" onclick="document.getElementById('depo-form-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <textarea class="form-input" id="depo-text" rows="5" placeholder="Escreva algo sobre essa pessoa…" style="resize:vertical;min-height:100px;margin-bottom:.75rem"></textarea>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:.75rem">O depoimento ficará pendente até ser aprovado pelo dono do perfil.</p>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitDepoimento('${toUid}')">
+        <i class="ti ti-send"></i> Enviar depoimento
+      </button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function submitDepoimento(toUid) {
+  const text = document.getElementById('depo-text')?.value.trim();
+  if (!text) return showToast('Escreva algo antes de enviar.');
+  if (text.length > 500) return showToast('Máximo 500 caracteres.');
+  const btn = document.querySelector('#depo-form-modal .btn-primary');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Enviando…'; }
+  try {
+    const me = await getUserData(currentUser.uid);
+    await db.collection('testimonials').doc(toUid).collection('items').add({
+      fromUid:   currentUser.uid,
+      fromName:  me?.displayName  || currentUser.displayName || 'Usuário',
+      fromPhoto: me?.photoURL     || currentUser.photoURL    || null,
+      text,
+      status:    'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    createNotification(toUid, 'scrap', {
+      message: `${currentUser.displayName} deixou um depoimento no seu perfil.`,
+      link: `perfil.html?uid=${toUid}`,
+      fromUid: currentUser.uid, fromName: currentUser.displayName
+    });
+    document.getElementById('depo-form-modal')?.remove();
+    showToast('Depoimento enviado! Aguardando aprovação.');
+  } catch(e) {
+    showToast('Erro ao enviar depoimento.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Enviar depoimento'; }
+  }
+}
+
+async function approveDepoimento(uid, itemId) {
+  await db.collection('testimonials').doc(uid).collection('items').doc(itemId).update({ status: 'approved' });
+  showToast('Depoimento aprovado!');
+  loadDepoimentos(uid);
+}
+
+async function deleteDepoimento(uid, itemId) {
+  if (!confirm('Excluir este depoimento?')) return;
+  await db.collection('testimonials').doc(uid).collection('items').doc(itemId).delete();
+  showToast('Depoimento excluído.');
+  loadDepoimentos(uid);
 }
 </script>
 </body>

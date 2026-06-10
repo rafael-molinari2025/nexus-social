@@ -324,9 +324,14 @@
                oninput="searchUsers(this.value)" autocomplete="off">
         <div class="user-results" id="user-results" style="display:none"></div>
       </div>
-      <button class="new-conv-btn" onclick="document.getElementById('user-search').focus()">
-        <i class="ti ti-edit"></i> Nova conversa
-      </button>
+      <div style="display:flex;gap:.4rem;margin-top:.65rem">
+        <button class="new-conv-btn" style="flex:1" onclick="document.getElementById('user-search').focus()">
+          <i class="ti ti-edit"></i> Nova conversa
+        </button>
+        <button class="new-conv-btn" style="flex:0 0 auto;padding:.55rem .75rem;white-space:nowrap" onclick="openGroupModal()" title="Novo grupo">
+          <i class="ti ti-users-group"></i>
+        </button>
+      </div>
     </div>
     <div class="conv-list" id="conv-list">
       <div class="chat-empty-sidebar">
@@ -402,11 +407,14 @@ function loadConversations() {
     }
     const convs = await Promise.all(activeDocs.map(async doc => {
       const d = doc.data();
+      if (d.type === 'group') return { id: doc.id, data: d, other: null };
       const otherUid = d.participants.find(u => u !== currentUser.uid);
       const other = await getUserData(otherUid) || { displayName: 'Usuário', uid: otherUid };
       return { id: doc.id, data: d, other };
     }));
-    list.innerHTML = convs.map(c => convItemHTML(c)).join('');
+    list.innerHTML = convs.map(c =>
+      c.data.type === 'group' ? groupConvItemHTML(c.id, c.data) : convItemHTML(c)
+    ).join('');
     if (activeConvId) {
       const el = document.getElementById(`conv-${activeConvId}`);
       if (el) el.classList.add('active');
@@ -908,6 +916,392 @@ document.addEventListener('click', e => {
     document.getElementById('user-results').style.display = 'none';
   }
 });
+
+// ══════════════════════════════════════════════════════════════
+// GROUP CHAT
+// ══════════════════════════════════════════════════════════════
+let _groupParticipants = new Set();
+
+function groupConvItemHTML(id, d) {
+  const unread = (d.unread || {})[currentUser.uid] || 0;
+  const time   = d.lastMessageAt ? timeAgo(d.lastMessageAt) : '';
+  const count  = (d.participants || []).length;
+  return `
+    <div class="conv-item" id="conv-${id}" onclick="openGroupConversation('${id}')">
+      <div class="avatar avatar-48" style="background:var(--indigo-50);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;border-radius:50%">
+        ${d.emoji || '👥'}
+      </div>
+      <div class="conv-item-info">
+        <div class="conv-item-name" style="display:flex;align-items:center;gap:.3rem">
+          ${sanitize(d.name || 'Grupo')}
+          <span style="font-size:10px;background:var(--indigo-50);color:var(--indigo-600);padding:.1rem .4rem;border-radius:var(--radius-full);font-weight:600">${count}</span>
+        </div>
+        <div class="conv-item-preview${unread ? ' unread' : ''}">${sanitize(d.lastMessage || 'Grupo criado')}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.25rem;flex-shrink:0">
+        <span class="conv-item-time">${time}</span>
+        ${unread ? `<span class="conv-unread-badge">${unread}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+async function openGroupConversation(cid) {
+  activeConvId = cid;
+  await db.collection('conversations').doc(cid).update({
+    [`unread.${currentUser.uid}`]: 0
+  }).catch(() => {});
+
+  document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(`conv-${cid}`)?.classList.add('active');
+
+  const convSnap = await db.collection('conversations').doc(cid).get();
+  if (!convSnap.exists) return;
+  const d = convSnap.data();
+  const name  = d.name || 'Grupo';
+  const emoji = d.emoji || '👥';
+  const count = (d.participants || []).length;
+
+  // Load participants data for sender names
+  const participantData = {};
+  await Promise.all((d.participants || []).map(async uid => {
+    participantData[uid] = await getUserData(uid) || { uid, displayName: 'Usuário' };
+  }));
+
+  document.getElementById('chat-main').innerHTML = `
+    <div class="chat-header">
+      <button class="chat-back-btn" onclick="mobileBackToList()" aria-label="Voltar">
+        <i class="ti ti-arrow-left"></i>
+      </button>
+      <div class="avatar avatar-40" style="background:var(--indigo-50);display:flex;align-items:center;justify-content:center;font-size:22px;border-radius:50%;flex-shrink:0">
+        ${emoji}
+      </div>
+      <div class="chat-header-info">
+        <div class="chat-header-name">${sanitize(name)}</div>
+        <div class="chat-header-status" style="cursor:pointer" onclick="showGroupMembers('${cid}')">
+          ${count} participante${count !== 1 ? 's' : ''} · Ver membros
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="showGroupMembers('${cid}')" title="Membros"><i class="ti ti-users"></i></button>
+      <button class="btn btn-sm" style="color:var(--coral-400)" onclick="leaveGroup('${cid}')" title="Sair do grupo"><i class="ti ti-door-exit"></i></button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+      <input type="file" id="chat-img-input" accept="image/*" style="display:none"
+             onchange="sendGroupImageMessage('${cid}', this)">
+      <button class="chat-send-btn" style="background:var(--gray-100);color:var(--text-secondary);flex-shrink:0"
+              onclick="document.getElementById('chat-img-input').click()">
+        <i class="ti ti-photo" style="font-size:16px"></i>
+      </button>
+      <div class="chat-input-wrap">
+        <textarea class="chat-input" id="chat-input" rows="1"
+          placeholder="Mensagem para o grupo…"
+          oninput="autoResize(this)"
+          onkeydown="handleGroupKey(event,'${cid}')"></textarea>
+      </div>
+      <button class="chat-send-btn" id="send-btn" onclick="sendGroupMessage('${cid}')">
+        <i class="ti ti-send"></i>
+      </button>
+    </div>`;
+
+  const sidebar = document.getElementById('chat-sidebar');
+  const main    = document.getElementById('chat-main');
+  if (window.innerWidth <= 768) { sidebar.classList.add('hidden'); main.classList.add('show'); }
+
+  if (messagesUnsub) messagesUnsub();
+  _firstMsgDoc = null; _loadingOldMsgs = false;
+  let firstLoad = true;
+  messagesUnsub = db.collection('conversations').doc(cid)
+    .collection('messages')
+    .orderBy('createdAt', 'asc')
+    .limitToLast(MSG_PAGE_SIZE)
+    .onSnapshot(snap => {
+      if (snap.docs.length) _firstMsgDoc = snap.docs[0];
+      const wasAtBottom = (() => {
+        const mc = document.getElementById('chat-messages');
+        return !mc || mc.scrollHeight - mc.scrollTop - mc.clientHeight < 60;
+      })();
+      renderGroupMessages(snap.docs, participantData, snap.docs.length >= MSG_PAGE_SIZE);
+      if (firstLoad || wasAtBottom) { scrollToBottom(); firstLoad = false; }
+      db.collection('conversations').doc(cid).update({ [`unread.${currentUser.uid}`]: 0 }).catch(() => {});
+    });
+}
+
+function renderGroupMessages(docs, participantData, showLoadOlder) {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  if (!docs.length) {
+    container.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">Nenhuma mensagem ainda. Diga olá! 👋</div>`;
+    return;
+  }
+  let html = '';
+  let lastDate = '';
+  docs.forEach(doc => {
+    const m  = doc.data();
+    const isMine = m.senderId === currentUser.uid;
+    const sender = participantData[m.senderId] || { displayName: 'Usuário', uid: m.senderId };
+    const cl = getAvatarColor(m.senderId);
+    const av = sender.photoURL
+      ? `<img src="${sanitize(sender.photoURL)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(sender.displayName)}</span>`;
+    const avatarHtml = isMine ? '' : `<div class="avatar avatar-28" style="background:${cl.bg};flex-shrink:0">${av}</div>`;
+    const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR', { day:'2-digit', month:'long' }) : '';
+    if (date && date !== lastDate) {
+      html += `<div class="msg-date-divider">${date}</div>`;
+      lastDate = date;
+    }
+    const time = m.createdAt ? m.createdAt.toDate().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '';
+    const reactions = m.reactions || {};
+    const reactKeys = Object.keys(reactions).filter(e => (reactions[e]||[]).length > 0);
+    const reactionsHtml = reactKeys.length
+      ? `<div class="msg-reactions">${reactKeys.map(e => {
+          const arr = reactions[e];
+          return `<button class="msg-reaction-pill${arr.includes(currentUser.uid)?' mine':''}" onclick="reactMsg('${doc.id}','${e}')">${e} <span>${arr.length}</span></button>`;
+        }).join('')}</div>` : '';
+    html += `<div class="msg-row${isMine?' mine':''}" id="msg-${doc.id}">
+      ${avatarHtml}
+      <div>
+        ${!isMine ? `<div style="font-size:11px;font-weight:600;color:${cl.bg === '#EEF2FF' ? '#4F46E5' : cl.color};margin-bottom:.15rem">${sanitize(sender.displayName)}</div>` : ''}
+        <div class="msg-bubble" ondblclick="showMsgReactionPicker(event,'${doc.id}')" style="cursor:default">
+          ${m.imageURL ? `<img src="${m.imageURL}" alt="" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : ''}
+          ${m.text ? sanitize(m.text).replace(/\n/g,'<br>') : ''}
+        </div>
+        ${reactionsHtml}
+        <div class="msg-time">${time}</div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+async function sendGroupMessage(cid) {
+  const input = document.getElementById('chat-input');
+  const text  = input?.value.trim();
+  if (!text) return;
+  input.value = '';
+  autoResize(input);
+  const btn = document.getElementById('send-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const convSnap = await db.collection('conversations').doc(cid).get();
+    const participants = convSnap.data()?.participants || [];
+    const batch  = db.batch();
+    const msgRef = db.collection('conversations').doc(cid).collection('messages').doc();
+    batch.set(msgRef, {
+      senderId:  currentUser.uid,
+      senderName: currentUser.displayName,
+      text,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    const unreadUpdate = {};
+    participants.forEach(uid => {
+      if (uid !== currentUser.uid) unreadUpdate[`unread.${uid}`] = firebase.firestore.FieldValue.increment(1);
+    });
+    const convRef = db.collection('conversations').doc(cid);
+    batch.update(convRef, {
+      lastMessage:    text.length > 60 ? text.slice(0,60)+'…' : text,
+      lastMessageAt:  firebase.firestore.FieldValue.serverTimestamp(),
+      ...unreadUpdate
+    });
+    await batch.commit();
+  } catch(e) { showToast('Erro ao enviar.'); input.value = text; }
+  if (btn) btn.disabled = false;
+  input?.focus();
+}
+
+async function sendGroupImageMessage(cid, input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file || file.size > 8*1024*1024) { showToast('Imagem muito grande.'); return; }
+  showToast('Enviando…');
+  try {
+    const imageURL = await uploadToCloudinary(file);
+    const convSnap = await db.collection('conversations').doc(cid).get();
+    const participants = convSnap.data()?.participants || [];
+    const batch  = db.batch();
+    const msgRef = db.collection('conversations').doc(cid).collection('messages').doc();
+    batch.set(msgRef, { senderId: currentUser.uid, senderName: currentUser.displayName, text:'', imageURL, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    const unreadUpdate = {};
+    participants.forEach(uid => { if (uid !== currentUser.uid) unreadUpdate[`unread.${uid}`] = firebase.firestore.FieldValue.increment(1); });
+    batch.update(db.collection('conversations').doc(cid), { lastMessage:'📷 Imagem', lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(), ...unreadUpdate });
+    await batch.commit();
+  } catch(e) { showToast('Erro ao enviar imagem.'); }
+}
+
+function handleGroupKey(e, cid) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendGroupMessage(cid); }
+}
+
+async function showGroupMembers(cid) {
+  const convSnap = await db.collection('conversations').doc(cid).get();
+  const d = convSnap.data();
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-users"></i> Membros do grupo</span>
+        <button class="btn btn-icon" onclick="this.closest('.modal-overlay').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div id="group-member-list" style="max-height:320px;overflow-y:auto">
+        <div style="display:flex;justify-content:center;padding:1rem"><div class="spinner"></div></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const members = await Promise.all((d.participants||[]).map(uid => getUserData(uid)));
+  const el = document.getElementById('group-member-list');
+  if (!el) return;
+  el.innerHTML = members.filter(Boolean).map(m => {
+    const cl = getAvatarColor(m.uid);
+    const av = m.photoURL
+      ? `<img src="${sanitize(m.photoURL)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color};font-size:12px;font-weight:700">${getInitials(m.displayName)}</span>`;
+    const isAdmin = (d.admins||[]).includes(m.uid);
+    return `<div style="display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem">
+      <div class="avatar avatar-38" style="background:${cl.bg}">${av}</div>
+      <div style="flex:1">
+        <div style="font-size:13.5px;font-weight:600">${sanitize(m.displayName||'Usuário')}${m.uid===currentUser.uid?' (você)':''}</div>
+        ${isAdmin ? '<div style="font-size:11px;color:var(--indigo-500);font-weight:600">Admin</div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function leaveGroup(cid) {
+  if (!confirm('Sair deste grupo?')) return;
+  await db.collection('conversations').doc(cid).update({
+    participants: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+  });
+  showToast('Você saiu do grupo.');
+  mobileBackToList();
+  loadConversations();
+}
+
+// ── Group creation modal ──────────────────────────────────────
+let _groupSelectedFriends = new Set();
+
+async function openGroupModal() {
+  const existing = document.getElementById('group-create-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'group-create-modal';
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-users-group"></i> Novo grupo</span>
+        <button class="btn btn-icon" onclick="document.getElementById('group-create-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div class="form-group">
+          <label class="form-label">Nome do grupo</label>
+          <input class="form-input" id="group-name-input" placeholder="Ex: Turma de Amigos" maxlength="40">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Emoji do grupo</label>
+          <input class="form-input" id="group-emoji-input" placeholder="👥" maxlength="4" style="font-size:20px;text-align:center;width:64px">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Adicionar participantes</label>
+          <input class="form-input" id="group-friend-search" placeholder="Buscar amigos…" oninput="searchFriendsForGroup(this.value)">
+          <div id="group-friend-results" style="margin-top:.35rem;display:flex;flex-direction:column;gap:.25rem;max-height:180px;overflow-y:auto"></div>
+        </div>
+        <div id="group-selected-chips" style="display:flex;flex-wrap:wrap;gap:.35rem"></div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createGroupConversation()">
+          <i class="ti ti-check"></i> Criar grupo
+        </button>
+      </div>
+    </div>`;
+  _groupSelectedFriends.clear();
+  document.body.appendChild(modal);
+  // Load friends immediately
+  searchFriendsForGroup('');
+}
+
+async function searchFriendsForGroup(q) {
+  const container = document.getElementById('group-friend-results');
+  if (!container) return;
+  try {
+    const qLower = q.toLowerCase().trim();
+    const snap = await db.collection('friendships').where('users','array-contains', currentUser.uid).limit(30).get();
+    const uids = [];
+    snap.docs.forEach(d => d.data().users.forEach(u => { if (u !== currentUser.uid) uids.push(u); }));
+    const users = (await Promise.all(uids.map(uid => getUserData(uid)))).filter(Boolean);
+    const filtered = qLower
+      ? users.filter(u => (u.displayName||'').toLowerCase().includes(qLower))
+      : users;
+    if (!filtered.length) { container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:.25rem .5rem">Nenhum amigo encontrado.</div>`; return; }
+    container.innerHTML = filtered.map(u => {
+      const cl  = getAvatarColor(u.uid);
+      const av  = u.photoURL
+        ? `<img src="${sanitize(u.photoURL)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color};font-size:11px;font-weight:700">${getInitials(u.displayName)}</span>`;
+      const sel = _groupSelectedFriends.has(u.uid);
+      return `<div onclick="toggleGroupFriend('${u.uid}','${sanitize(u.displayName).replace(/'/g,"\\'")}',this)" style="display:flex;align-items:center;gap:.6rem;padding:.4rem .6rem;border-radius:var(--radius-sm);cursor:pointer;background:${sel?'var(--indigo-50)':'transparent'};transition:background var(--transition)">
+        <div class="avatar avatar-30" style="background:${cl.bg}">${av}</div>
+        <span style="font-size:13.5px;font-weight:500;flex:1">${sanitize(u.displayName||'Usuário')}</span>
+        <i class="ti ${sel?'ti-circle-check':'ti-circle'}" style="font-size:18px;color:${sel?'var(--indigo-500)':'var(--text-muted)'}"></i>
+      </div>`;
+    }).join('');
+  } catch(e) { container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:.25rem">Erro ao carregar.</div>`; }
+}
+
+function toggleGroupFriend(uid, name, row) {
+  if (_groupSelectedFriends.has(uid)) {
+    _groupSelectedFriends.delete(uid);
+    row.style.background = 'transparent';
+    row.querySelector('i').className = 'ti ti-circle';
+    row.querySelector('i').style.color = 'var(--text-muted)';
+  } else {
+    _groupSelectedFriends.add(uid);
+    row.style.background = 'var(--indigo-50)';
+    row.querySelector('i').className = 'ti ti-circle-check';
+    row.querySelector('i').style.color = 'var(--indigo-500)';
+  }
+  updateGroupChips();
+}
+
+async function updateGroupChips() {
+  const chips = document.getElementById('group-selected-chips');
+  if (!chips) return;
+  if (!_groupSelectedFriends.size) { chips.innerHTML = ''; return; }
+  const users = await Promise.all([..._groupSelectedFriends].map(uid => getUserData(uid)));
+  chips.innerHTML = users.filter(Boolean).map(u =>
+    `<div style="display:flex;align-items:center;gap:.3rem;background:var(--indigo-50);border:1px solid var(--indigo-200);border-radius:var(--radius-full);padding:.2rem .65rem;font-size:12.5px;font-weight:500;color:var(--indigo-700)">
+      ${sanitize(u.displayName)}
+      <button onclick="_groupSelectedFriends.delete('${u.uid}');searchFriendsForGroup(document.getElementById('group-friend-search')?.value||'');updateGroupChips()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px;display:flex;align-items:center">×</button>
+    </div>`
+  ).join('');
+}
+
+async function createGroupConversation() {
+  const name  = document.getElementById('group-name-input')?.value.trim();
+  const emoji = document.getElementById('group-emoji-input')?.value.trim() || '👥';
+  if (!name) return showToast('Digite um nome para o grupo.');
+  if (_groupSelectedFriends.size < 1) return showToast('Adicione pelo menos 1 participante.');
+  const btn = document.querySelector('#group-create-modal .btn-primary');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Criando…'; }
+  try {
+    const participants = [currentUser.uid, ..._groupSelectedFriends];
+    const unread = {};
+    participants.forEach(uid => { unread[uid] = 0; });
+    const convRef = await db.collection('conversations').add({
+      type: 'group',
+      name, emoji,
+      participants,
+      admins: [currentUser.uid],
+      lastMessage: `${currentUser.displayName} criou o grupo.`,
+      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+      unread,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('group-create-modal')?.remove();
+    showToast(`Grupo "${name}" criado!`);
+    openGroupConversation(convRef.id);
+  } catch(e) {
+    showToast('Erro ao criar grupo.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Criar grupo'; }
+  }
+}
 
 // ── Cleanup ao sair da página ────────────────────────────────────
 window.addEventListener('beforeunload', () => {

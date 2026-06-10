@@ -692,9 +692,10 @@ async function createPost() {
       text: text || '',
       images,
       imageURL: images[0] || null,
-      authorId:     currentUser.uid,
-      authorName:   currentUser.displayName,
-      authorPhoto:  currentUser.photoURL || null,
+      authorId:       currentUser.uid,
+      authorName:     currentUser.displayName,
+      authorPhoto:    currentUser.photoURL || null,
+      authorVerified: (await getUserData(currentUser.uid))?.isVerified || false,
       likes:        [],
       bookmarks:    [],
       reactions:    {},
@@ -882,7 +883,7 @@ function postHTML(id, p) {
       <div class="avatar avatar-40" style="background:${cl.bg};color:${cl.color};cursor:pointer;position:relative"
            onclick="location.href='pages/perfil.html?uid=${p.authorId}'">${av}</div>
       <div class="post-meta">
-        <div class="post-author">${sanitize(p.authorName||'Usuário')}</div>
+        <div class="post-author">${sanitize(p.authorName||'Usuário')}${p.authorVerified ? '<span class="verified-badge" title="Conta verificada"><i class="ti ti-check" style="font-size:8px"></i></span>' : ''}</div>
         <div class="post-time">
           ${timeAgo(p.createdAt)}
           <span class="post-privacy-badge" title="${privOpt.label}">
