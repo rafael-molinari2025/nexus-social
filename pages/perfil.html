@@ -75,7 +75,8 @@
     .photos-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-sm); cursor: pointer; transition: opacity var(--transition); }
     .photos-grid img:hover { opacity: .85; }
     .edit-modal-form { display: flex; flex-direction: column; gap: .85rem; }
-    .modal { max-width: 480px; max-height: 90vh; overflow-y: auto; }
+    /* Modal mais largo no desktop */
+    .modal { max-width: 600px; max-height: 90vh; overflow-y: auto; }
     .fields-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
     .gender-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; }
     .gender-btn {
@@ -97,6 +98,19 @@
       position: absolute; left: .75rem; top: 50%; transform: translateY(-50%);
       color: var(--text-muted); font-size: 15px; pointer-events: none;
     }
+    /* Emoji picker rápido */
+    .emoji-quick-grid {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: .5rem;
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); padding: .5rem;
+    }
+    .emoji-quick-btn {
+      font-size: 20px; padding: .25rem; border: none; background: none;
+      cursor: pointer; border-radius: 6px; transition: background var(--transition);
+      line-height: 1;
+    }
+    .emoji-quick-btn:hover { background: var(--gray-100); }
+    /* Sobrescreve o bottom-sheet global para o edit modal — sempre centralizado */
     @media (max-width: 768px) {
       .profile-page { padding: 1rem .5rem calc(80px + 1rem); }
       .profile-cover { height: 130px; }
@@ -106,6 +120,20 @@
       .profile-fullname { font-size: 18px; }
       .profile-info-card { padding: 0 1rem 1.25rem; }
       .profile-tab { padding: .65rem .85rem; font-size: 13px; }
+      /* Edit modal: modal centralizado mesmo no mobile */
+      #edit-modal {
+        align-items: center !important;
+        padding: .5rem !important;
+      }
+      #edit-modal .modal {
+        border-radius: var(--radius-xl) !important;
+        max-width: 100% !important;
+        max-height: 92vh !important;
+        transform: scale(.97) translateY(10px) !important;
+      }
+      #edit-modal.open .modal {
+        transform: scale(1) translateY(0) !important;
+      }
     }
     @media (max-width: 380px) {
       .friends-big-grid { grid-template-columns: repeat(2, 1fr); }
@@ -136,7 +164,8 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title">Editar perfil</span>
-      <button class="btn btn-icon" onclick="closeModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+      <button class="btn btn-icon" onclick="closeModal()" aria-label="Fechar"
+              style="font-size:20px;font-weight:300;line-height:1;flex-shrink:0">&times;</button>
     </div>
     <div class="edit-modal-form">
 
@@ -156,7 +185,7 @@
       <div class="form-group">
         <label class="form-label">Nome de usuário</label>
         <div class="input-icon-wrap">
-          <i class="ti ti-at input-icon"></i>
+          <span class="input-icon" style="font-family:monospace;font-weight:600;font-size:16px">@</span>
           <input class="form-input" type="text" id="edit-username" placeholder="rafamolinari"
                  oninput="this.value=this.value.replace(/[^a-z0-9_.]/gi,'').toLowerCase()">
         </div>
@@ -173,32 +202,20 @@
       <div class="fields-row-2">
         <div class="form-group">
           <label class="form-label">Data de nascimento</label>
-          <div class="input-icon-wrap">
-            <i class="ti ti-calendar input-icon"></i>
-            <input class="form-input" type="date" id="edit-birthdate">
-          </div>
+          <input class="form-input" type="date" id="edit-birthdate">
         </div>
         <div class="form-group">
           <label class="form-label">Cidade</label>
-          <div class="input-icon-wrap">
-            <i class="ti ti-map-pin input-icon"></i>
-            <input class="form-input" type="text" id="edit-city" placeholder="São Paulo, SP">
-          </div>
+          <input class="form-input" type="text" id="edit-city" placeholder="São Paulo, SP">
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">Gênero</label>
         <div class="gender-grid">
-          <button type="button" class="gender-btn" id="eg-masculino" onclick="selectEditGender('Masculino')">
-            <i class="ti ti-gender-male"></i>&nbsp;Masculino
-          </button>
-          <button type="button" class="gender-btn" id="eg-feminino" onclick="selectEditGender('Feminino')">
-            <i class="ti ti-gender-female"></i>&nbsp;Feminino
-          </button>
-          <button type="button" class="gender-btn" id="eg-outro" onclick="selectEditGender('Outro')">
-            <i class="ti ti-gender-androgyne"></i>&nbsp;Outro
-          </button>
+          <button type="button" class="gender-btn" id="eg-masculino" onclick="selectEditGender('Masculino')">&#9794; Masculino</button>
+          <button type="button" class="gender-btn" id="eg-feminino" onclick="selectEditGender('Feminino')">&#9792; Feminino</button>
+          <button type="button" class="gender-btn" id="eg-outro" onclick="selectEditGender('Outro')">&#9895; Outro</button>
         </div>
       </div>
 
@@ -206,25 +223,30 @@
 
       <div class="form-group">
         <label class="form-label">Website / Redes sociais</label>
-        <div class="input-icon-wrap">
-          <i class="ti ti-world input-icon"></i>
-          <input class="form-input" type="url" id="edit-website" placeholder="https://seusite.com">
-        </div>
+        <input class="form-input" type="url" id="edit-website" placeholder="https://seusite.com">
       </div>
 
       <div class="section-divider">Status</div>
 
       <div class="form-group">
-        <label class="form-label">Status atual</label>
-        <div class="fields-row-2">
-          <input class="form-input" type="text" id="edit-status-emoji" placeholder="😊"
-                 maxlength="4" style="text-align:center;font-size:20px;padding:.45rem .5rem">
-          <input class="form-input" type="text" id="edit-status-text" placeholder="Disponível…" maxlength="60">
+        <label class="form-label">Status atual <span style="font-size:11px;color:var(--text-muted);font-weight:400">(emoji + texto)</span></label>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <button type="button" id="emoji-pick-btn" onclick="toggleEmojiPicker()"
+                  title="Escolher emoji"
+                  style="min-width:46px;height:42px;font-size:22px;background:var(--gray-50);border:0.5px solid var(--border);border-radius:var(--radius-md);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color var(--transition)"
+                  onmouseover="this.style.borderColor='var(--purple-400)'" onmouseout="this.style.borderColor='var(--border)'">
+            <span id="emoji-display">😊</span>
+          </button>
+          <input class="form-input" type="text" id="edit-status-text" placeholder="Ex: Disponível, Trabalhando…" maxlength="60" style="flex:1">
+        </div>
+        <input type="hidden" id="edit-status-emoji" value="😊">
+        <div id="emoji-quick-grid" class="emoji-quick-grid" style="display:none">
+          <!-- preenchido pelo JS -->
         </div>
       </div>
 
-      <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px;border-radius:var(--radius-md)" onclick="saveProfile()">
-        <i class="ti ti-device-floppy"></i> Salvar alterações
+      <button class="btn btn-primary" style="width:100%;justify-content:center;height:44px;border-radius:var(--radius-md);font-size:15px" onclick="saveProfile()">
+        Salvar alterações
       </button>
     </div>
   </div>
@@ -446,9 +468,12 @@ async function renderProfile(uid) {
     document.getElementById('edit-bio').value       = d.bio       || '';
     document.getElementById('edit-birthdate').value = d.birthdate || '';
     document.getElementById('edit-city').value      = d.city      || '';
-    document.getElementById('edit-website').value       = d.website         || '';
-    document.getElementById('edit-status-emoji').value = d.status?.emoji   || '';
-    document.getElementById('edit-status-text').value  = d.status?.text    || '';
+    document.getElementById('edit-website').value      = d.website        || '';
+    document.getElementById('edit-status-text').value  = d.status?.text   || '';
+    const savedEmoji = d.status?.emoji || '😊';
+    document.getElementById('edit-status-emoji').value = savedEmoji;
+    const disp = document.getElementById('emoji-display');
+    if (disp) disp.textContent = savedEmoji;
     if (d.gender) selectEditGender(d.gender);
   }
 }
@@ -862,7 +887,36 @@ function selectEditGender(g) {
 }
 
 function openModal() { document.getElementById('edit-modal').classList.add('open'); }
-function closeModal() { document.getElementById('edit-modal').classList.remove('open'); }
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+  const grid = document.getElementById('emoji-quick-grid');
+  if (grid) grid.style.display = 'none';
+}
+
+const _STATUS_EMOJIS = [
+  '😊','😄','😎','🤔','😴','😍','🤩','😅','😢','😡',
+  '👍','👏','🙌','💪','🤝','❤️','🔥','✨','🎉','🎯',
+  '🏠','💼','📚','🎮','🎵','🍕','☕','🌟','💡','🚀',
+  '✅','⏳','🔕','📵','🌙','🏖️','🤒','💰','🌍','😶'
+];
+
+function toggleEmojiPicker() {
+  const grid = document.getElementById('emoji-quick-grid');
+  if (!grid) return;
+  if (grid.style.display !== 'none') { grid.style.display = 'none'; return; }
+  if (!grid.innerHTML.trim()) {
+    grid.innerHTML = _STATUS_EMOJIS.map(e =>
+      `<button type="button" class="emoji-quick-btn" onclick="selectStatusEmoji('${e}')" title="${e}">${e}</button>`
+    ).join('');
+  }
+  grid.style.display = 'flex';
+}
+
+function selectStatusEmoji(emoji) {
+  document.getElementById('emoji-display').textContent = emoji;
+  document.getElementById('edit-status-emoji').value   = emoji;
+  document.getElementById('emoji-quick-grid').style.display = 'none';
+}
 
 async function showMutualFriendsModal() {
   const uids = window._mutualFriendUids || [];
@@ -1099,7 +1153,11 @@ async function loadHighlights(uid, isOwn) {
 
     const addBtn = isOwn
       ? `<div class="highlight-item" onclick="openCreateHighlightModal()">
-           <div class="highlight-ring add-ring"><div class="highlight-ring-inner"><i class="ti ti-plus" style="font-size:20px;color:var(--text-muted)"></i></div></div>
+           <div class="highlight-ring add-ring">
+             <div class="highlight-ring-inner">
+               <span style="font-size:26px;font-weight:200;color:var(--text-muted);line-height:1;user-select:none">+</span>
+             </div>
+           </div>
            <span class="highlight-name">Novo</span>
          </div>` : '';
 

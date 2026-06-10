@@ -54,10 +54,9 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount'])
         && (request.resource.data.commentsCount == resource.data.commentsCount + 1
             || request.resource.data.commentsCount == resource.data.commentsCount - 1);
-      // Incremento de views por qualquer usuário autenticado (somente +1)
+      // Qualquer autenticado pode incrementar views (somente o campo views)
       allow update: if request.auth != null
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
-        && request.resource.data.views == resource.data.get('views', 0) + 1;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']);
       // Votação em enquete: qualquer autenticado pode modificar o campo poll (votes arrays)
       allow update: if request.auth != null
         && resource.data.get('poll', null) != null
