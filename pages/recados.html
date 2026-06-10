@@ -145,7 +145,7 @@ async function loadScraps(type) {
         : `<span style="color:${cl.color}">${getInitials(authorName)}</span>`;
 
       return `
-      <div class="scrap-full">
+      <div class="scrap-full" id="scrap-${doc.id}">
         <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer;flex-shrink:0"
              onclick="location.href='perfil.html?uid=${authorUid}'">${av}</div>
         <div class="scrap-full-content">
@@ -156,6 +156,11 @@ async function loadScraps(type) {
           <div class="scrap-full-text">${sanitize(s.text).replace(/\n/g,'<br>')}</div>
           <div class="scrap-full-time">${timeAgo(s.createdAt)}</div>
         </div>
+        <button onclick="deleteScrap('${doc.id}')" title="Excluir recado"
+          style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:.25rem;flex-shrink:0;align-self:flex-start;margin-top:.1rem;border-radius:var(--radius-sm);transition:color var(--transition)"
+          onmouseover="this.style.color='var(--coral-400)'" onmouseout="this.style.color='var(--text-muted)'">
+          <i class="ti ti-trash" style="font-size:15px"></i>
+        </button>
       </div>`;
     }).join('');
   } catch(e) {
@@ -246,6 +251,17 @@ async function sendScrap() {
 
   btn.disabled = false;
   btn.innerHTML = '<i class="ti ti-send" aria-hidden="true"></i> Enviar';
+}
+
+async function deleteScrap(id) {
+  if (!confirm('Excluir este recado?')) return;
+  try {
+    await db.collection('scraps').doc(id).delete();
+    document.getElementById(`scrap-${id}`)?.remove();
+    showToast('Recado excluído.');
+  } catch(e) {
+    showToast('Erro ao excluir recado.');
+  }
 }
 
 // Fechar resultados ao clicar fora

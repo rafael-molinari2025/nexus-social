@@ -113,18 +113,52 @@ async function changePassword() {
   }
 }
 
+async function _batchDelete(docs) {
+  for (let i = 0; i < docs.length; i += 500) {
+    const batch = db.batch();
+    docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
+async function _deleteUserFirestoreData(uid) {
+  const queries = [
+    db.collection('posts').where('authorId', '==', uid),
+    db.collection('photos').where('uid', '==', uid),
+    db.collection('stories').where('uid', '==', uid),
+    db.collection('scraps').where('fromUid', '==', uid),
+    db.collection('scraps').where('toUid', '==', uid),
+    db.collection('friend_requests').where('from', '==', uid),
+    db.collection('friend_requests').where('to', '==', uid),
+    db.collection('friendships').where('users', 'array-contains', uid),
+    db.collection('community_members').where('uid', '==', uid),
+  ];
+
+  const results = await Promise.all(queries.map(q => q.get()));
+  for (const snap of results) await _batchDelete(snap.docs);
+
+  const notifSnap = await db.collection('notifications').doc(uid).collection('items').get();
+  await _batchDelete(notifSnap.docs);
+
+  await db.collection('users').doc(uid).delete();
+}
+
 async function deleteAccount() {
   if (!confirm('Tem certeza? Esta ação é permanente e todos os seus dados serão excluídos.')) return;
   const pass = prompt('Digite sua senha para confirmar:');
   if (!pass) return;
+  const btn = document.querySelector('[onclick="deleteAccount()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo…'; }
   try {
     const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, pass);
     await currentUser.reauthenticateWithCredential(credential);
+    await _deleteUserFirestoreData(currentUser.uid);
     await currentUser.delete();
-    window.location.href = '/pages/login.html';
+    window.location.href = '../index.html';
   } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Excluir minha conta'; }
     if (e.code === 'auth/wrong-password') showToast('Senha incorreta. Conta não excluída.');
-    else showToast('Erro ao excluir conta. Tente novamente.');
+    else { console.error(e); showToast('Erro ao excluir conta. Tente novamente.'); }
   }
 }
 </script>

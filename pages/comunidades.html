@@ -96,6 +96,41 @@
   </div>
 </div>
 
+<!-- Edit community modal -->
+<div class="modal-overlay" id="edit-comm-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Editar comunidade</span>
+      <button class="btn btn-icon" onclick="closeEditCommModal()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.85rem">
+      <div class="form-group">
+        <label class="form-label">Nome da comunidade</label>
+        <input class="form-input" type="text" id="edit-comm-name" placeholder="Ex: Devs do Brasil">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição</label>
+        <textarea class="composer-textarea" id="edit-comm-desc" placeholder="Sobre o que é esta comunidade?" style="min-height:80px"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoria</label>
+        <select class="form-input" id="edit-comm-category">
+          <option value="tecnologia">Tecnologia</option>
+          <option value="musica">Música</option>
+          <option value="arte">Arte &amp; Design</option>
+          <option value="esportes">Esportes</option>
+          <option value="jogos">Jogos</option>
+          <option value="livros">Livros</option>
+          <option value="outros">Outros</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px;border-radius:var(--radius-md)" onclick="saveEditCommunity()">
+        <i class="ti ti-device-floppy" aria-hidden="true"></i> Salvar alterações
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -123,8 +158,19 @@ requireAuth(async user => {
   loadAllCommunities();
 });
 
-function commCardHTML(id, d) {
+function commCardHTML(id, d, isOwner = false) {
   const cl = CATEGORY_COLORS[d.category] || CATEGORY_COLORS.outros;
+  const adminBtns = isOwner ? `
+    <div style="display:flex;gap:.3rem;margin-top:.5rem">
+      <button class="btn btn-sm" style="flex:1;justify-content:center;font-size:11px"
+              onclick="event.stopPropagation();openEditComm('${id}','${sanitize(d.name).replace(/'/g,"\\'")}','${sanitize(d.description||'').replace(/'/g,"\\'")}','${d.category||'outros'}')">
+        <i class="ti ti-pencil" aria-hidden="true"></i> Editar
+      </button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center;font-size:11px;border-color:var(--coral-400);color:var(--coral-400)"
+              onclick="event.stopPropagation();deleteCommunity('${id}','${sanitize(d.name).replace(/'/g,"\\'")}')">
+        <i class="ti ti-trash" aria-hidden="true"></i> Excluir
+      </button>
+    </div>` : '';
   return `
   <div class="comm-card" onclick="location.href='comunidade.html?id=${id}'">
     <div class="comm-card-banner" style="background:${cl.bg}">
@@ -137,6 +183,7 @@ function commCardHTML(id, d) {
         <div class="comm-card-members"><i class="ti ti-users" aria-hidden="true"></i> ${d.membersCount||0} membros</div>
         <span style="font-size:10px;background:${cl.bg};color:${cl.c};padding:2px 8px;border-radius:var(--radius-full);font-weight:500">${d.category||'outros'}</span>
       </div>
+      ${adminBtns}
     </div>
   </div>`;
 }
@@ -150,7 +197,10 @@ async function loadMyCommunities() {
   }
   const ids = snap.docs.map(d => d.data().communityId);
   const comms = await Promise.all(ids.map(id => db.collection('communities').doc(id).get()));
-  el.innerHTML = comms.filter(d => d.exists).map(d => commCardHTML(d.id, d.data())).join('');
+  el.innerHTML = comms.filter(d => d.exists).map(d => {
+    const isOwner = d.data().createdBy === currentUser.uid;
+    return commCardHTML(d.id, d.data(), isOwner);
+  }).join('');
 }
 
 async function loadAllCommunities() {
@@ -193,6 +243,50 @@ function closeCreateModal() { document.getElementById('create-modal').classList.
 document.getElementById('create-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeCreateModal();
 });
+
+// ── Editar comunidade ────────────────────────────────────────────
+let _editingCommId = null;
+
+function openEditComm(id, name, desc, category) {
+  _editingCommId = id;
+  document.getElementById('edit-comm-name').value = name;
+  document.getElementById('edit-comm-desc').value = desc;
+  document.getElementById('edit-comm-category').value = category;
+  document.getElementById('edit-comm-modal').classList.add('open');
+}
+
+function closeEditCommModal() {
+  document.getElementById('edit-comm-modal').classList.remove('open');
+  _editingCommId = null;
+}
+
+async function saveEditCommunity() {
+  if (!_editingCommId) return;
+  const name = document.getElementById('edit-comm-name').value.trim();
+  const desc = document.getElementById('edit-comm-desc').value.trim();
+  const cat  = document.getElementById('edit-comm-category').value;
+  if (!name) return showToast('O nome é obrigatório.');
+  try {
+    await db.collection('communities').doc(_editingCommId).update({ name, description: desc, category: cat });
+    closeEditCommModal();
+    showToast('Comunidade atualizada!');
+    loadMyCommunities();
+  } catch(e) { showToast('Erro ao atualizar comunidade.'); }
+}
+
+async function deleteCommunity(id, name) {
+  if (!confirm(`Excluir a comunidade "${name}"? Todos os membros serão removidos.`)) return;
+  try {
+    const membersSnap = await db.collection('community_members').where('communityId','==',id).get();
+    const batch = db.batch();
+    membersSnap.docs.forEach(d => batch.delete(d.ref));
+    batch.delete(db.collection('communities').doc(id));
+    await batch.commit();
+    showToast('Comunidade excluída.');
+    loadMyCommunities();
+    loadAllCommunities();
+  } catch(e) { showToast('Erro ao excluir comunidade.'); }
+}
 </script>
 </body>
 </html>

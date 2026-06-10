@@ -192,24 +192,34 @@ async function doSearch() {
   }
 }
 
-let _buscarUsersCache = null;
-
 async function searchPeople(q, el) {
   try {
     const qLower = q.toLowerCase().trim();
-    if (!_buscarUsersCache) {
-      _buscarUsersCache = await db.collection('users').limit(500).get();
+    // Busca eficiente pelo campo displayName_lower com startAt/endAt
+    const [snap1, snap2] = await Promise.all([
+      db.collection('users')
+        .orderBy('displayName_lower')
+        .startAt(qLower)
+        .endAt(qLower + '')
+        .limit(20)
+        .get(),
+      db.collection('users')
+        .orderBy('username')
+        .startAt(qLower)
+        .endAt(qLower + '')
+        .limit(10)
+        .get()
+    ]);
+
+    const seen = new Set();
+    const results = [];
+    for (const snap of [snap1, snap2]) {
+      for (const d of snap.docs) {
+        if (d.id === currentUser.uid || seen.has(d.id)) continue;
+        seen.add(d.id);
+        results.push({ uid: d.id, ...d.data() });
+      }
     }
-    const results = _buscarUsersCache.docs
-      .filter(d => {
-        if (d.id === currentUser.uid) return false;
-        const u = d.data();
-        return (u.displayName || '').toLowerCase().includes(qLower) ||
-               (u.username    || '').toLowerCase().includes(qLower) ||
-               (u.email       || '').toLowerCase().includes(qLower);
-      })
-      .slice(0, 20)
-      .map(d => ({ uid: d.id, ...d.data() }));
 
     if (!results.length) {
       el.innerHTML = `<div class="empty-search">

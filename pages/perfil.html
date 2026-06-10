@@ -243,32 +243,48 @@ async function renderProfile(uid) {
     ? `<img src="${d.photoURL}" alt="${d.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(d.displayName)}</span>`;
 
-  let isFriend = false, hasPendingRequest = false;
+  let isFriend = false, hasPendingRequest = false, isBlocked = false;
   if (!isOwn) {
-    const fSnap = await db.collection('friendships').where('users', 'array-contains', currentUser.uid).get();
+    const [fSnap, myData] = await Promise.all([
+      db.collection('friendships').where('users', 'array-contains', currentUser.uid).get(),
+      getUserData(currentUser.uid)
+    ]);
     isFriend = fSnap.docs.some(doc => doc.data().users.includes(uid));
-    if (!isFriend) {
+    isBlocked = (myData?.blocked || []).includes(uid);
+    if (!isFriend && !isBlocked) {
       const rSnap = await db.collection('friend_requests').where('from', '==', currentUser.uid).where('to', '==', uid).get();
       hasPendingRequest = !rSnap.empty;
     }
   }
+
+  const blockBtn = isOwn ? '' :
+    `<button class="btn" id="block-btn" onclick="toggleBlock('${uid}', this)" title="${isBlocked ? 'Desbloquear' : 'Bloquear'}" style="padding:.4rem .6rem;${isBlocked ? 'color:var(--coral-400);border-color:var(--coral-400)' : ''}">
+       <i class="ti ti-${isBlocked ? 'lock-open' : 'ban'}" aria-hidden="true"></i>
+     </button>`;
 
   const actionBtn = isOwn
     ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
          <button class="btn" onclick="openModal()"><i class="ti ti-pencil" aria-hidden="true"></i> Editar perfil</button>
          <button class="btn btn-danger" onclick="handleSignOut()" style="gap:.4rem"><i class="ti ti-logout" aria-hidden="true"></i> Sair</button>
        </div>`
-    : isFriend
-      ? `<div style="display:flex;gap:.5rem">
-           <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
-           <button class="btn" disabled><i class="ti ti-check" aria-hidden="true"></i> Amigos</button>
+    : isBlocked
+      ? `<div style="display:flex;gap:.5rem;align-items:center">
+           <span style="font-size:13px;color:var(--text-muted)">Usuário bloqueado</span>
+           ${blockBtn}
          </div>`
-      : hasPendingRequest
-        ? `<button class="btn" disabled>Solicitação enviada</button>`
-        : `<div style="display:flex;gap:.5rem">
+      : isFriend
+        ? `<div style="display:flex;gap:.5rem">
              <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
-             <button class="btn" onclick="sendFriendRequest('${uid}', this)"><i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar</button>
-           </div>`;
+             <button class="btn" disabled><i class="ti ti-check" aria-hidden="true"></i> Amigos</button>
+             ${blockBtn}
+           </div>`
+        : hasPendingRequest
+          ? `<div style="display:flex;gap:.5rem">${blockBtn}<button class="btn" disabled>Solicitação enviada</button></div>`
+          : `<div style="display:flex;gap:.5rem">
+               <button class="btn btn-primary" onclick="location.href='mensagens.html?with=${uid}'"><i class="ti ti-message-circle-2" aria-hidden="true"></i> Mensagem</button>
+               <button class="btn" onclick="sendFriendRequest('${uid}', this)"><i class="ti ti-user-plus" aria-hidden="true"></i> Adicionar</button>
+               ${blockBtn}
+             </div>`;
 
   const coverStyle = d.coverURL
     ? `background-image:url('${d.coverURL}');background-size:cover;background-position:center;`
@@ -546,16 +562,33 @@ async function loadScraps(uid) {
     const av = s.fromPhoto
       ? `<img src="${s.fromPhoto}" alt="${s.fromName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       : `<span style="color:${cl.color}">${getInitials(s.fromName)}</span>`;
-    return `<div class="scrap">
+    const canDelete = isOwn || s.fromUid === currentUser.uid;
+    return `<div class="scrap" id="pscrap-${doc.id}" style="position:relative">
       <div class="scrap-author">
         <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer" onclick="location.href='perfil.html?uid=${s.fromUid}'">${av}</div>
         ${sanitize(s.fromName)}
       </div>
       <div class="scrap-text">${sanitize(s.text).replace(/\n/g,'<br>')}</div>
       <div class="scrap-time">${timeAgo(s.createdAt)}</div>
+      ${canDelete ? `<button onclick="deleteProfileScrap('${doc.id}')" title="Excluir"
+        style="position:absolute;top:.35rem;right:.35rem;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:.2rem;border-radius:4px"
+        onmouseover="this.style.color='var(--coral-400)'" onmouseout="this.style.color='var(--text-muted)'">
+        <i class="ti ti-trash"></i>
+      </button>` : ''}
     </div>`;
   }).join('');
   el.innerHTML = html + scrapsHTML;
+}
+
+async function deleteProfileScrap(id) {
+  if (!confirm('Excluir este recado?')) return;
+  try {
+    await db.collection('scraps').doc(id).delete();
+    document.getElementById(`pscrap-${id}`)?.remove();
+    showToast('Recado excluído.');
+  } catch(e) {
+    showToast('Erro ao excluir recado.');
+  }
 }
 
 async function postScrap(toUid) {
@@ -583,6 +616,30 @@ async function postScrap(toUid) {
     fromName: currentUser.displayName
   });
   loadScraps(toUid);
+}
+
+async function toggleBlock(targetUid, btn) {
+  const myData = await getUserData(currentUser.uid);
+  const blocked = myData?.blocked || [];
+  const isBlocked = blocked.includes(targetUid);
+  try {
+    await db.collection('users').doc(currentUser.uid).update({
+      blocked: isBlocked
+        ? firebase.firestore.FieldValue.arrayRemove(targetUid)
+        : firebase.firestore.FieldValue.arrayUnion(targetUid)
+    });
+    if (isBlocked) {
+      btn.title = 'Bloquear';
+      btn.style.cssText = '';
+      btn.innerHTML = '<i class="ti ti-ban" aria-hidden="true"></i>';
+      showToast('Usuário desbloqueado.');
+    } else {
+      btn.title = 'Desbloquear';
+      btn.style.cssText = 'color:var(--coral-400);border-color:var(--coral-400)';
+      btn.innerHTML = '<i class="ti ti-lock-open" aria-hidden="true"></i>';
+      showToast('Usuário bloqueado.');
+    }
+  } catch(e) { showToast('Erro ao atualizar bloqueio.'); }
 }
 
 async function sendFriendRequest(targetUid, btn) {

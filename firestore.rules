@@ -53,6 +53,9 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if request.auth != null
           && request.resource.data.authorId == request.auth.uid;
+        allow update: if request.auth != null
+          && (resource.data.authorId == request.auth.uid
+              || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']));
         allow delete: if request.auth != null
           && resource.data.authorId == request.auth.uid;
       }
@@ -100,8 +103,10 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid;
+      // Próprio membro pode sair OU admin da comunidade pode remover
       allow delete: if request.auth != null
-        && resource.data.uid == request.auth.uid;
+        && (resource.data.uid == request.auth.uid
+            || get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.createdBy == request.auth.uid);
     }
 
     // ── Recados (scraps) ─────────────────────────────────────────
@@ -144,7 +149,9 @@ service cloud.firestore {
     match /reports/{docId} {
       allow create: if request.auth != null
         && request.resource.data.reportedBy == request.auth.uid;
-      allow read: if false;
+      // Somente usuários com isAdmin:true no doc de usuário podem ler/atualizar
+      allow read, update: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
     // ── Galeria de fotos ─────────────────────────────────────────

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    .admin-page { max-width: 800px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .report-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem 1.25rem;
+      margin-bottom: .75rem;
+    }
+    .report-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+    .report-reason { font-size: 13px; font-weight: 600; color: var(--coral-400); }
+    .report-meta { font-size: 12px; color: var(--text-muted); margin-top: .25rem; }
+    .report-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+    .admin-badge {
+      display: inline-flex; align-items: center; gap: .35rem;
+      background: var(--coral-400); color: #fff;
+      font-size: 11px; font-weight: 700; padding: .25rem .6rem;
+      border-radius: var(--radius-sm); letter-spacing: .04em;
+    }
+    @media (max-width: 768px) {
+      .admin-page { padding: 1rem .5rem calc(80px + 1rem); }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div class="toast" id="toast"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="admin-page">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+      <h1 style="font-size:1.25rem;font-weight:700;margin:0">Painel Admin</h1>
+      <span class="admin-badge"><i class="ti ti-shield-check"></i> Admin</span>
+    </div>
+
+    <div style="display:flex;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap">
+      <button class="btn btn-sm btn-primary" onclick="loadReports('pending')">Pendentes</button>
+      <button class="btn btn-sm" onclick="loadReports('resolved')">Resolvidos</button>
+      <button class="btn btn-sm" onclick="loadReports('all')">Todos</button>
+      <span id="report-count" style="font-size:13px;color:var(--text-muted);align-self:center"></span>
+    </div>
+
+    <div id="reports-list">
+      <div class="empty-state" style="padding:3rem 0">
+        <i class="ti ti-shield-check" style="font-size:2.5rem;color:var(--text-muted)"></i>
+        <p>Selecione uma fila acima para ver as denúncias.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid);
+  if (!userData?.isAdmin) {
+    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:1rem"><i class="ti ti-lock" style="font-size:3rem;color:var(--text-muted)"></i><p style="color:var(--text-secondary)">Acesso negado.</p><a href="../index.html" class="btn btn-primary">Voltar ao feed</a></div>';
+    return;
+  }
+  renderTopbar(userData || { uid: user.uid, displayName: user.displayName }, 'admin');
+  loadReports('pending');
+});
+
+async function loadReports(filter = 'pending') {
+  const el = document.getElementById('reports-list');
+  el.innerHTML = '<div class="loading-screen" style="min-height:160px"><div class="spinner"></div></div>';
+  try {
+    let query = db.collection('reports').orderBy('createdAt', 'desc').limit(50);
+    if (filter === 'pending') query = query.where('status', '==', 'pending');
+    if (filter === 'resolved') query = query.where('status', '==', 'resolved');
+
+    const snap = await query.get();
+    document.getElementById('report-count').textContent = `${snap.docs.length} denúncia(s)`;
+
+    if (snap.empty) {
+      el.innerHTML = '<div class="empty-state" style="padding:2rem 0"><i class="ti ti-check-circle" style="font-size:2rem;color:var(--text-muted)"></i><p>Nenhuma denúncia nesta fila.</p></div>';
+      return;
+    }
+
+    el.innerHTML = snap.docs.map(doc => reportHTML(doc.id, doc.data())).join('');
+  } catch(e) {
+    console.error(e);
+    el.innerHTML = '<div class="empty-state" style="padding:2rem 0"><p style="color:var(--coral-400)">Erro ao carregar denúncias. Verifique as regras do Firestore.</p></div>';
+  }
+}
+
+function reportHTML(id, r) {
+  const ts = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString('pt-BR') : '—';
+  const statusBadge = r.status === 'resolved'
+    ? '<span style="font-size:11px;color:var(--green-500);font-weight:600">Resolvido</span>'
+    : '<span style="font-size:11px;color:var(--coral-400);font-weight:600">Pendente</span>';
+
+  return `<div class="report-card" id="report-${id}">
+    <div class="report-card-header">
+      <div>
+        <div class="report-reason"><i class="ti ti-flag" aria-hidden="true"></i> ${sanitize(r.reason || 'Sem motivo')}</div>
+        <div class="report-meta">
+          Post: <a href="post.html?id=${sanitize(r.postId || '')}" target="_blank" style="color:var(--purple-600)">${sanitize(r.postId || '—')}</a>
+          · Denunciado por: ${sanitize(r.reportedBy || '—')}
+          · ${ts}
+        </div>
+        <div style="margin-top:.35rem">${statusBadge}</div>
+      </div>
+      <div class="report-actions">
+        <a href="post.html?id=${sanitize(r.postId || '')}" target="_blank" class="btn btn-sm" title="Ver post">
+          <i class="ti ti-external-link" aria-hidden="true"></i>
+        </a>
+        ${r.status !== 'resolved' ? `
+        <button class="btn btn-sm" onclick="resolveReport('${id}', this)" title="Marcar como resolvido" style="color:var(--green-500);border-color:var(--green-500)">
+          <i class="ti ti-check" aria-hidden="true"></i>
+        </button>
+        <button class="btn btn-sm" onclick="deleteReportedPost('${r.postId}', '${id}', this)" title="Excluir post denunciado" style="color:var(--coral-400);border-color:var(--coral-400)">
+          <i class="ti ti-trash" aria-hidden="true"></i>
+        </button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function resolveReport(reportId, btn) {
+  btn.disabled = true;
+  try {
+    await db.collection('reports').doc(reportId).update({
+      status: 'resolved',
+      resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      resolvedBy: currentUser.uid
+    });
+    showToast('Denúncia marcada como resolvida.');
+    document.getElementById(`report-${reportId}`)?.remove();
+  } catch(e) { btn.disabled = false; showToast('Erro ao resolver denúncia.'); }
+}
+
+async function deleteReportedPost(postId, reportId, btn) {
+  if (!postId || !confirm('Excluir o post denunciado? Esta ação não pode ser desfeita.')) return;
+  btn.disabled = true;
+  try {
+    await db.collection('posts').doc(postId).delete();
+    await db.collection('reports').doc(reportId).update({
+      status: 'resolved',
+      resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      resolvedBy: currentUser.uid
+    });
+    showToast('Post excluído e denúncia resolvida.');
+    document.getElementById(`report-${reportId}`)?.remove();
+  } catch(e) { btn.disabled = false; showToast('Erro ao excluir post.'); }
+}
+</script>
+</body>
+</html>

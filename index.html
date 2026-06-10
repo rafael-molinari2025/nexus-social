@@ -561,6 +561,8 @@ async function createPost() {
   const text = document.getElementById('post-text').value.trim();
   if (!text && !_postImageFile) return showToast('Escreva algo ou adicione uma imagem.');
   if (text.length > 2000) return showToast('Post muito longo. Máximo 2000 caracteres.');
+  if (!checkRateLimit('post_' + currentUser.uid, 3, 60000))
+    return showToast('Muitos posts seguidos. Aguarde um momento.');
   const btn = document.getElementById('post-btn');
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Publicando…';
@@ -642,21 +644,32 @@ function loadPosts() {
 
       const mainHTML = docs.map(d => postHTML(d.id, d.data())).join('');
       list.innerHTML = `<div class="card" id="posts-container">${mainHTML}${_extraPostsHTML}</div>
-        ${snap.docs.length === 20 ? `<button class="btn btn-sm" id="load-more-btn"
-          style="width:100%;justify-content:center;height:40px;margin-top:.5rem"
-          onclick="loadMorePosts()">
-          <i class="ti ti-refresh" aria-hidden="true"></i> Carregar mais
-        </button>` : ''}`;
+        <div id="infinite-sentinel" style="height:1px;margin-top:.5rem"></div>`;
+      if (snap.docs.length === 20) _observeSentinel();
     }, err => {
       console.error('loadPosts:', err);
       list.innerHTML = `<div class="empty-state card"><i class="ti ti-wifi-off"></i><p>Erro ao carregar posts.</p></div>`;
     });
 }
 
+let _infiniteObserver = null;
+let _loadingMore = false;
+
+function _observeSentinel() {
+  if (_infiniteObserver) _infiniteObserver.disconnect();
+  const sentinel = document.getElementById('infinite-sentinel');
+  if (!sentinel) return;
+  _infiniteObserver = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && !_loadingMore) loadMorePosts();
+  }, { rootMargin: '200px' });
+  _infiniteObserver.observe(sentinel);
+}
+
 async function loadMorePosts() {
-  if (!_lastPostDoc) return;
-  const btn = document.getElementById('load-more-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin" aria-hidden="true"></i> Carregando…'; }
+  if (!_lastPostDoc || _loadingMore) return;
+  _loadingMore = true;
+  const sentinel = document.getElementById('infinite-sentinel');
+  if (sentinel) sentinel.innerHTML = '<i class="ti ti-loader-2 ti-spin" style="display:block;text-align:center;padding:.75rem;font-size:1.25rem;color:var(--text-muted)"></i>';
   try {
     const snap = await db.collection('posts')
       .orderBy('createdAt', 'desc')
@@ -673,15 +686,17 @@ async function loadMorePosts() {
       document.getElementById('posts-container')?.insertAdjacentHTML('beforeend', newHTML);
     }
 
-    if (!_lastPostDoc || snap.docs.length < 20) {
-      btn?.remove();
-    } else if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i> Carregar mais';
+    if (sentinel) sentinel.innerHTML = '';
+    if (_lastPostDoc && snap.docs.length === 20) {
+      _observeSentinel();
+    } else if (_infiniteObserver) {
+      _infiniteObserver.disconnect();
     }
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i> Carregar mais'; }
+    if (sentinel) sentinel.innerHTML = '';
     showToast('Erro ao carregar mais posts.');
+  } finally {
+    _loadingMore = false;
   }
 }
 
@@ -863,6 +878,7 @@ async function submitReport(reason) {
       postId: _reportPostId,
       reason,
       reportedBy: currentUser.uid,
+      status: 'pending',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     showToast('Denúncia enviada. Obrigado!');
@@ -871,22 +887,32 @@ async function submitReport(reason) {
 }
 
 // ── Stories ────────────────────────────────────────────────────
-const ST_VIEWED_KEY = 'nx_sv_';
+const ST_VIEWED_KEY  = 'nx_sv_';
+const ST_CACHE_KEY   = 'nx_stories_cache';
+const ST_CACHE_TTL   = 5 * 60 * 1000; // 5 min
 
 async function loadStories() {
   const bar = document.getElementById('stories-bar');
   if (!bar) return;
   try {
-    const snap = await db.collection('stories')
-      .orderBy('createdAt', 'desc').limit(60).get();
+    // Use sessionStorage cache when fresh
+    const cached = (() => { try { return JSON.parse(sessionStorage.getItem(ST_CACHE_KEY)); } catch { return null; } })();
+    let docs;
+    if (cached && Date.now() - cached.ts < ST_CACHE_TTL) {
+      docs = cached.docs;
+    } else {
+      const snap = await db.collection('stories')
+        .orderBy('createdAt', 'desc').limit(60).get();
+      docs = snap.docs.map(d => ({ id: d.id, data: d.data() }));
+      try { sessionStorage.setItem(ST_CACHE_KEY, JSON.stringify({ ts: Date.now(), docs })); } catch {}
+    }
 
-    const byUser = {};
     const now = Date.now();
-    snap.docs.forEach(doc => {
-      const d = doc.data();
-      if (d.expiresAt && d.expiresAt.toMillis() < now) return;
+    const byUser = {};
+    docs.forEach(({ id, data: d }) => {
+      if (d.expiresAt && (d.expiresAt.toMillis ? d.expiresAt.toMillis() : d.expiresAt._seconds * 1000) < now) return;
       if (!byUser[d.uid]) byUser[d.uid] = { info: d, ids: [] };
-      byUser[d.uid].ids.push(doc.id);
+      byUser[d.uid].ids.push(id);
     });
 
     const myInfo    = byUser[currentUser.uid];
@@ -1080,6 +1106,7 @@ async function publishStory() {
     await db.collection('stories').add(base);
     showToast('Story publicado! Disponível por 24h.');
     closeStoryModal();
+    try { sessionStorage.removeItem(ST_CACHE_KEY); } catch {}
     loadStories();
   } catch(e) {
     console.error(e);

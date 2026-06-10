@@ -387,11 +387,55 @@ document.addEventListener('click', e => {
   }
 });
 
+// ── Rate limiter ──────────────────────────────────────────────
+const _rateLimits = {};
+
+function checkRateLimit(key, maxCalls, windowMs) {
+  const now = Date.now();
+  if (!_rateLimits[key]) _rateLimits[key] = [];
+  _rateLimits[key] = _rateLimits[key].filter(t => now - t < windowMs);
+  if (_rateLimits[key].length >= maxCalls) return false;
+  _rateLimits[key].push(now);
+  return true;
+}
+
+// ── Image compression ─────────────────────────────────────────
+function compressImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/') || file.type === 'image/gif') {
+      resolve(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width <= maxWidth && height <= maxHeight) { resolve(file); return; }
+      const ratio = Math.min(maxWidth / width, maxHeight / height);
+      width  = Math.round(width  * ratio);
+      height = Math.round(height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        if (!blob) { resolve(file); return; }
+        resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 // ── Cloudinary upload ─────────────────────────────────────────
 const _CLOUDINARY_CLOUD  = 'dyoi5mrdc';
 const _CLOUDINARY_PRESET = 'nexus_uploads';
 
-async function uploadToCloudinary(file) {
+async function uploadToCloudinary(file, options = {}) {
+  const { compress = true, maxWidth = 1280, maxHeight = 1280, quality = 0.82 } = options;
+  if (compress) file = await compressImage(file, maxWidth, maxHeight, quality);
+
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', _CLOUDINARY_PRESET);

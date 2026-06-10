@@ -20,10 +20,31 @@
       transition: border-color var(--transition), box-shadow var(--transition);
     }
     .comment-input:focus { border-color: var(--purple-400); box-shadow: 0 0 0 3px rgba(83,74,183,0.10); background: var(--surface); }
+    .comment-actions { display: flex; align-items: center; gap: .5rem; margin-top: 4px; }
+    .comment-like-btn {
+      background: none; border: none; font-size: 11px; color: var(--text-muted);
+      cursor: pointer; padding: 0; display: flex; align-items: center; gap: 2px;
+      transition: color var(--transition);
+    }
+    .comment-like-btn:hover, .comment-like-btn.liked { color: var(--purple-600); }
+    /* Share modal */
+    .share-modal-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem;
+    }
+    .share-opt {
+      display: flex; flex-direction: column; align-items: center;
+      gap: .4rem; padding: .875rem .5rem; border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); cursor: pointer; background: var(--surface);
+      transition: background var(--transition), border-color var(--transition);
+      font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    }
+    .share-opt:hover { background: var(--gray-50); border-color: var(--purple-400); }
+    .share-opt i { font-size: 24px; }
     @media (max-width: 768px) {
       .post-page { padding: 1rem .5rem calc(80px + 1rem); }
       .back-btn { margin-bottom: .5rem; }
       .comment-composer { padding: .75rem .875rem; gap: .5rem; }
+      .share-modal-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -89,7 +110,7 @@ function loadPost() {
         <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike()">
           <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length} curtidas
         </button>
-        <button class="post-action-btn" onclick="sharePost()">
+        <button class="post-action-btn" onclick="openShareModal()">
           <i class="ti ti-share-3" aria-hidden="true"></i> compartilhar
         </button>
       </div>
@@ -103,6 +124,11 @@ function loadPost() {
 
       <!-- Comentários -->
       <div id="comments-list"></div>
+      <div id="comments-load-more" style="text-align:center;padding:.5rem;display:none">
+        <button class="btn btn-sm" onclick="loadMoreComments()" style="width:100%">
+          <i class="ti ti-refresh" aria-hidden="true"></i> Ver mais comentários
+        </button>
+      </div>
     `;
 
     // Avatar do compositor
@@ -122,45 +148,119 @@ function loadPost() {
   }, () => showError('Erro ao carregar o post.'));
 }
 
+const COMMENT_PAGE_SIZE = 20;
+let _lastCommentDoc = null;
+let _commentsUnsub = null;
+
 function loadComments() {
-  db.collection('posts').doc(postId).collection('comments')
+  if (_commentsUnsub) { _commentsUnsub(); _commentsUnsub = null; }
+  _lastCommentDoc = null;
+  const el = document.getElementById('comments-list');
+
+  _commentsUnsub = db.collection('posts').doc(postId).collection('comments')
     .orderBy('createdAt', 'asc')
+    .limit(COMMENT_PAGE_SIZE)
     .onSnapshot(snap => {
-      const el = document.getElementById('comments-list');
       if (!el) return;
+      _lastCommentDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      const lmEl = document.getElementById('comments-load-more');
+      if (lmEl) lmEl.style.display = snap.docs.length === COMMENT_PAGE_SIZE ? 'block' : 'none';
       if (snap.empty) {
         el.innerHTML = `<div class="empty-state" style="padding:1.25rem"><i class="ti ti-messages" aria-hidden="true"></i><p>Nenhum comentário ainda. Seja o primeiro!</p></div>`;
         return;
       }
-      el.innerHTML = snap.docs.map(doc => {
-        const c = doc.data();
-        const cl = getAvatarColor(c.authorId);
-        const av = c.authorPhoto
-          ? `<img src="${c.authorPhoto}" alt="${c.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-          : `<span style="color:${cl.color}">${getInitials(c.authorName)}</span>`;
-        const canDelete = c.authorId === currentUser.uid;
-        return `<div class="comment">
-          <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer;flex-shrink:0"
-               onclick="location.href='perfil.html?uid=${c.authorId}'">${av}</div>
-          <div class="comment-body">
-            <div style="background:var(--gray-50);border-radius:var(--radius-md);padding:.5rem .75rem">
-              <div class="comment-author" style="cursor:pointer" onclick="location.href='perfil.html?uid=${c.authorId}'">${sanitize(c.authorName||'Usuário')}</div>
-              <div class="comment-text">${sanitize(c.text).replace(/\n/g,'<br>')}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:.75rem;margin-top:3px">
-              <span class="comment-time">${timeAgo(c.createdAt)}</span>
-              ${canDelete ? `<button style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:0" onclick="deleteComment('${doc.id}')">Excluir</button>` : ''}
-            </div>
-          </div>
-        </div>`;
-      }).join('');
+      el.innerHTML = snap.docs.map(doc => commentHTML(doc.id, doc.data())).join('');
     });
+}
+
+async function loadMoreComments() {
+  if (!_lastCommentDoc) return;
+  const btn = document.querySelector('#comments-load-more button');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Carregando…'; }
+  try {
+    const snap = await db.collection('posts').doc(postId).collection('comments')
+      .orderBy('createdAt', 'asc')
+      .startAfter(_lastCommentDoc)
+      .limit(COMMENT_PAGE_SIZE)
+      .get();
+    _lastCommentDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    const el = document.getElementById('comments-list');
+    if (el) el.insertAdjacentHTML('beforeend', snap.docs.map(doc => commentHTML(doc.id, doc.data())).join(''));
+    const lmEl = document.getElementById('comments-load-more');
+    if (lmEl) lmEl.style.display = snap.docs.length === COMMENT_PAGE_SIZE ? 'block' : 'none';
+  } catch(e) { showToast('Erro ao carregar comentários.'); }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i> Ver mais comentários'; }
+}
+
+function commentHTML(id, c) {
+  const cl = getAvatarColor(c.authorId);
+  const av = c.authorPhoto
+    ? `<img src="${c.authorPhoto}" alt="${c.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(c.authorName)}</span>`;
+  const canDelete = c.authorId === currentUser.uid;
+  const liked = (c.likes || []).includes(currentUser.uid);
+  const likeCount = (c.likes || []).length;
+  const parsedText = sanitize(c.text)
+    .replace(/\n/g,'<br>')
+    .replace(/@(\w+)/g, '<span style="color:var(--purple-600);font-weight:500">@$1</span>');
+  return `<div class="comment" id="comment-${id}">
+    <div class="avatar avatar-32" style="background:${cl.bg};cursor:pointer;flex-shrink:0"
+         onclick="location.href='perfil.html?uid=${c.authorId}'">${av}</div>
+    <div class="comment-body">
+      <div style="background:var(--gray-50);border-radius:var(--radius-md);padding:.5rem .75rem">
+        <div class="comment-author" style="cursor:pointer" onclick="location.href='perfil.html?uid=${c.authorId}'">${sanitize(c.authorName||'Usuário')}</div>
+        <div class="comment-text" id="ctext-${id}">${parsedText}</div>
+      </div>
+      <div class="comment-actions">
+        <span class="comment-time">${timeAgo(c.createdAt)}</span>
+        <button class="comment-like-btn${liked?' liked':''}" id="clike-${id}" onclick="likeComment('${id}')">
+          <i class="ti ti-heart-filled" style="font-size:10px"></i> ${likeCount || ''}
+        </button>
+        ${canDelete ? `<button style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:0" onclick="editComment('${id}')">Editar</button>` : ''}
+        ${canDelete ? `<button style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:0" onclick="deleteComment('${id}')">Excluir</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function likeComment(commentId) {
+  const ref = db.collection('posts').doc(postId).collection('comments').doc(commentId);
+  const snap = await ref.get();
+  const likes = snap.data().likes || [];
+  const isLiked = likes.includes(currentUser.uid);
+  await ref.update({
+    likes: isLiked
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+  const btn = document.getElementById(`clike-${commentId}`);
+  if (btn) {
+    const newCount = isLiked ? likes.length - 1 : likes.length + 1;
+    btn.className = `comment-like-btn${!isLiked?' liked':''}`;
+    btn.innerHTML = `<i class="ti ti-heart-filled" style="font-size:10px"></i> ${newCount || ''}`;
+  }
+}
+
+async function editComment(commentId) {
+  const textEl = document.getElementById(`ctext-${commentId}`);
+  if (!textEl) return;
+  const currentText = textEl.textContent;
+  const newText = prompt('Editar comentário:', currentText);
+  if (!newText || newText.trim() === currentText.trim()) return;
+  try {
+    await db.collection('posts').doc(postId).collection('comments').doc(commentId)
+      .update({ text: newText.trim(), editedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    textEl.innerHTML = sanitize(newText.trim()).replace(/\n/g,'<br>').replace(/@(\w+)/g, '<span style="color:var(--purple-600);font-weight:500">@$1</span>');
+    showToast('Comentário editado.');
+  } catch(e) { showToast('Erro ao editar comentário.'); }
 }
 
 async function postComment() {
   const input = document.getElementById('comment-input');
   const text = input.value.trim();
   if (!text) return;
+  if (!checkRateLimit('comment_' + currentUser.uid, 10, 60000))
+    return showToast('Muitos comentários seguidos. Aguarde um momento.');
   input.value = '';
   try {
     const batch = db.batch();
@@ -218,8 +318,44 @@ async function deletePost() {
   setTimeout(() => history.back(), 1200);
 }
 
-function sharePost() {
-  navigator.clipboard.writeText(location.href).then(() => showToast('Link copiado!'));
+function openShareModal() {
+  const url = encodeURIComponent(location.href);
+  const text = encodeURIComponent('Veja este post no Nexus!');
+  const existing = document.getElementById('share-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'share-modal';
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <span class="modal-title">Compartilhar post</span>
+        <button class="btn btn-icon" onclick="document.getElementById('share-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="share-modal-grid">
+        <button class="share-opt" onclick="window.open('https://wa.me/?text=${text}%20${url}','_blank')">
+          <i class="ti ti-brand-whatsapp" style="color:#25D366"></i> WhatsApp
+        </button>
+        <button class="share-opt" onclick="window.open('https://twitter.com/intent/tweet?url=${url}&text=${text}','_blank')">
+          <i class="ti ti-brand-x" style="color:#000"></i> Twitter/X
+        </button>
+        <button class="share-opt" onclick="window.open('https://www.facebook.com/sharer/sharer.php?u=${url}','_blank')">
+          <i class="ti ti-brand-facebook" style="color:#1877F2"></i> Facebook
+        </button>
+        <button class="share-opt" onclick="window.open('https://t.me/share/url?url=${url}&text=${text}','_blank')">
+          <i class="ti ti-brand-telegram" style="color:#26A5E4"></i> Telegram
+        </button>
+        <button class="share-opt" onclick="navigator.clipboard.writeText(location.href).then(()=>{showToast('Link copiado!');document.getElementById('share-modal').remove()})">
+          <i class="ti ti-link" style="color:var(--purple-600)"></i> Copiar link
+        </button>
+        <button class="share-opt" onclick="navigator.share ? navigator.share({title:'Nexus',url:location.href}) : showToast('Compartilhamento nativo não suportado.')">
+          <i class="ti ti-dots" style="color:var(--text-secondary)"></i> Mais opções
+        </button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
 function showError(msg) {

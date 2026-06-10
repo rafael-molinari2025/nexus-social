@@ -780,6 +780,17 @@ document.addEventListener('click', e => {
   }
 });
 
+// ── Cleanup ao sair da página ────────────────────────────────────
+window.addEventListener('beforeunload', () => {
+  if (activeConvId) clearTyping(activeConvId);
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && activeConvId) {
+    clearTyping(activeConvId);
+  }
+});
+
 // ── Mobile: voltar para lista de conversas ───────────────────────
 function mobileBackToList() {
   if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
