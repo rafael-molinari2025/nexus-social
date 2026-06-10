@@ -166,7 +166,7 @@ async function loadRequests() {
              onclick="location.href='perfil.html?uid=${r.user.uid}'">${av}</div>
         <div class="request-info">
           <div class="request-name">${sanitize(r.user.displayName||'Usuário')}</div>
-          <div class="request-sub">${sanitize(r.user.bio||r.user.city||r.user.email||'')}</div>
+          <div class="request-sub">${sanitize(r.user.bio||r.user.city||'')}</div>
         </div>
         <div class="request-btns">
           <button class="btn btn-primary btn-sm" onclick="acceptRequest('${r.docId}','${r.user.uid}')">
@@ -186,6 +186,10 @@ async function loadRequests() {
 
 async function acceptRequest(docId, fromUid) {
   try {
+    const reqSnap = await db.collection('friend_requests').doc(docId).get();
+    if (!reqSnap.exists || reqSnap.data().to !== currentUser.uid) {
+      showToast('Solicitação inválida.'); return;
+    }
     const existing = await db.collection('friendships')
       .where('users', 'array-contains', currentUser.uid).get();
     const alreadyFriends = existing.docs.some(d => d.data().users.includes(fromUid));
@@ -445,11 +449,9 @@ function doFriendSearch(q) {
   dd.style.display = 'block';
 
   const users = (_searchAllUsers || []).filter(u => {
-    // busca em displayName_lower (campo indexado), displayName, username e email
     const nameLower = (u.displayName_lower || (u.displayName || '').toLowerCase());
     const uname     = (u.username    || '').toLowerCase();
-    const mail      = (u.email       || '').toLowerCase();
-    return nameLower.includes(qLower) || uname.includes(qLower) || mail.includes(qLower);
+    return nameLower.includes(qLower) || uname.includes(qLower);
   }).slice(0, 10);
 
   if (!users.length) {

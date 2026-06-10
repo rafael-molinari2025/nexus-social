@@ -871,8 +871,7 @@ function searchUsers(q) {
         if (d.id === currentUser.uid) return false;
         const u = d.data();
         return (u.displayName || '').toLowerCase().includes(qLower) ||
-               (u.username    || '').toLowerCase().includes(qLower) ||
-               (u.email       || '').toLowerCase().includes(qLower);
+               (u.username    || '').toLowerCase().includes(qLower);
       }).slice(0, 6);
 
       if (others.length === 0) {
