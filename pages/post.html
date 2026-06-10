@@ -78,7 +78,7 @@ let _viewIncremented = false;
 requireAuth(async user => {
   currentUser = user;
   const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
-  renderTopbar(userData, 'feed');
+  renderTopbar(userData, 'post');
   if (!postId) { showError('Post não encontrado.'); return; }
   loadPost();
 });

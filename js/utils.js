@@ -217,9 +217,12 @@ function renderTopbar(user, activePage = 'feed') {
     : `<span style="color:${cl.color}">${getInitials(user.displayName)}</span>`;
 
   const themeIcon = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'ti-sun' : 'ti-moon';
+  const mainNavPages = ['feed', 'friends', 'messages', 'communities', 'trends'];
+  const showBack = !mainNavPages.includes(activePage);
 
   nav.innerHTML = `
-    <a href="${PAGES}perfil.html?uid=${user.uid}" class="topbar-logo">nexus</a>
+    ${showBack ? `<button class="topbar-nav-btn topbar-back-btn" onclick="history.back()" title="Voltar" aria-label="Voltar"><i class="ti ti-arrow-left" aria-hidden="true"></i></button>` : ''}
+    <a href="${ROOT}index.html" class="topbar-logo">nexus</a>
     <div class="topbar-search">
       <i class="ti ti-search" aria-hidden="true"></i>
       <input type="text" placeholder="Buscar pessoas, comunidades..." id="search-input" autocomplete="off">

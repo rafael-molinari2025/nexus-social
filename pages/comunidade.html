@@ -112,7 +112,7 @@ const MEMBERS_PAGE = 20;
 requireAuth(async user => {
   currentUser = user;
   const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
-  renderTopbar(userData, 'communities');
+  renderTopbar(userData, 'community');
 
   if (!commId) {
     showError('Comunidade não encontrada.');
