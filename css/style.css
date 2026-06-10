@@ -208,6 +208,10 @@ ul, ol { list-style: none; }
   white-space: nowrap;
   flex-shrink: 0;
   text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  padding: 8px 4px;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
 .topbar-search {
