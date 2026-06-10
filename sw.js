@@ -1,11 +1,11 @@
-const CACHE_NAME = 'nexus-v3';
+const CACHE_NAME = 'nexus-v4';
 const STATIC_ASSETS = [
   '/css/style.css',
   '/js/utils.js',
   '/js/firebase-config.js',
   '/offline.html'
 ];
-const NETWORK_TIMEOUT = 8000; // 8s
+const NETWORK_TIMEOUT = 8000;
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -19,7 +19,6 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     ).then(() => {
-      // Notify all open clients that a new version is active
       self.clients.matchAll({ type: 'window' }).then(clients => {
         clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' }));
       });
@@ -39,7 +38,7 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(e.request.url);
 
-  // Ignorar requisições do Firebase / Google APIs / CDNs
+  // Ignorar APIs externas
   if (
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('firebase.googleapis.com') ||
@@ -47,50 +46,35 @@ self.addEventListener('fetch', e => {
     url.hostname.includes('gstatic.com') ||
     url.hostname.includes('cloudinary.com') ||
     url.hostname.includes('jsdelivr.net') ||
+    url.hostname.includes('microlink.io') ||
     url.hostname.includes('fonts.googleapis.com') ||
     url.hostname.includes('fonts.gstatic.com')
   ) return;
 
-  const isStaticAsset = /\.(css|js|woff2?|ttf|otf|svg|png|jpg|jpeg|webp|ico)$/.test(url.pathname)
-    || STATIC_ASSETS.includes(url.pathname);
-
+  const isStaticAsset = /\.(css|js|woff2?|ttf|otf|svg|png|jpg|jpeg|webp|ico)$/.test(url.pathname);
   const isHtml = e.request.headers.get('accept')?.includes('text/html');
 
-  if (isStaticAsset) {
-    // Cache-first: serve do cache imediatamente; busca na rede e atualiza em paralelo
-    e.respondWith(
-      caches.open(CACHE_NAME).then(cache =>
-        cache.match(e.request).then(cached => {
-          const networkFetch = fetchWithTimeout(e.request, NETWORK_TIMEOUT).then(res => {
-            if (res.ok) cache.put(e.request, res.clone());
-            return res;
-          }).catch(() => cached);
-          return cached || networkFetch;
-        })
-      )
-    );
-    return;
-  }
-
-  if (isHtml) {
-    // Network-first com timeout; cai no offline.html se falhar
+  if (isStaticAsset || isHtml) {
+    // Network-first: sempre busca na rede; usa cache apenas se offline
     e.respondWith(
       fetchWithTimeout(e.request, NETWORK_TIMEOUT)
         .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          }
           return res;
         })
         .catch(() =>
           caches.match(e.request).then(cached =>
-            cached || caches.match('/offline.html')
+            cached || (isHtml ? caches.match('/offline.html') : new Response('', { status: 408 }))
           )
         )
     );
     return;
   }
 
-  // Padrão: rede com timeout e fallback no cache
+  // Padrão: rede com fallback no cache
   e.respondWith(
     fetchWithTimeout(e.request, NETWORK_TIMEOUT).catch(() => caches.match(e.request))
   );
