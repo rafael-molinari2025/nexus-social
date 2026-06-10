@@ -148,8 +148,34 @@ Todos os uploads vão para o **Cloudinary** via `uploadToCloudinary(file)` em `u
 
 ---
 
+## Ícones
+
+O projeto usa **Tabler Icons** hospedados **localmente** (sem CDN):
+- CSS: `css/tabler-icons.min.css` → referencia fontes em `fonts/tabler-icons.woff2` (447 KB)
+- Páginas em `pages/` incluem `../css/tabler-icons.min.css`; `index.html` inclui `css/tabler-icons.min.css`
+- **Não** usar o link CDN `cdn.jsdelivr.net/npm/@tabler/icons-webfont` — foi removido intencionalmente para eliminar dependência externa que causava ícones vazios em conexões lentas
+
+Para elementos de UI críticos (botões de ação, navegação), preferir texto/Unicode como fallback caso o ícone seja decorativo. Nunca colocar **só** um `<i class="ti ti-*">` em botões que o usuário precisa identificar sem a fonte carregada.
+
+---
+
+## Campos importantes não óbvios
+
+- `users/{uid}.status` — objeto `{ emoji: string, text: string }` para status do perfil. Ao exibir `status.emoji`, validar com `/\p{Emoji}/u` (pode conter lixo de versões antigas).
+- `posts/{id}.privacy` — campo ausente em posts antigos; **sempre** usar `resource.data.get('privacy', 'public')` nas regras Firestore, nunca comparar `resource.data.privacy == 'public'` diretamente (causa falha em queries de lista).
+- `conversations/{id}.lastMessageAt` — campo de ordenação de conversas (índice composto existe em `firestore.indexes.json`).
+
+---
+
+## Domínio
+
+O site está deployado em `nexus.primetitec.com.br` (CNAME → `rede-social-acf40.web.app`). O `authDomain` em `js/firebase-config.js` permanece `rede-social-acf40.firebaseapp.com` — isso é correto e não deve ser alterado.
+
+---
+
 ## PWA
 
-- Service Worker: `sw.js` (versão `nexus-v2`) — cache-first para assets, network-first para HTML, fallback em `offline.html`
+- Service Worker: `sw.js` (versão atual: `nexus-v5`) — **network-first** para todos os assets e HTML; cache usado só como fallback offline. Ao mudar assets estáticos significativos, incrementar `CACHE_NAME` para invalidar clientes.
 - Manifest: `manifest.json` — `start_url: /index.html`, tema `#534AB7`
 - O SW é registrado em `js/utils.js` via `navigator.serviceWorker.register('/sw.js')` ao carregar qualquer página
+- `firebase.json` tem header `no-cache, no-store` específico para `/sw.js` (antes de qualquer regra `*.js`) para garantir que o browser sempre busque o SW atualizado
