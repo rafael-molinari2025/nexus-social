@@ -288,7 +288,9 @@ function renderCommPosts(docs) {
     el.innerHTML = `<div class="empty-state card"><i class="ti ti-news-off" aria-hidden="true"></i><p>Nenhum post ainda. ${isMember ? 'Seja o primeiro!' : 'Entre na comunidade para postar.'}</p></div>`;
     return;
   }
-  el.innerHTML = `<div class="card">${docs.map(doc => postHTML(doc.id, doc.data())).join('')}</div>`;
+  // Pinned posts first
+  const sorted = [...docs].sort((a, b) => (b.data().isPinned ? 1 : 0) - (a.data().isPinned ? 1 : 0));
+  el.innerHTML = `<div class="card">${sorted.map(doc => postHTML(doc.id, doc.data())).join('')}</div>`;
 }
 
 function filterCommPosts(q) {
@@ -310,6 +312,7 @@ function postHTML(id, p) {
   const canDelete = p.authorId === currentUser.uid || isAdmin;
   return `
   <div class="post" id="post-${id}">
+    ${p.isPinned ? `<div class="post-pinned-badge"><i class="ti ti-pin-filled" aria-hidden="true"></i> Post fixado</div>` : ''}
     <div class="post-header">
       <div class="avatar avatar-40" style="background:${cl.bg};color:${cl.color};cursor:pointer"
            onclick="location.href='perfil.html?uid=${p.authorId}'">${av}</div>
@@ -317,9 +320,14 @@ function postHTML(id, p) {
         <div class="post-author">${sanitize(p.authorName||'Usuário')}</div>
         <div class="post-time">${timeAgo(p.createdAt)}</div>
       </div>
-      ${canDelete ? `<button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
+      <div style="display:flex;gap:.1rem;margin-left:auto">
+        ${isAdmin ? `<button class="btn btn-icon" onclick="togglePinPost('${id}',${!!p.isPinned})" title="${p.isPinned?'Desafixar post':'Fixar post'}">
+          <i class="ti ${p.isPinned?'ti-pin-filled':'ti-pin'}" style="font-size:15px;color:${p.isPinned?'var(--purple-600)':'var(--text-muted)'}" aria-hidden="true"></i>
+        </button>` : ''}
+        ${canDelete ? `<button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
+      </div>
     </div>
-    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>')}</div>
+    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>')}</div>
     <div class="post-actions">
       <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${id}')">
         <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
@@ -370,6 +378,13 @@ async function deletePost(postId) {
   if (!confirm('Excluir este post?')) return;
   await db.collection('posts').doc(postId).delete();
   showToast('Post excluído.');
+}
+
+async function togglePinPost(postId, isPinned) {
+  try {
+    await db.collection('posts').doc(postId).update({ isPinned: !isPinned });
+    showToast(!isPinned ? 'Post fixado no topo!' : 'Post desafixado.');
+  } catch(e) { showToast('Erro ao fixar post.'); }
 }
 
 function sharePost(postId) {

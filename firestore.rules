@@ -51,6 +51,11 @@ service cloud.firestore {
             || request.resource.data.commentsCount == resource.data.commentsCount - 1);
       allow delete: if request.auth != null
         && resource.data.authorId == request.auth.uid;
+      // Admin da comunidade pode fixar/desafixar post (apenas campo isPinned)
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned'])
+        && resource.data.communityId != null
+        && get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.createdBy == request.auth.uid;
 
       // Comentários (subcollection)
       match /comments/{commentId} {

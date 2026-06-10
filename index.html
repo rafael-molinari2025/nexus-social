@@ -456,6 +456,7 @@ const _carouselState = {};
 let _feedTab       = 'all';
 let _friendIds     = new Set();
 let _friendsList   = [];
+let _storyTimer    = null;
 let _mentionStart  = -1;
 let _mentionQuery  = '';
 let _mentionType   = '';
@@ -1154,19 +1155,53 @@ async function repostPost(postId) {
   if (!snap.exists) return showToast('Post não encontrado.');
   const p = snap.data();
   if (p.authorId === currentUser.uid) return showToast('Você não pode repostar seu próprio post.');
-  const text = prompt('Adicionar comentário ao repost (opcional):', '');
-  if (text === null) return;
-  await db.collection('posts').add({
-    text: text.trim() || '',
-    images: [], imageURL: null,
-    authorId: currentUser.uid,
-    authorName: currentUser.displayName,
-    authorPhoto: currentUser.photoURL || null,
-    repostOf: { postId, authorId: p.authorId, authorName: p.authorName||'Usuário', text: p.text||'', imageURL: p.imageURL||null },
-    likes: [], bookmarks: [], reactions: {}, commentsCount: 0, privacy: 'public', hashtags: [],
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  showToast('Post repostado no seu feed!');
+  const existing = document.getElementById('repost-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'repost-modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-repeat"></i> Repostar</span>
+        <button class="btn btn-icon" onclick="document.getElementById('repost-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="repost-block" style="margin:.25rem 0">
+        <div class="repost-label"><i class="ti ti-repeat" aria-hidden="true"></i> ${sanitize(p.authorName||'Usuário')}</div>
+        ${p.text ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.5">${sanitize(p.text).slice(0,180)}${p.text.length>180?'…':''}</div>` : ''}
+        ${p.imageURL ? `<img src="${p.imageURL}" style="width:100%;border-radius:6px;margin-top:.4rem;max-height:120px;object-fit:cover">` : ''}
+      </div>
+      <textarea class="composer-textarea" id="repost-comment-text" placeholder="Adicione um comentário (opcional)…" style="min-height:80px;margin-top:.25rem" maxlength="500"></textarea>
+      <button class="btn btn-primary" style="justify-content:center;margin-top:.25rem" id="repost-submit-btn" onclick="submitRepost('${postId}',this)">
+        <i class="ti ti-repeat"></i> Repostar no feed
+      </button>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function submitRepost(postId, btn) {
+  const text = document.getElementById('repost-comment-text')?.value.trim() || '';
+  const snap = await db.collection('posts').doc(postId).get();
+  if (!snap.exists) return;
+  const p = snap.data();
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Repostando…';
+  try {
+    await db.collection('posts').add({
+      text,
+      images: [], imageURL: null,
+      authorId: currentUser.uid,
+      authorName: currentUser.displayName,
+      authorPhoto: currentUser.photoURL || null,
+      repostOf: { postId, authorId: p.authorId, authorName: p.authorName||'Usuário', text: p.text||'', imageURL: p.imageURL||null },
+      likes: [], bookmarks: [], reactions: {}, commentsCount: 0, privacy: 'public', hashtags: [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('repost-modal')?.remove();
+    showToast('Post repostado no seu feed!');
+  } catch(e) { showToast('Erro ao repostar. Tente novamente.'); btn.disabled = false; btn.innerHTML = '<i class="ti ti-repeat"></i> Repostar no feed'; }
 }
 
 async function shareInCommunity(postId) {
@@ -1393,7 +1428,7 @@ async function loadTrendingHashtags() {
     }
     el.innerHTML = sorted.map(([tag, count]) =>
       `<div style="display:flex;align-items:center;padding:.3rem 0;cursor:pointer;border-bottom:0.5px solid var(--border)"
-            onclick="location.href='/index.html?hashtag=${encodeURIComponent(tag)}'">
+            onclick="location.href='${PAGES}busca.html?tab=posts&q=%23${encodeURIComponent(tag)}'">
         <span style="font-size:13px;font-weight:600;color:var(--purple-600)">#${sanitize(tag)}</span>
         <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${count} post${count > 1 ? 's' : ''}</span>
       </div>`
@@ -1493,7 +1528,28 @@ async function loadStories() {
   }
 }
 
+function storyNavPrev() {
+  const ctx = window._storyCtx;
+  if (!ctx) return;
+  clearTimeout(_storyTimer);
+  document.getElementById('story-view-overlay')?.remove();
+  const prevIdx = ctx.currentIdx - 1;
+  viewStory(ctx.allIds[Math.max(0, prevIdx)], ctx.allIds, Math.max(0, prevIdx));
+}
+
+function storyNavNext() {
+  const ctx = window._storyCtx;
+  if (!ctx) return;
+  clearTimeout(_storyTimer);
+  document.getElementById('story-view-overlay')?.remove();
+  const nextIdx = ctx.currentIdx + 1;
+  if (nextIdx < ctx.allIds.length) viewStory(ctx.allIds[nextIdx], ctx.allIds, nextIdx);
+}
+
 async function viewStory(storyId, allIds = [], currentIdx = 0) {
+  clearTimeout(_storyTimer);
+  window._storyCtx = { allIds, currentIdx };
+
   const snap = await db.collection('stories').doc(storyId).get();
   if (!snap.exists) { showToast('Story não encontrado.'); return; }
   const s  = snap.data();
@@ -1507,39 +1563,72 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
     ? `<img src="${s.imageURL}" style="max-width:100%;max-height:100%;object-fit:contain">`
     : `<div class="story-viewer-text">${sanitize(s.text||'')}</div>`;
 
+  // Progress segments (one per story in the set)
+  const segs = allIds.length > 1
+    ? allIds.map((_, i) => `<div class="story-prog-seg"><div class="story-prog-fill" id="spf-${i}" style="width:${i < currentIdx ? '100%' : '0%'}"></div></div>`).join('')
+    : `<div class="story-prog-seg"><div class="story-prog-fill" id="spf-0"></div></div>`;
+
+  document.getElementById('story-view-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.className = 'story-overlay';
   overlay.id = 'story-view-overlay';
   overlay.innerHTML = `
-    <div class="story-viewer" style="${bgStyle}">
-      <div class="story-prog-bar"><div class="story-prog-seg"><div class="story-prog-fill" id="spf"></div></div></div>
+    <div class="story-viewer" style="${bgStyle}" id="_story-box">
+      <div class="story-prog-bar">${segs}</div>
       <div class="story-viewer-header">
         ${av}
         <div>
           <div style="font-size:13px;font-weight:600;color:#fff">${sanitize(s.displayName||'Usuário')}</div>
           <div style="font-size:11px;color:rgba(255,255,255,.65)">${timeAgo(s.createdAt)}</div>
         </div>
-        <button onclick="document.getElementById('story-view-overlay').remove()"
-                style="margin-left:auto;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1">
+        <button onclick="clearTimeout(_storyTimer);document.getElementById('story-view-overlay').remove()"
+                style="margin-left:auto;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;z-index:10;position:relative">
           <i class="ti ti-x" aria-hidden="true"></i>
         </button>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;z-index:4;pointer-events:none">
+        <div style="flex:0 0 35%;height:100%;pointer-events:auto;cursor:pointer" onclick="storyNavPrev()"></div>
+        <div style="flex:1;height:100%;pointer-events:auto;cursor:pointer" onclick="storyNavNext()"></div>
       </div>
       <div class="story-viewer-body">${body}</div>
     </div>`;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', e => { if (e.target === overlay) { clearTimeout(_storyTimer); overlay.remove(); } });
 
-  // Animate progress bar and auto-advance
-  const fill = document.getElementById('spf');
-  if (fill) {
-    fill.style.transition = 'width 5s linear';
-    requestAnimationFrame(() => { fill.style.width = '100%'; });
-    setTimeout(() => {
-      overlay.remove();
-      const nextIdx = currentIdx + 1;
-      if (nextIdx < allIds.length) viewStory(allIds[nextIdx], allIds, nextIdx);
-    }, 5100);
+  // Pause-on-hold
+  const box = document.getElementById('_story-box');
+  let _paused = false;
+  const fillEl = document.getElementById(`spf-${currentIdx}`);
+  if (box && fillEl) {
+    box.addEventListener('pointerdown', () => {
+      _paused = true;
+      fillEl.style.transition = 'none';
+      clearTimeout(_storyTimer);
+    });
+    box.addEventListener('pointerup', () => {
+      if (!_paused) return;
+      _paused = false;
+      const pct = parseFloat(fillEl.style.width) || 0;
+      const remaining = (1 - pct / 100) * 5000;
+      fillEl.style.transition = `width ${remaining / 1000}s linear`;
+      fillEl.style.width = '100%';
+      _storyTimer = setTimeout(() => {
+        overlay.remove();
+        storyNavNext();
+      }, remaining + 100);
+    });
   }
+
+  // Auto-advance
+  if (fillEl) {
+    fillEl.style.transition = 'width 5s linear';
+    requestAnimationFrame(() => { fillEl.style.width = '100%'; });
+  }
+  _storyTimer = setTimeout(() => {
+    overlay.remove();
+    const nextIdx = currentIdx + 1;
+    if (nextIdx < allIds.length) viewStory(allIds[nextIdx], allIds, nextIdx);
+  }, 5100);
 
   // Mark viewed
   localStorage.setItem(ST_VIEWED_KEY + storyId, '1');
