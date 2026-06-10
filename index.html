@@ -357,7 +357,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- ── Editar post ────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="edit-post-modal" style="display:none"
+<div class="modal-overlay" id="edit-post-modal"
      onclick="if(event.target===this)closeEditModal()">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
@@ -375,7 +375,7 @@
 </div>
 
 <!-- ── Criar story ────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="story-create-modal" style="display:none"
+<div class="modal-overlay" id="story-create-modal"
      onclick="if(event.target===this)closeStoryModal()">
   <div class="modal story-creator-modal">
     <div class="modal-header">
@@ -421,7 +421,7 @@
 </div>
 
 <!-- ── Denunciar post ─────────────────────────────────────────────── -->
-<div class="modal-overlay" id="report-modal" style="display:none"
+<div class="modal-overlay" id="report-modal"
      onclick="if(event.target===this)closeReportModal()">
   <div class="modal" style="max-width:360px">
     <div class="modal-header">
@@ -1125,8 +1125,7 @@ function sharePost(postId) {
   if (existing) { existing.remove(); return; }
   const modal = document.createElement('div');
   modal.id = 'share-mini-modal';
-  modal.className = 'modal-overlay';
-  modal.style.display = 'flex';
+  modal.className = 'modal-overlay open';
   const url = `${location.origin}/pages/post.html?id=${postId}`;
   modal.innerHTML = `
     <div class="modal" style="max-width:300px">
@@ -1158,9 +1157,8 @@ async function repostPost(postId) {
   const existing = document.getElementById('repost-modal');
   if (existing) existing.remove();
   const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
+  modal.className = 'modal-overlay open';
   modal.id = 'repost-modal';
-  modal.style.display = 'flex';
   modal.innerHTML = `
     <div class="modal" style="max-width:460px">
       <div class="modal-header">
@@ -1213,8 +1211,7 @@ async function shareInCommunity(postId) {
   if (!valid.length) return showToast('Sem comunidades disponíveis.');
   const modal = document.createElement('div');
   modal.id = 'share-comm-modal';
-  modal.className = 'modal-overlay';
-  modal.style.display = 'flex';
+  modal.className = 'modal-overlay open';
   modal.innerHTML = `
     <div class="modal" style="max-width:340px">
       <div class="modal-header">
@@ -1265,12 +1262,12 @@ function startEditPost(postId) {
   _editingPostId = postId;
   const el = document.getElementById(`post-${postId}`);
   document.getElementById('edit-post-ta').value = el?.dataset.rawtext || '';
-  document.getElementById('edit-post-modal').style.display = 'flex';
+  document.getElementById('edit-post-modal').classList.add('open');
   document.getElementById('edit-post-ta').focus();
 }
 function closeEditModal() {
   _editingPostId = null;
-  document.getElementById('edit-post-modal').style.display = 'none';
+  document.getElementById('edit-post-modal').classList.remove('open');
 }
 async function saveEditPost() {
   const text = document.getElementById('edit-post-ta').value.trim();
@@ -1288,11 +1285,11 @@ async function saveEditPost() {
 // ── Report ─────────────────────────────────────────────────────
 function openReportModal(postId) {
   _reportPostId = postId;
-  document.getElementById('report-modal').style.display = 'flex';
+  document.getElementById('report-modal').classList.add('open');
 }
 function closeReportModal() {
   _reportPostId = null;
-  document.getElementById('report-modal').style.display = 'none';
+  document.getElementById('report-modal').classList.remove('open');
 }
 async function submitReport(reason) {
   if (!_reportPostId) return;
@@ -1682,7 +1679,7 @@ function setStoryType(type) {
 }
 
 function openStoryModal() {
-  document.getElementById('story-create-modal').style.display = 'flex';
+  document.getElementById('story-create-modal').classList.add('open');
   document.getElementById('story-text-input').value = '';
   _storyImgFile = null;
   document.getElementById('st-img-preview').innerHTML = `
@@ -1692,7 +1689,7 @@ function openStoryModal() {
     </div>`;
   setStoryType('text');
 }
-function closeStoryModal() { document.getElementById('story-create-modal').style.display = 'none'; }
+function closeStoryModal() { document.getElementById('story-create-modal').classList.remove('open'); }
 
 function previewStoryImage(input) {
   const file = input.files[0];

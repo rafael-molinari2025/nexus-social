@@ -231,7 +231,7 @@
 </div>
 
 <!-- Report user modal -->
-<div class="modal-overlay" id="user-report-modal" style="display:none"
+<div class="modal-overlay" id="user-report-modal"
      onclick="if(event.target===this)closeUserReportModal()">
   <div class="modal" style="max-width:360px">
     <div class="modal-header">
@@ -854,8 +854,7 @@ async function showMutualFriendsModal() {
   const uids = window._mutualFriendUids || [];
   if (!uids.length) return;
   const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.style.display = 'flex';
+  modal.className = 'modal-overlay open';
   modal.innerHTML = `<div class="modal" style="max-width:380px">
     <div class="modal-header">
       <span class="modal-title"><i class="ti ti-users"></i> Amigos em comum</span>
@@ -957,12 +956,12 @@ let _reportUserUid = null;
 
 function openUserReportModal(uid) {
   _reportUserUid = uid;
-  document.getElementById('user-report-modal').style.display = 'flex';
+  document.getElementById('user-report-modal').classList.add('open');
 }
 
 function closeUserReportModal() {
   _reportUserUid = null;
-  document.getElementById('user-report-modal').style.display = 'none';
+  document.getElementById('user-report-modal').classList.remove('open');
 }
 
 async function submitUserReport(reason) {
