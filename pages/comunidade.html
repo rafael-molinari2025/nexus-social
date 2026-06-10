@@ -105,6 +105,8 @@ let isAdmin = false;
 let memberDocId = null;
 let _allCommPostDocs = [];
 let _lastMemberDoc = null;
+let _allMembersCache = [];
+let _memberSearchQ = '';
 const MEMBERS_PAGE = 20;
 
 requireAuth(async user => {
@@ -397,11 +399,54 @@ async function loadTopMembers() {
   }).join('')}</div>`;
 }
 
+function _renderMemberRow(doc, u) {
+  if (!u) return '';
+  const cl = getAvatarColor(u.uid);
+  const av = u.photoURL
+    ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+  const role = doc.data ? doc.data().role : doc.role;
+  const canRemove = isAdmin && u.uid !== currentUser.uid;
+  const docId = doc.id || doc._id;
+  return `<div class="search-result-item" style="border-radius:var(--radius-md);position:relative">
+    <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer" onclick="location.href='perfil.html?uid=${u.uid}'">${av}</div>
+    <div class="search-result-info" style="cursor:pointer" onclick="location.href='perfil.html?uid=${u.uid}'">
+      <div class="search-result-name">${sanitize(u.displayName||'Usuário')}</div>
+      ${role==='admin' ? `<div style="font-size:11px;color:var(--indigo-500);font-weight:600">Administrador</div>` : ''}
+      ${u.bio ? `<div class="search-result-sub">${sanitize(u.bio)}</div>` : ''}
+    </div>
+    ${canRemove ? `<button onclick="removeMember('${docId}','${sanitize(u.displayName||'Usuário').replace(/'/g,"\\'")}','${u.uid}')"
+      title="Remover membro"
+      style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:15px;padding:.25rem;border-radius:4px;flex-shrink:0"
+      onmouseover="this.style.color='var(--rose-500)'" onmouseout="this.style.color='var(--text-muted)'">
+      <i class="ti ti-user-minus"></i>
+    </button>` : ''}
+  </div>`;
+}
+
+function filterMembers(q) {
+  _memberSearchQ = q.toLowerCase().trim();
+  const filtered = _memberSearchQ
+    ? _allMembersCache.filter(m => (m.u?.displayName||'').toLowerCase().includes(_memberSearchQ) || (m.u?.bio||'').toLowerCase().includes(_memberSearchQ))
+    : _allMembersCache;
+  const grid = document.getElementById('members-grid');
+  if (grid) grid.innerHTML = filtered.map(m => _renderMemberRow(m.doc, m.u)).join('') || '<p style="font-size:13px;color:var(--text-muted);padding:.5rem">Nenhum resultado.</p>';
+}
+
 async function loadAllMembers(reset = true) {
   const el = document.getElementById('panel-members');
   if (reset) {
     _lastMemberDoc = null;
-    el.innerHTML = '<div class="loading-screen" style="min-height:100px"><div class="spinner"></div></div>';
+    _allMembersCache = [];
+    _memberSearchQ = '';
+    el.innerHTML = `
+      <div style="position:relative;margin-bottom:.65rem">
+        <i class="ti ti-search" style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:15px;pointer-events:none"></i>
+        <input type="text" id="member-search" placeholder="Buscar membros..."
+          style="width:100%;padding:.55rem .75rem .55rem 2.4rem;border:1.5px solid var(--border);border-radius:var(--radius-full);background:var(--surface);font-size:13px;color:var(--text-primary);font-family:var(--font-sans);outline:none;transition:border-color var(--transition)"
+          oninput="filterMembers(this.value)">
+      </div>
+      <div class="loading-screen" style="min-height:100px"><div class="spinner"></div></div>`;
   }
 
   let snap;
@@ -420,44 +465,41 @@ async function loadAllMembers(reset = true) {
   if (snap.docs.length) _lastMemberDoc = snap.docs[snap.docs.length - 1];
 
   const usersData = await Promise.all(snap.docs.map(d => getUserData(d.data().uid)));
-  const newRows = snap.docs.map((doc, i) => {
-    const u = usersData[i];
-    if (!u) return '';
-    const cl = getAvatarColor(u.uid);
-    const av = u.photoURL
-      ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-      : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
-    const role = doc.data().role;
-    const canRemove = isAdmin && u.uid !== currentUser.uid;
-    return `<div class="search-result-item" style="border-radius:var(--radius-md);position:relative">
-      <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer" onclick="location.href='perfil.html?uid=${u.uid}'">${av}</div>
-      <div class="search-result-info" style="cursor:pointer" onclick="location.href='perfil.html?uid=${u.uid}'">
-        <div class="search-result-name">${sanitize(u.displayName||'Usuário')}</div>
-        ${role==='admin' ? `<div style="font-size:11px;color:var(--purple-600);font-weight:500">Administrador</div>` : ''}
-        ${u.bio ? `<div class="search-result-sub">${sanitize(u.bio)}</div>` : ''}
-      </div>
-      ${canRemove ? `<button onclick="removeMember('${doc.id}','${sanitize(u.displayName||'Usuário').replace(/'/g,"\\'")}','${u.uid}')"
-        title="Remover membro"
-        style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:15px;padding:.25rem;border-radius:4px;flex-shrink:0"
-        onmouseover="this.style.color='var(--coral-400)'" onmouseout="this.style.color='var(--text-muted)'">
-        <i class="ti ti-user-minus"></i>
-      </button>` : ''}
-    </div>`;
-  }).join('');
 
-  const loadMoreBtn = snap.docs.length === MEMBERS_PAGE
-    ? `<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:.5rem" onclick="loadAllMembers(false)">
+  // Merge into cache (avoid duplicates)
+  snap.docs.forEach((doc, i) => {
+    const u = usersData[i];
+    if (u && !_allMembersCache.find(m => m.u?.uid === u.uid)) {
+      _allMembersCache.push({ doc, u });
+    }
+  });
+
+  const hasMore = snap.docs.length === MEMBERS_PAGE;
+  const loadMoreBtn = hasMore
+    ? `<button class="btn btn-sm" id="load-more-members-btn" style="width:100%;justify-content:center;margin-top:.5rem" onclick="loadAllMembers(false)">
          <i class="ti ti-refresh"></i> Carregar mais membros
        </button>` : '';
 
+  const searchInput = document.getElementById('member-search');
+
   if (reset) {
-    el.innerHTML = `<div class="card"><div id="members-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.5rem;padding:.75rem">${newRows}</div></div>${loadMoreBtn}`;
+    // Preserve the search input already in the DOM, only rebuild grid
+    const searchHtml = `<div style="position:relative;margin-bottom:.65rem">
+      <i class="ti ti-search" style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:15px;pointer-events:none"></i>
+      <input type="text" id="member-search" placeholder="Buscar membros..."
+        style="width:100%;padding:.55rem .75rem .55rem 2.4rem;border:1.5px solid var(--border);border-radius:var(--radius-full);background:var(--surface);font-size:13px;color:var(--text-primary);font-family:var(--font-sans);outline:none;transition:border-color var(--transition)"
+        oninput="filterMembers(this.value)">
+    </div>`;
+    const rows = _allMembersCache.map(m => _renderMemberRow(m.doc, m.u)).join('');
+    el.innerHTML = `${searchHtml}<div class="card"><div id="members-grid" style="padding:.5rem">${rows}</div></div>${loadMoreBtn}`;
   } else {
     const grid = document.getElementById('members-grid');
-    if (grid) grid.insertAdjacentHTML('beforeend', newRows);
-    const oldBtn = el.querySelector('button.btn-sm');
+    const newRows = snap.docs.map((doc, i) => _renderMemberRow(doc, usersData[i])).join('');
+    if (grid && !_memberSearchQ) grid.insertAdjacentHTML('beforeend', newRows);
+    const oldBtn = document.getElementById('load-more-members-btn');
     if (oldBtn) oldBtn.remove();
-    if (loadMoreBtn) el.insertAdjacentHTML('beforeend', loadMoreBtn);
+    if (loadMoreBtn && !_memberSearchQ) el.insertAdjacentHTML('beforeend', loadMoreBtn);
+    if (_memberSearchQ) filterMembers(_memberSearchQ);
   }
 }
 

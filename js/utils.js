@@ -256,12 +256,54 @@ function renderTopbar(user, activePage = 'feed') {
 
   const si = document.getElementById('search-input');
   if (si) {
+    // History stored as JSON array in localStorage
+    const HIST_KEY = 'nexus-search-history';
+    const getHistory = () => JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    const saveHistory = q => {
+      let h = getHistory().filter(x => x !== q);
+      h.unshift(q);
+      localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0, 8)));
+    };
+    const removeHistory = q => {
+      localStorage.setItem(HIST_KEY, JSON.stringify(getHistory().filter(x => x !== q)));
+    };
+
+    function renderSearchHistory() {
+      const hist = getHistory();
+      let dd = document.getElementById('search-history-dd');
+      if (!hist.length) { if (dd) dd.remove(); return; }
+      if (!dd) {
+        dd = document.createElement('div');
+        dd.id = 'search-history-dd';
+        dd.style.cssText = 'position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:500;margin-top:6px;overflow:hidden';
+        si.parentElement.style.position = 'relative';
+        si.parentElement.appendChild(dd);
+      }
+      dd.innerHTML = hist.map(q => {
+        const safe = q.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .875rem;cursor:pointer;transition:background var(--transition);font-size:13px;color:var(--text-primary)" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='none'" onclick="document.getElementById('search-input').value='${safe}';this.closest('#search-history-dd').remove();location.href='${PAGES}busca.html?q=${encodeURIComponent(q)}'">
+          <i class="ti ti-history" style="font-size:14px;color:var(--text-muted);flex-shrink:0"></i>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>
+          <button onclick="event.stopPropagation();removeSearchHistory('${safe}');renderTopbarSearchHistory()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;font-size:13px;display:flex;align-items:center" title="Remover"><i class="ti ti-x"></i></button>
+        </div>`;
+      }).join('');
+    }
+
+    window.removeSearchHistory = q => removeHistory(q);
+    window.renderTopbarSearchHistory = renderSearchHistory;
+
+    si.addEventListener('focus', () => { if (!si.value.trim()) renderSearchHistory(); });
+    si.addEventListener('input', () => { if (!si.value.trim()) renderSearchHistory(); else document.getElementById('search-history-dd')?.remove(); });
     si.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
         const q = si.value.trim();
-        if (q) location.href = `${PAGES}busca.html?q=${encodeURIComponent(q)}`;
+        if (q) { saveHistory(q); location.href = `${PAGES}busca.html?q=${encodeURIComponent(q)}`; }
       }
+      if (e.key === 'Escape') document.getElementById('search-history-dd')?.remove();
     });
+    document.addEventListener('click', e => {
+      if (!si.contains(e.target)) document.getElementById('search-history-dd')?.remove();
+    }, true);
   }
 
   // ── Bottom navigation (mobile) ──────────────────────────────

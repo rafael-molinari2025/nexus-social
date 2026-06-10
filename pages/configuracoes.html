@@ -83,6 +83,13 @@
       </div>
     </div>
 
+    <!-- Usuários silenciados -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-volume-off"></i> Usuários silenciados</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:.875rem">Posts de usuários silenciados não aparecem no seu feed. O silêncio só afeta este dispositivo.</p>
+      <div id="muted-list"></div>
+    </div>
+
     <!-- Exportar dados -->
     <div class="config-section">
       <div class="config-section-title"><i class="ti ti-download"></i> Exportar dados</div>
@@ -136,7 +143,46 @@ requireAuth(async user => {
   renderTopbar(userData, 'settings');
   loadBlockedUsers();
   loadCurrentStatus();
+  loadMutedUsers();
 });
+
+// ── Silenciados ───────────────────────────────────────────────
+async function loadMutedUsers() {
+  const el = document.getElementById('muted-list');
+  if (!el) return;
+  const muted = JSON.parse(localStorage.getItem('nexus-muted') || '[]');
+  if (!muted.length) {
+    el.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Nenhum usuário silenciado.</p>`;
+    return;
+  }
+  const usersData = await Promise.all(muted.map(uid => getUserData(uid)));
+  el.innerHTML = usersData.filter(Boolean).map(u => {
+    const cl = getAvatarColor(u.uid);
+    const av = u.photoURL
+      ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+    return `<div class="blocked-row">
+      <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600">${sanitize(u.displayName||'Usuário')}</div>
+      </div>
+      <button class="btn btn-sm" onclick="unmuteFromSettings('${u.uid}',this)">
+        <i class="ti ti-volume"></i> Dessilenciar
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function unmuteFromSettings(uid, btn) {
+  let muted = JSON.parse(localStorage.getItem('nexus-muted') || '[]');
+  muted = muted.filter(u => u !== uid);
+  localStorage.setItem('nexus-muted', JSON.stringify(muted));
+  btn.closest('.blocked-row').remove();
+  showToast('Usuário dessilenciado.');
+  const el = document.getElementById('muted-list');
+  if (el && !el.querySelector('.blocked-row'))
+    el.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Nenhum usuário silenciado.</p>`;
+}
 
 // ── Senha ─────────────────────────────────────────────────────
 async function changePassword() {
