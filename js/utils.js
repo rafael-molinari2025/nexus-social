@@ -300,6 +300,28 @@ function renderTopbar(user, activePage = 'feed') {
   initNotifications(user.uid);
 }
 
+// ── Agrupamento de notificações ───────────────────────────────
+function groupNotifications(notifs) {
+  const groups = [];
+  const byKey  = {};
+  for (const n of notifs) {
+    const groupable = ['post_like', 'post_comment'].includes(n.type);
+    if (!groupable) { groups.push(n); continue; }
+    const key = `${n.type}:${n.link || ''}`;
+    if (byKey[key]) {
+      byKey[key]._extra = (byKey[key]._extra || 0) + 1;
+    } else {
+      byKey[key] = { ...n, _extra: 0 };
+      groups.push(byKey[key]);
+    }
+  }
+  return groups.map(n => {
+    if (!n._extra) return n;
+    const suffix = n._extra === 1 ? 'mais 1 pessoa' : `mais ${n._extra} pessoas`;
+    return { ...n, message: `${(n.message || '').replace(/\.$/, '')} e ${suffix}.` };
+  });
+}
+
 // ── Painel de notificações ────────────────────────────────────
 let _notifPanelOpen = false;
 
@@ -346,7 +368,8 @@ async function toggleNotifPanel(uid) {
     return;
   }
 
-  body.innerHTML = notifs.map(n => {
+  const grouped = groupNotifications(notifs);
+  body.innerHTML = grouped.map(n => {
     const ic = notifIcon(n.type);
     return `
       <div class="notif-item${n.read ? '' : ' unread'}" data-href="${n.link || ''}">

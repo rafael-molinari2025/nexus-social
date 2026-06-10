@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -13,6 +13,14 @@
     .config-section-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 1.25rem; display: flex; align-items: center; gap: .5rem; }
     .config-section-title i { color: var(--purple-600); }
     .config-divider { height: 0.5px; background: var(--border); margin: 1rem 0; }
+    .status-preset {
+      padding: .35rem .75rem; border: 0.5px solid var(--border); border-radius: var(--radius-full);
+      background: var(--surface); font-size: 13px; cursor: pointer; font-family: var(--font-sans);
+      color: var(--text-secondary); transition: all var(--transition);
+    }
+    .status-preset:hover { background: var(--gray-100); border-color: var(--purple-400); }
+    .blocked-row { display: flex; align-items: center; gap: .75rem; padding: .6rem 0; border-bottom: 0.5px solid var(--border); }
+    .blocked-row:last-child { border-bottom: none; }
     @media (max-width: 768px) {
       .config-page { padding: 1rem .5rem calc(80px + 1rem); }
     }
@@ -45,6 +53,43 @@
           <i class="ti ti-device-floppy"></i> Salvar nova senha
         </button>
       </div>
+    </div>
+
+    <!-- Status / Humor -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-mood-smile"></i> Status / Humor</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem" id="status-presets">
+        <button class="status-preset" onclick="setStatusPreset('😊','Animado')">😊 Animado</button>
+        <button class="status-preset" onclick="setStatusPreset('💼','Trabalhando')">💼 Trabalhando</button>
+        <button class="status-preset" onclick="setStatusPreset('📚','Estudando')">📚 Estudando</button>
+        <button class="status-preset" onclick="setStatusPreset('🎮','Jogando')">🎮 Jogando</button>
+        <button class="status-preset" onclick="setStatusPreset('🎵','Ouvindo música')">🎵 Música</button>
+        <button class="status-preset" onclick="setStatusPreset('😴','Descansando')">😴 Descansando</button>
+        <button class="status-preset" onclick="setStatusPreset('','')">✕ Limpar</button>
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <input class="form-input" id="status-emoji" placeholder="😊" maxlength="4" style="width:58px;text-align:center;font-size:18px">
+        <input class="form-input" id="status-text" placeholder="O que você está fazendo?" maxlength="60" style="flex:1">
+        <button class="btn btn-primary" onclick="saveStatus()"><i class="ti ti-device-floppy"></i></button>
+      </div>
+      <div id="status-current" style="font-size:12px;color:var(--text-muted);margin-top:.5rem"></div>
+    </div>
+
+    <!-- Usuários bloqueados -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-ban"></i> Usuários bloqueados</div>
+      <div id="blocked-list">
+        <div class="spinner" style="margin:auto;width:24px;height:24px"></div>
+      </div>
+    </div>
+
+    <!-- Exportar dados -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-download"></i> Exportar dados</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:.875rem">Baixe uma cópia de seus dados: perfil, posts e recados (formato JSON — LGPD).</p>
+      <button class="btn" id="export-btn" onclick="exportUserData()">
+        <i class="ti ti-file-download"></i> Exportar meus dados
+      </button>
     </div>
 
     <!-- Sessão -->
@@ -89,8 +134,11 @@ requireAuth(async user => {
   currentUser = user;
   const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
   renderTopbar(userData, 'settings');
+  loadBlockedUsers();
+  loadCurrentStatus();
 });
 
+// ── Senha ─────────────────────────────────────────────────────
 async function changePassword() {
   const current = document.getElementById('current-pass').value;
   const newPass  = document.getElementById('new-pass').value;
@@ -98,7 +146,6 @@ async function changePassword() {
   if (!current || !newPass || !confirm) return showToast('Preencha todos os campos.');
   if (newPass.length < 6) return showToast('A nova senha deve ter pelo menos 6 caracteres.');
   if (newPass !== confirm) return showToast('As senhas não coincidem.');
-
   try {
     const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, current);
     await currentUser.reauthenticateWithCredential(credential);
@@ -113,6 +160,124 @@ async function changePassword() {
   }
 }
 
+// ── Status / Humor ─────────────────────────────────────────────
+async function loadCurrentStatus() {
+  const d = await getUserData(currentUser.uid);
+  const s = d?.status;
+  const el = document.getElementById('status-current');
+  if (s && (s.emoji || s.text)) {
+    if (el) el.textContent = `Status atual: ${s.emoji||''} ${s.text||''}`.trim();
+    document.getElementById('status-emoji').value = s.emoji || '';
+    document.getElementById('status-text').value  = s.text  || '';
+  } else {
+    if (el) el.textContent = 'Sem status definido.';
+  }
+}
+
+function setStatusPreset(emoji, text) {
+  document.getElementById('status-emoji').value = emoji;
+  document.getElementById('status-text').value  = text;
+}
+
+async function saveStatus() {
+  const emoji = document.getElementById('status-emoji').value.trim();
+  const text  = document.getElementById('status-text').value.trim();
+  try {
+    if (!emoji && !text) {
+      await db.collection('users').doc(currentUser.uid).update({ status: firebase.firestore.FieldValue.delete() });
+      document.getElementById('status-current').textContent = 'Sem status definido.';
+      showToast('Status removido.');
+    } else {
+      await db.collection('users').doc(currentUser.uid).update({ status: { emoji, text } });
+      document.getElementById('status-current').textContent = `Status atual: ${emoji} ${text}`.trim();
+      showToast('Status atualizado!');
+    }
+  } catch(e) { showToast('Erro ao salvar status.'); }
+}
+
+// ── Bloqueados ─────────────────────────────────────────────────
+async function loadBlockedUsers() {
+  const el = document.getElementById('blocked-list');
+  try {
+    const d = await getUserData(currentUser.uid);
+    const blocked = d?.blocked || [];
+    if (!blocked.length) {
+      el.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Nenhum usuário bloqueado.</p>`;
+      return;
+    }
+    const users = await Promise.all(blocked.map(uid => getUserData(uid)));
+    el.innerHTML = users.filter(Boolean).map(u => {
+      const cl = getAvatarColor(u.uid);
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      return `<div class="blocked-row" id="blocked-${u.uid}">
+        <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:500">${sanitize(u.displayName||'Usuário')}</div>
+          ${u.username ? `<div style="font-size:12px;color:var(--text-muted)">@${sanitize(u.username)}</div>` : ''}
+        </div>
+        <button class="btn btn-sm" onclick="unblockUser('${u.uid}', this)">Desbloquear</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Erro ao carregar lista.</p>`;
+  }
+}
+
+async function unblockUser(uid, btn) {
+  btn.disabled = true;
+  try {
+    await db.collection('users').doc(currentUser.uid).update({
+      blocked: firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    document.getElementById(`blocked-${uid}`)?.remove();
+    const el = document.getElementById('blocked-list');
+    if (el && !el.querySelector('.blocked-row')) {
+      el.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Nenhum usuário bloqueado.</p>`;
+    }
+    showToast('Usuário desbloqueado.');
+  } catch(e) { btn.disabled = false; showToast('Erro ao desbloquear.'); }
+}
+
+// ── Exportar dados ─────────────────────────────────────────────
+async function exportUserData() {
+  const btn = document.getElementById('export-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Exportando…';
+  try {
+    const [profile, postsSnap, scrapsSnap] = await Promise.all([
+      getUserData(currentUser.uid),
+      db.collection('posts').where('authorId', '==', currentUser.uid).get(),
+      db.collection('scraps').where('fromUid', '==', currentUser.uid).get()
+    ]);
+    const toJSON = snap => snap.docs.map(d => {
+      const data = d.data();
+      // Convert Firestore timestamps to ISO strings
+      Object.keys(data).forEach(k => {
+        if (data[k]?.toDate) data[k] = data[k].toDate().toISOString();
+      });
+      return { id: d.id, ...data };
+    });
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      profile: profile || {},
+      posts:   toJSON(postsSnap),
+      scraps:  toJSON(scrapsSnap)
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `nexus_dados_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Dados exportados com sucesso!');
+  } catch(e) { showToast('Erro ao exportar dados.'); }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-file-download"></i> Exportar meus dados';
+}
+
+// ── Excluir conta ──────────────────────────────────────────────
 async function _batchDelete(docs) {
   for (let i = 0; i < docs.length; i += 500) {
     const batch = db.batch();
@@ -133,13 +298,10 @@ async function _deleteUserFirestoreData(uid) {
     db.collection('friendships').where('users', 'array-contains', uid),
     db.collection('community_members').where('uid', '==', uid),
   ];
-
   const results = await Promise.all(queries.map(q => q.get()));
   for (const snap of results) await _batchDelete(snap.docs);
-
   const notifSnap = await db.collection('notifications').doc(uid).collection('items').get();
   await _batchDelete(notifSnap.docs);
-
   await db.collection('users').doc(uid).delete();
 }
 
