@@ -237,7 +237,7 @@
 <body>
 
 <div id="auth-loading" style="position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:1rem">
-  <span style="font-family:var(--font-display);font-size:28px;color:var(--purple-600);font-weight:500">nexus</span>
+  <span class="loading-logo">nexus</span>
   <div class="spinner"></div>
 </div>
 
@@ -1639,7 +1639,7 @@ async function loadTrendingCommunities() {
     const snap = await db.collection('communities').orderBy('membersCount','desc').limit(5).get();
     if (snap.empty) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Nenhuma comunidade ainda.</p>`; return; }
     const CAT = {
-      tecnologia:{bg:'#EEEDFE',c:'#534AB7',icon:'ti-code'},
+      tecnologia:{bg:'#EEF2FF',c:'#6366F1',icon:'ti-code'},
       musica:{bg:'#FAEEDA',c:'#854F0B',icon:'ti-music'},
       arte:{bg:'#FBEAF0',c:'#993556',icon:'ti-palette'},
       esportes:{bg:'#E1F5EE',c:'#0F6E56',icon:'ti-ball-football'},

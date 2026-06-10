@@ -85,7 +85,7 @@
       transition: all var(--transition); font-family: var(--font-sans);
     }
     .gender-btn:hover { border-color: var(--purple-400); color: var(--purple-600); }
-    .gender-btn.selected { border-color: var(--purple-600); background: #EEEDFE; color: var(--purple-600); }
+    .gender-btn.selected { border-color: var(--indigo-500); background: var(--indigo-50); color: var(--indigo-500); }
     .section-divider {
       font-size: 11px; font-weight: 600; text-transform: uppercase;
       letter-spacing: .06em; color: var(--text-muted);
@@ -641,7 +641,7 @@ async function loadProfileCommunities(uid) {
   if (snap.empty) { el.innerHTML = `<div class="empty-state"><i class="ti ti-users-group" aria-hidden="true"></i><p>Nenhuma comunidade.</p></div>`; return; }
   const ids = snap.docs.map(d => d.data().communityId);
   const comms = await Promise.all(ids.map(id => db.collection('communities').doc(id).get()));
-  const colors = [{bg:'#EEEDFE',c:'#534AB7'},{bg:'#E1F5EE',c:'#0F6E56'},{bg:'#FAEEDA',c:'#854F0B'}];
+  const colors = [{bg:'#EEF2FF',c:'#6366F1'},{bg:'#E1F5EE',c:'#0F6E56'},{bg:'#FAEEDA',c:'#854F0B'}];
   el.innerHTML = comms.filter(d => d.exists).map((d,i) => {
     const c = d.data(); const cl = colors[i%colors.length];
     return `<div class="comm-item" onclick="location.href='comunidade.html?id=${d.id}'">

@@ -9,7 +9,7 @@ const PAGES = _isInPages ? '' : 'pages/';
 
 // ── Avatar helpers ───────────────────────────────────────────
 const AVATAR_COLORS = [
-  { bg: '#EEEDFE', color: '#534AB7' },
+  { bg: '#EEF2FF', color: '#6366F1' },
   { bg: '#E1F5EE', color: '#0F6E56' },
   { bg: '#FAEEDA', color: '#854F0B' },
   { bg: '#FAECE7', color: '#993C1D' },
@@ -171,7 +171,7 @@ async function markAllNotificationsRead(uid) {
 
 function notifIcon(type) {
   const map = {
-    friend_request: { icon: 'ti-user-plus', bg: '#EEEDFE', color: '#534AB7' },
+    friend_request: { icon: 'ti-user-plus', bg: '#EEF2FF', color: '#6366F1' },
     friend_accept:  { icon: 'ti-users',     bg: '#E1F5EE', color: '#0F6E56' },
     post_like:      { icon: 'ti-heart',     bg: '#FBEAF0', color: '#993556' },
     post_comment:   { icon: 'ti-message-circle', bg: '#FAEEDA', color: '#854F0B' },
@@ -502,7 +502,7 @@ if ('serviceWorker' in navigator) {
     banner.id = 'sw-update-banner';
     banner.style.cssText = [
       'position:fixed;bottom:80px;left:50%;transform:translateX(-50%)',
-      'background:var(--purple-600);color:#fff',
+      'background:var(--gradient-primary);color:#fff',
       'padding:.6rem 1.1rem;border-radius:var(--radius-full)',
       'font-size:13px;font-weight:600;z-index:9999',
       'display:flex;align-items:center;gap:.75rem;box-shadow:var(--shadow-lg)',
