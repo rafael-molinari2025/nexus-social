@@ -502,8 +502,20 @@ async function initAgoraHost(liveId) {
     _localVideo.play('agora-video-container');
     await _agoraClient.publish([_localAudio, _localVideo]);
   } catch(e) {
-    showToast('Erro ao iniciar transmissão. Verifique câmera e microfone.');
     console.error('Agora host error:', e);
+    const msg = e?.message || String(e);
+    if (/NotAllowed|Permission|denied/i.test(msg)) {
+      showToast('Permissão negada. Permita câmera e microfone no navegador e tente novamente.');
+    } else if (/NotFound|Devices/i.test(msg)) {
+      showToast('Câmera ou microfone não encontrado. Verifique o dispositivo.');
+    } else if (/token|auth|invalid/i.test(msg.toLowerCase())) {
+      showToast('Erro de autenticação Agora. Tente novamente.');
+    } else {
+      showToast('Erro ao iniciar: ' + msg.substring(0, 100));
+    }
+    // Reabilitar botão de encerrar para o host sair sem travar
+    const endBtn = document.querySelector('.ctrl-end');
+    if (endBtn) endBtn.onclick = () => { location.href = '../index.html'; };
   }
 }
 

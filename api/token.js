@@ -16,10 +16,11 @@ module.exports = function handler(req, res) {
   try {
     const expireAt = Math.floor(Date.now() / 1000) + 7200; // 2 horas
     const token = RtcTokenBuilder.buildTokenWithUid(
-      APP_ID, cert, channel, 0, RtcRole.PUBLISHER, expireAt
+      APP_ID, cert, channel, 0, RtcRole.PUBLISHER, expireAt, expireAt
     );
     res.status(200).json({ token, expireAt });
   } catch (e) {
-    res.status(500).json({ error: 'token generation failed' });
+    console.error('Token error:', e);
+    res.status(500).json({ error: e.message || 'token generation failed' });
   }
 };
