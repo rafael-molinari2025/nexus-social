@@ -217,6 +217,20 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
     }
 
+    // ── Eventos ───────────────────────────────────────────────────
+    match /events/{eventId} {
+      allow read: if request.auth != null
+        && (resource.data.get('privacy', 'public') in ['public', 'friends']
+            || resource.data.createdBy == request.auth.uid);
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && (resource.data.createdBy == request.auth.uid
+            || request.resource.data.diff(resource.data).affectedKeys().hasAny(['attendees', 'interested']));
+      allow delete: if request.auth != null
+        && resource.data.createdBy == request.auth.uid;
+    }
+
     // ── Conversas diretas ────────────────────────────────────────
     match /conversations/{convId} {
       // Criar nova conversa

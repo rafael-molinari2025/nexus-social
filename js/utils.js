@@ -232,6 +232,7 @@ function renderTopbar(user, activePage = 'feed') {
       <button class="topbar-nav-btn${activePage==='friends'?' active':''}" title="Amigos" onclick="location.href='${PAGES}amigos.html'"><i class="ti ti-users" aria-hidden="true"></i></button>
       <button class="topbar-nav-btn${activePage==='messages'?' active':''}" title="Mensagens" onclick="location.href='${PAGES}mensagens.html'"><i class="ti ti-message-circle-2" aria-hidden="true"></i></button>
       <button class="topbar-nav-btn${activePage==='communities'?' active':''}" title="Comunidades" onclick="location.href='${PAGES}comunidades.html'"><i class="ti ti-users-group" aria-hidden="true"></i></button>
+      <button class="topbar-nav-btn${activePage==='events'?' active':''}" title="Eventos" onclick="location.href='${PAGES}eventos.html'"><i class="ti ti-calendar-event" aria-hidden="true"></i></button>
       <button class="topbar-nav-btn${activePage==='trends'?' active':''}" title="Tendências" onclick="location.href='${PAGES}tendencias.html'"><i class="ti ti-trending-up" aria-hidden="true"></i></button>
       <div class="notif-topbar-wrap">
         <button class="topbar-nav-btn${activePage==='notifications'?' active':''}" title="Notificações" id="notif-btn" onclick="toggleNotifPanel('${user.uid}')">
@@ -268,6 +269,9 @@ function renderTopbar(user, activePage = 'feed') {
         </a>
         <a href="${PAGES}salvos.html" class="user-dropdown-item">
           <i class="ti ti-bookmark" aria-hidden="true"></i> Posts salvos
+        </a>
+        <a href="${PAGES}eventos.html" class="user-dropdown-item">
+          <i class="ti ti-calendar-event" aria-hidden="true"></i> Eventos
         </a>
         <a href="${PAGES}tendencias.html" class="user-dropdown-item">
           <i class="ti ti-trending-up" aria-hidden="true"></i> Tendências
@@ -358,9 +362,9 @@ function renderTopbar(user, activePage = 'feed') {
         <i class="ti ti-message-circle-2" aria-hidden="true"></i>
         <span>Chat</span>
       </button>
-      <button class="bottom-nav-btn${activePage==='communities'?' active':''}" onclick="location.href='${PAGES}comunidades.html'" title="Comunidades">
-        <i class="ti ti-users-group" aria-hidden="true"></i>
-        <span>Grupos</span>
+      <button class="bottom-nav-btn${activePage==='events'?' active':''}" onclick="location.href='${PAGES}eventos.html'" title="Eventos">
+        <i class="ti ti-calendar-event" aria-hidden="true"></i>
+        <span>Eventos</span>
       </button>
       <button class="bottom-nav-btn${activePage==='notifications'?' active':''}" id="bnav-notif-btn" onclick="toggleNotifPanel('${user.uid}')" title="Notificações">
         <i class="ti ti-bell" aria-hidden="true"></i>
@@ -569,6 +573,34 @@ async function uploadToCloudinary(file, options = {}) {
   } catch(e) {
     clearTimeout(timeoutId);
     if (e.name === 'AbortError') throw new Error('O upload demorou demais. Tente com uma imagem menor.');
+    throw e;
+  }
+}
+
+async function uploadVideoToCloudinary(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', _CLOUDINARY_PRESET);
+  formData.append('resource_type', 'video');
+
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(() => ctrl.abort(), 120000);
+
+  try {
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${_CLOUDINARY_CLOUD}/video/upload`,
+      { method: 'POST', body: formData, signal: ctrl.signal }
+    );
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error?.message || `Falha no upload (${res.status})`);
+    }
+    const data = await res.json();
+    return data.secure_url;
+  } catch(e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') throw new Error('O upload do vídeo demorou demais. Tente com um vídeo menor.');
     throw e;
   }
 }

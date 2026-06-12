@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Eventos</title>
+  <meta name="description" content="Crie e participe de eventos no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <style>
+    .eventos-page { max-width: 860px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .eventos-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; gap: 1rem; flex-wrap: wrap; }
+    .eventos-title { font-size: 20px; font-weight: 700; }
+    .ev-tabs { display: flex; gap: .4rem; margin-bottom: 1.25rem; }
+    .ev-tab { padding: .4rem 1rem; border: 0.5px solid var(--border-md); border-radius: var(--radius-full); background: none; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text-secondary); font-family: var(--font-sans); transition: all var(--transition); }
+    .ev-tab.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+
+    .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+
+    .ev-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+      transition: box-shadow var(--transition); cursor: pointer;
+    }
+    .ev-card:hover { box-shadow: var(--shadow-md); }
+
+    .ev-cover {
+      height: 130px; background: var(--gradient-primary); position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ev-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .ev-cover-icon { font-size: 48px; opacity: .6; }
+    .ev-date-badge {
+      position: absolute; top: .75rem; left: .75rem;
+      background: var(--surface); border-radius: var(--radius-sm);
+      padding: .25rem .55rem; font-size: 12px; font-weight: 700;
+      color: var(--purple-600); box-shadow: var(--shadow-sm);
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .ev-privacy-badge {
+      position: absolute; top: .75rem; right: .75rem;
+      background: rgba(0,0,0,.45); border-radius: var(--radius-full);
+      padding: .2rem .55rem; font-size: 11px; color: rgba(255,255,255,.9);
+    }
+
+    .ev-body { padding: .875rem 1rem 1rem; }
+    .ev-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: .4rem; line-height: 1.35; }
+    .ev-meta { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .75rem; }
+    .ev-meta-row { display: flex; align-items: center; gap: .45rem; font-size: 12.5px; color: var(--text-secondary); }
+    .ev-meta-row i { font-size: 14px; color: var(--purple-400); flex-shrink: 0; }
+    .ev-host { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: var(--text-muted); margin-bottom: .75rem; }
+    .ev-attendees { font-size: 12px; color: var(--text-muted); margin-bottom: .75rem; }
+    .ev-rsvp { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .ev-rsvp-btn {
+      flex: 1; min-width: 0; padding: .45rem .5rem; border: 1.5px solid var(--border-md);
+      border-radius: var(--radius-md); font-size: 12px; font-weight: 600;
+      cursor: pointer; background: none; font-family: var(--font-sans);
+      color: var(--text-secondary); transition: all var(--transition);
+      display: flex; align-items: center; justify-content: center; gap: .3rem;
+    }
+    .ev-rsvp-btn:hover { border-color: var(--purple-400); color: var(--purple-600); background: var(--indigo-50); }
+    .ev-rsvp-btn.going { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+    .ev-rsvp-btn.interested { background: var(--indigo-50); color: var(--purple-600); border-color: var(--purple-400); }
+
+    .ev-empty { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+    .ev-empty i { font-size: 48px; opacity: .3; display: block; margin-bottom: .75rem; }
+
+    /* Create modal */
+    .ev-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    @media (max-width: 500px) { .ev-form-grid { grid-template-columns: 1fr; } }
+
+    @media (max-width: 768px) {
+      .eventos-page { padding: 1rem .5rem calc(80px + 1rem); }
+      .ev-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div class="toast" id="toast"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="eventos-page">
+
+    <div class="eventos-header">
+      <div>
+        <h1 class="eventos-title"><i class="ti ti-calendar-event" style="color:var(--purple-600)"></i> Eventos</h1>
+        <p style="font-size:13px;color:var(--text-muted);margin-top:.2rem">Crie e participe de eventos com seus amigos</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateModal()">
+        <i class="ti ti-plus"></i> Criar evento
+      </button>
+    </div>
+
+    <div class="ev-tabs">
+      <button class="ev-tab active" id="tab-upcoming" onclick="switchTab('upcoming')">Próximos</button>
+      <button class="ev-tab" id="tab-mine" onclick="switchTab('mine')">Meus eventos</button>
+      <button class="ev-tab" id="tab-past" onclick="switchTab('past')">Passados</button>
+    </div>
+
+    <div id="ev-list">
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Create / Edit modal -->
+<div class="modal-overlay" id="ev-modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <span class="modal-title" id="ev-modal-title"><i class="ti ti-calendar-plus"></i> Criar evento</span>
+      <button class="btn btn-icon" onclick="closeModal()">&times;</button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:.75rem">
+      <div class="form-group">
+        <label class="form-label">Título do evento <span style="color:var(--coral-400)">*</span></label>
+        <input class="form-input" id="ev-title" placeholder="Ex: Churrasco na casa do João" maxlength="100">
+      </div>
+
+      <div class="ev-form-grid">
+        <div class="form-group">
+          <label class="form-label">Data <span style="color:var(--coral-400)">*</span></label>
+          <input class="form-input" type="date" id="ev-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Horário</label>
+          <input class="form-input" type="time" id="ev-time">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Local</label>
+        <input class="form-input" id="ev-location" placeholder="Ex: Rua das Flores, 123 — São Paulo" maxlength="150">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Descrição</label>
+        <textarea class="form-input" id="ev-desc" rows="3" placeholder="Detalhes do evento..." maxlength="1000" style="resize:vertical;font-family:var(--font-sans)"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Foto de capa (opcional, máx. 8MB)</label>
+        <input type="file" id="ev-cover-input" accept="image/*" style="display:none" onchange="previewEvCover(this)">
+        <div id="ev-cover-preview" style="min-height:80px;border:1.5px dashed var(--border-md);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);font-size:13px;gap:.5rem;background:var(--gray-50)"
+             onclick="document.getElementById('ev-cover-input').click()">
+          <i class="ti ti-photo" style="font-size:20px"></i> Adicionar foto de capa
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Privacidade</label>
+        <select class="form-input" id="ev-privacy" style="cursor:pointer">
+          <option value="public">🌐 Público — qualquer pessoa no Nexus</option>
+          <option value="friends">👥 Amigos — apenas seus amigos</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="ev-modal-error" style="display:none;font-size:13px;color:var(--coral-400);margin-top:.75rem"></div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:1rem;height:44px" id="ev-save-btn" onclick="saveEvent()">
+      <i class="ti ti-calendar-check"></i> Criar evento
+    </button>
+  </div>
+</div>
+
+<!-- Event detail modal -->
+<div class="modal-overlay" id="ev-detail-modal" onclick="if(event.target===this)closeDetailModal()">
+  <div class="modal" style="max-width:560px;padding:0;overflow:hidden">
+    <div id="ev-detail-content"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let _currentTab = 'upcoming';
+let _editingId  = null;
+let _evCoverFile = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'events');
+  loadEvents();
+  // Set min date to today
+  document.getElementById('ev-date').min = new Date().toISOString().slice(0,10);
+});
+
+// ── Tabs ──────────────────────────────────────────────────────
+function switchTab(tab) {
+  _currentTab = tab;
+  document.querySelectorAll('.ev-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${tab}`)?.classList.add('active');
+  loadEvents();
+}
+
+// ── Load events ───────────────────────────────────────────────
+async function loadEvents() {
+  const el = document.getElementById('ev-list');
+  el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    let q;
+    if (_currentTab === 'mine') {
+      q = db.collection('events').where('createdBy','==',currentUser.uid).orderBy('date','desc').limit(30);
+    } else if (_currentTab === 'past') {
+      q = db.collection('events').where('privacy','==','public').orderBy('date','desc').limit(30);
+    } else {
+      q = db.collection('events').where('privacy','==','public').orderBy('date','asc').limit(50);
+    }
+    const snap = await q.get();
+    let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (_currentTab === 'upcoming') {
+      docs = docs.filter(e => e.date >= today);
+    } else if (_currentTab === 'past') {
+      docs = docs.filter(e => e.date < today);
+    }
+
+    if (!docs.length) {
+      el.innerHTML = `<div class="ev-empty">
+        <i class="ti ti-calendar-off"></i>
+        <p>${_currentTab === 'upcoming' ? 'Nenhum evento próximo ainda.<br>Seja o primeiro a criar!' : _currentTab === 'mine' ? 'Você ainda não criou nenhum evento.' : 'Nenhum evento passado.'}</p>
+        ${_currentTab !== 'past' ? `<button class="btn btn-primary" style="margin-top:1rem" onclick="openCreateModal()"><i class="ti ti-plus"></i> Criar evento</button>` : ''}
+      </div>`;
+      return;
+    }
+    el.innerHTML = `<div class="ev-grid">${docs.map(ev => evCardHTML(ev)).join('')}</div>`;
+  } catch(e) {
+    console.error(e);
+    el.innerHTML = `<div class="ev-empty"><i class="ti ti-alert-circle"></i><p>Erro ao carregar eventos.</p></div>`;
+  }
+}
+
+// ── Event card HTML ───────────────────────────────────────────
+function evCardHTML(ev) {
+  const going      = (ev.attendees||[]).includes(currentUser.uid);
+  const interested = (ev.interested||[]).includes(currentUser.uid);
+  const total      = (ev.attendees||[]).length;
+  const intCount   = (ev.interested||[]).length;
+  const dateStr    = ev.date ? new Date(ev.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'numeric', month:'long' }) : '';
+  const timeStr    = ev.time ? ` às ${ev.time}` : '';
+  const isOwn      = ev.createdBy === currentUser.uid;
+  const isPast     = ev.date < new Date().toISOString().slice(0,10);
+
+  const cover = ev.coverURL
+    ? `<img src="${ev.coverURL}" alt="Capa do evento">`
+    : `<i class="ev-cover-icon ti ti-calendar-event"></i>`;
+
+  return `<div class="ev-card" id="ev-card-${ev.id}">
+    <div class="ev-cover" style="${!ev.coverURL ? 'background:var(--gradient-primary)' : ''}">
+      ${cover}
+      <div class="ev-date-badge">${ev.date ? new Date(ev.date+'T12:00:00').toLocaleDateString('pt-BR',{day:'numeric',month:'short'}).replace('.',',') : ''}</div>
+      <div class="ev-privacy-badge"><i class="ti ti-${ev.privacy==='friends'?'users':'world'}" style="font-size:10px"></i> ${ev.privacy==='friends'?'Amigos':'Público'}</div>
+    </div>
+    <div class="ev-body" onclick="openDetail('${ev.id}')">
+      <div class="ev-title">${sanitize(ev.title||'')}</div>
+      <div class="ev-meta">
+        ${dateStr ? `<div class="ev-meta-row"><i class="ti ti-calendar"></i>${sanitize(dateStr+timeStr)}</div>` : ''}
+        ${ev.location ? `<div class="ev-meta-row"><i class="ti ti-map-pin"></i>${sanitize(ev.location)}</div>` : ''}
+      </div>
+      <div class="ev-host">
+        <i class="ti ti-user-circle" style="font-size:14px"></i>
+        Por <strong style="margin-left:.2rem">${sanitize(ev.createdByName||'Usuário')}</strong>
+        ${isOwn ? ' <span style="color:var(--purple-400)">(você)</span>' : ''}
+      </div>
+      <div class="ev-attendees">
+        ${total ? `<strong>${total}</strong> ${total===1?'pessoa vai':'pessoas vão'}` : 'Ninguém confirmou ainda'}
+        ${intCount ? ` · <strong>${intCount}</strong> interessados` : ''}
+      </div>
+    </div>
+    ${!isPast ? `<div class="ev-rsvp" style="padding:0 1rem 1rem;gap:.4rem">
+      <button class="ev-rsvp-btn${going?' going':''}" onclick="rsvp(event,'${ev.id}','going')">
+        <i class="ti ti-${going?'check':'calendar-check'}"></i> ${going?'Confirmado':'Vou'}
+      </button>
+      <button class="ev-rsvp-btn${interested?' interested':''}" onclick="rsvp(event,'${ev.id}','interested')">
+        <i class="ti ti-star${interested?'-filled':''}"></i> Interesse
+      </button>
+      ${isOwn ? `<button class="ev-rsvp-btn" style="flex:0;padding:.45rem .6rem" onclick="openEditModal(event,'${ev.id}')" title="Editar"><i class="ti ti-pencil"></i></button>
+        <button class="ev-rsvp-btn" style="flex:0;padding:.45rem .6rem;color:var(--coral-400)" onclick="deleteEvent(event,'${ev.id}')" title="Excluir"><i class="ti ti-trash"></i></button>` : ''}
+    </div>` : `<div style="padding:.5rem 1rem 1rem;font-size:12px;color:var(--text-muted)">Evento encerrado</div>`}
+  </div>`;
+}
+
+// ── RSVP ──────────────────────────────────────────────────────
+async function rsvp(e, evId, type) {
+  e.stopPropagation();
+  const ref   = db.collection('events').doc(evId);
+  const snap  = await ref.get();
+  if (!snap.exists) return;
+  const data  = snap.data();
+  const going = (data.attendees||[]).includes(currentUser.uid);
+  const inter = (data.interested||[]).includes(currentUser.uid);
+  const uid   = currentUser.uid;
+
+  let updates = {};
+  if (type === 'going') {
+    updates = {
+      attendees: going
+        ? firebase.firestore.FieldValue.arrayRemove(uid)
+        : firebase.firestore.FieldValue.arrayUnion(uid),
+      interested: firebase.firestore.FieldValue.arrayRemove(uid)
+    };
+    showToast(going ? 'Presença cancelada.' : 'Presença confirmada! 🎉');
+  } else {
+    updates = {
+      interested: inter
+        ? firebase.firestore.FieldValue.arrayRemove(uid)
+        : firebase.firestore.FieldValue.arrayUnion(uid),
+      attendees: firebase.firestore.FieldValue.arrayRemove(uid)
+    };
+    showToast(inter ? 'Interesse removido.' : 'Interesse registrado! ⭐');
+  }
+  await ref.update(updates);
+  loadEvents();
+}
+
+// ── Create / Edit modal ───────────────────────────────────────
+function openCreateModal() {
+  _editingId  = null;
+  _evCoverFile = null;
+  document.getElementById('ev-modal-title').innerHTML = '<i class="ti ti-calendar-plus"></i> Criar evento';
+  document.getElementById('ev-save-btn').innerHTML = '<i class="ti ti-calendar-check"></i> Criar evento';
+  document.getElementById('ev-title').value = '';
+  document.getElementById('ev-date').value = '';
+  document.getElementById('ev-time').value = '';
+  document.getElementById('ev-location').value = '';
+  document.getElementById('ev-desc').value = '';
+  document.getElementById('ev-privacy').value = 'public';
+  document.getElementById('ev-modal-error').style.display = 'none';
+  resetEvCoverPreview();
+  document.getElementById('ev-modal').classList.add('open');
+  setTimeout(() => document.getElementById('ev-title').focus(), 120);
+}
+
+async function openEditModal(e, evId) {
+  e.stopPropagation();
+  const snap = await db.collection('events').doc(evId).get();
+  if (!snap.exists) return;
+  const d = snap.data();
+  _editingId  = evId;
+  _evCoverFile = null;
+  document.getElementById('ev-modal-title').innerHTML = '<i class="ti ti-pencil"></i> Editar evento';
+  document.getElementById('ev-save-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
+  document.getElementById('ev-title').value = d.title || '';
+  document.getElementById('ev-date').value = d.date || '';
+  document.getElementById('ev-time').value = d.time || '';
+  document.getElementById('ev-location').value = d.location || '';
+  document.getElementById('ev-desc').value = d.description || '';
+  document.getElementById('ev-privacy').value = d.privacy || 'public';
+  document.getElementById('ev-modal-error').style.display = 'none';
+  if (d.coverURL) {
+    const prev = document.getElementById('ev-cover-preview');
+    prev.innerHTML = `<img src="${d.coverURL}" style="width:100%;height:120px;object-fit:cover;border-radius:var(--radius-md)">`;
+    prev.style.border = 'none';
+  } else {
+    resetEvCoverPreview();
+  }
+  document.getElementById('ev-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('ev-modal').classList.remove('open');
+}
+
+function previewEvCover(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) return showToast('Imagem deve ter no máximo 8MB.');
+  _evCoverFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const prev = document.getElementById('ev-cover-preview');
+    prev.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:120px;object-fit:cover;border-radius:var(--radius-md)">`;
+    prev.style.border = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetEvCoverPreview() {
+  const prev = document.getElementById('ev-cover-preview');
+  prev.innerHTML = '<i class="ti ti-photo" style="font-size:20px"></i> Adicionar foto de capa';
+  prev.style.border = '1.5px dashed var(--border-md)';
+}
+
+async function saveEvent() {
+  const title = document.getElementById('ev-title').value.trim();
+  const date  = document.getElementById('ev-date').value;
+  const err   = document.getElementById('ev-modal-error');
+  if (!title) { err.textContent = 'O título é obrigatório.'; err.style.display='block'; return; }
+  if (!date)  { err.textContent = 'A data é obrigatória.'; err.style.display='block'; return; }
+  err.style.display = 'none';
+
+  const btn = document.getElementById('ev-save-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Salvando…';
+
+  try {
+    let coverURL = null;
+    if (_evCoverFile) {
+      coverURL = await uploadToCloudinary(_evCoverFile, { compress: true, maxWidth: 1200, maxHeight: 630 });
+    } else if (_editingId) {
+      const existing = await db.collection('events').doc(_editingId).get();
+      coverURL = existing.data()?.coverURL || null;
+    }
+
+    const userData = await getUserData(currentUser.uid);
+    const payload = {
+      title,
+      date,
+      time:        document.getElementById('ev-time').value || '',
+      location:    document.getElementById('ev-location').value.trim(),
+      description: document.getElementById('ev-desc').value.trim(),
+      privacy:     document.getElementById('ev-privacy').value,
+      coverURL,
+      createdBy:    currentUser.uid,
+      createdByName: currentUser.displayName || userData?.displayName || 'Usuário',
+      createdByPhoto: currentUser.photoURL || userData?.photoURL || null,
+    };
+
+    if (_editingId) {
+      await db.collection('events').doc(_editingId).update(payload);
+      showToast('Evento atualizado!');
+    } else {
+      payload.attendees  = [currentUser.uid];
+      payload.interested = [];
+      payload.createdAt  = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('events').add(payload);
+      showToast('Evento criado! 🎉');
+    }
+    closeModal();
+    loadEvents();
+  } catch(e) {
+    console.error(e);
+    err.textContent = 'Erro ao salvar o evento. Tente novamente.';
+    err.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.innerHTML = _editingId
+    ? '<i class="ti ti-device-floppy"></i> Salvar alterações'
+    : '<i class="ti ti-calendar-check"></i> Criar evento';
+}
+
+// ── Delete ────────────────────────────────────────────────────
+async function deleteEvent(e, evId) {
+  e.stopPropagation();
+  if (!confirm('Excluir este evento? Esta ação não pode ser desfeita.')) return;
+  try {
+    await db.collection('events').doc(evId).delete();
+    showToast('Evento excluído.');
+    loadEvents();
+  } catch(e) { showToast('Erro ao excluir evento.'); }
+}
+
+// ── Detail modal ──────────────────────────────────────────────
+async function openDetail(evId) {
+  const snap = await db.collection('events').doc(evId).get();
+  if (!snap.exists) return;
+  const ev = { id: snap.id, ...snap.data() };
+  const going      = (ev.attendees||[]).includes(currentUser.uid);
+  const interested = (ev.interested||[]).includes(currentUser.uid);
+  const isOwn      = ev.createdBy === currentUser.uid;
+  const isPast     = ev.date < new Date().toISOString().slice(0,10);
+  const dateStr    = ev.date ? new Date(ev.date+'T12:00:00').toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '';
+  const timeStr    = ev.time ? ` às ${ev.time}` : '';
+  const total      = (ev.attendees||[]).length;
+  const intCount   = (ev.interested||[]).length;
+
+  const cl = getAvatarColor(ev.createdBy || '');
+  const av = ev.createdByPhoto
+    ? `<img src="${ev.createdByPhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(ev.createdByName||'?')}</span>`;
+
+  document.getElementById('ev-detail-content').innerHTML = `
+    <div style="${ev.coverURL ? '' : 'background:var(--gradient-primary);height:180px;display:flex;align-items:center;justify-content:center;'}position:relative">
+      ${ev.coverURL
+        ? `<img src="${ev.coverURL}" style="width:100%;height:180px;object-fit:cover;display:block">`
+        : `<i class="ti ti-calendar-event" style="font-size:64px;color:rgba(255,255,255,.7)"></i>`}
+      <button class="btn btn-icon" onclick="closeDetailModal()" style="position:absolute;top:.75rem;right:.75rem;background:rgba(0,0,0,.45);color:#fff;border:none;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center">&times;</button>
+    </div>
+    <div style="padding:1.25rem">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:1rem;line-height:1.3">${sanitize(ev.title||'')}</h2>
+      <div style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1rem">
+        ${dateStr ? `<div style="display:flex;align-items:center;gap:.6rem;font-size:14px"><i class="ti ti-calendar" style="color:var(--purple-400);font-size:18px"></i><div><strong>${sanitize(dateStr)}</strong>${timeStr ? `<div style="font-size:12px;color:var(--text-muted)">${sanitize(timeStr)}</div>` : ''}</div></div>` : ''}
+        ${ev.location ? `<div style="display:flex;align-items:flex-start;gap:.6rem;font-size:14px"><i class="ti ti-map-pin" style="color:var(--purple-400);font-size:18px;margin-top:1px;flex-shrink:0"></i><span>${sanitize(ev.location)}</span></div>` : ''}
+      </div>
+      ${ev.description ? `<p style="font-size:14px;color:var(--text-secondary);line-height:1.6;margin-bottom:1rem;white-space:pre-wrap">${sanitize(ev.description)}</p>` : ''}
+      <div style="display:flex;align-items:center;gap:.65rem;padding:.75rem;background:var(--gray-50);border-radius:var(--radius-md);margin-bottom:1rem">
+        <div class="avatar avatar-36" style="background:${cl.bg}">${av}</div>
+        <div>
+          <div style="font-size:13px;font-weight:600">${sanitize(ev.createdByName||'Usuário')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">Organizador</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:1rem">
+        <strong style="color:var(--text-primary)">${total}</strong> ${total===1?'pessoa confirmou':'pessoas confirmaram'} presença
+        ${intCount ? ` · <strong style="color:var(--text-primary)">${intCount}</strong> interessados` : ''}
+      </div>
+      ${!isPast ? `<div style="display:flex;gap:.5rem">
+        <button class="ev-rsvp-btn${going?' going':''}" style="flex:1;height:42px;font-size:13px" onclick="rsvp(event,'${ev.id}','going');closeDetailModal()">
+          <i class="ti ti-${going?'check':'calendar-check'}"></i> ${going?'Confirmado':'Vou'}
+        </button>
+        <button class="ev-rsvp-btn${interested?' interested':''}" style="flex:1;height:42px;font-size:13px" onclick="rsvp(event,'${ev.id}','interested');closeDetailModal()">
+          <i class="ti ti-star${interested?'-filled':''}"></i> ${interested?'Interessado':'Interesse'}
+        </button>
+      </div>` : `<p style="text-align:center;font-size:13px;color:var(--text-muted)">Este evento já aconteceu.</p>`}
+    </div>`;
+  document.getElementById('ev-detail-modal').classList.add('open');
+}
+
+function closeDetailModal() {
+  document.getElementById('ev-detail-modal').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  closeModal();
+  closeDetailModal();
+});
+</script>
+</body>
+</html>

@@ -577,6 +577,7 @@ async function loadProfileStats(uid) {
 }
 
 function _profilePostImageHTML(p) {
+  if (p.videoURL) return `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:360px;border-radius:var(--radius-md);background:#000;display:block;margin-bottom:.5rem" onclick="event.stopPropagation()"></video>`;
   const imgs = p.images?.length ? p.images : (p.imageURL ? [p.imageURL] : []);
   if (!imgs.length) return '';
   if (imgs.length === 1) {

@@ -341,7 +341,7 @@
         </div>
       </div>
     </div>
-    <input type="file" id="post-image-input" accept="image/*" multiple style="display:none"
+    <input type="file" id="post-image-input" accept="image/*,video/*" multiple style="display:none"
            onchange="previewPostImage(this)">
 
     <!-- Posts -->
@@ -368,6 +368,18 @@
       <div class="card-body">
         <div class="card-title">hashtags em alta</div>
         <div id="trending-hashtags"></div>
+      </div>
+    </div>
+    <div class="card" id="birthdays-widget" style="display:none">
+      <div class="card-body">
+        <div class="card-title"><i class="ti ti-cake" aria-hidden="true" style="color:var(--purple-600)"></i> aniversariantes</div>
+        <div id="birthdays-list"></div>
+      </div>
+    </div>
+    <div class="card" id="memories-widget" style="display:none">
+      <div class="card-body">
+        <div class="card-title"><i class="ti ti-clock-heart" aria-hidden="true" style="color:var(--purple-600)"></i> memórias</div>
+        <div id="memories-list"></div>
       </div>
     </div>
   </aside>
@@ -539,6 +551,8 @@ requireAuth(async user => {
     .catch(() => {});
 
   loadTrendingHashtags();
+  loadBirthdayWidget();
+  loadMemoriesWidget();
 
   document.getElementById('auth-loading')?.remove();
 });
@@ -664,20 +678,38 @@ function insertEmoji() {
   ta.setSelectionRange(pos + e.length, pos + e.length);
 }
 
+let _postVideoFile = null;
+
 function previewPostImage(input) {
   const files = Array.from(input.files).slice(0, 4);
   if (!files.length) return;
-  if (files.some(f => !f.type.startsWith('image/'))) return showToast('Selecione apenas imagens.');
-  if (files.some(f => f.size > 8 * 1024 * 1024)) return showToast('Cada imagem deve ter no máximo 8MB.');
-  _postImageFiles = files;
   const wrap = document.getElementById('image-preview-wrap');
-  wrap.style.display = 'block';
+
+  // Video: single file only
+  if (files[0].type.startsWith('video/')) {
+    if (files[0].size > 60 * 1024 * 1024) return showToast('Vídeo deve ter no máximo 60MB.');
+    _postVideoFile = files[0];
+    _postImageFiles = [];
+    const url = URL.createObjectURL(files[0]);
+    wrap.style.display = 'block';
+    wrap.innerHTML = `<div style="position:relative">
+      <video src="${url}" controls style="width:100%;max-height:240px;border-radius:var(--radius-md);background:#000;display:block"></video>
+      <button class="composer-image-remove" onclick="removePostImage()" title="Remover" style="position:absolute;top:4px;right:4px;z-index:1"><i class="ti ti-x"></i></button>
+    </div>`;
+    return;
+  }
+
+  if (files.some(f => !f.type.startsWith('image/'))) return showToast('Selecione apenas imagens ou um vídeo.');
+  if (files.some(f => f.size > 8 * 1024 * 1024)) return showToast('Cada imagem deve ter no máximo 8MB.');
+  _postVideoFile = null;
+  _postImageFiles = files;
   const readAll = files.map(f => new Promise(res => {
     const r = new FileReader();
     r.onload = e => res(e.target.result);
     r.readAsDataURL(f);
   }));
   Promise.all(readAll).then(srcs => {
+    wrap.style.display = 'block';
     wrap.innerHTML = `<div style="display:flex;gap:.3rem;flex-wrap:wrap;position:relative">
       ${srcs.map((src, i) => `<div style="position:relative;flex:1;min-width:80px;max-width:200px">
         <img src="${src}" style="width:100%;height:90px;object-fit:cover;border-radius:var(--radius-sm)">
@@ -689,6 +721,7 @@ function previewPostImage(input) {
 
 function removePostImage() {
   _postImageFiles = [];
+  _postVideoFile  = null;
   const w = document.getElementById('image-preview-wrap');
   w.style.display = 'none'; w.innerHTML = '';
   document.getElementById('post-image-input').value = '';
@@ -774,7 +807,7 @@ function dismissLinkPreview() {
 // ── Create post ────────────────────────────────────────────────
 async function createPost() {
   const text = document.getElementById('post-text').value.trim();
-  if (!text && !_postImageFiles.length && !_pollActive) return showToast('Escreva algo, adicione uma imagem ou crie uma enquete.');
+  if (!text && !_postImageFiles.length && !_postVideoFile && !_pollActive) return showToast('Escreva algo, adicione uma imagem, vídeo ou crie uma enquete.');
   if (text.length > 2000) return showToast('Post muito longo. Máximo 2000 caracteres.');
   if (!checkRateLimit('post_' + currentUser.uid, 3, 60000))
     return showToast('Muitos posts seguidos. Aguarde um momento.');
@@ -783,9 +816,15 @@ async function createPost() {
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Publicando…';
   const reset = () => { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Publicar'; };
   try {
-    // Multiple images
+    // Multiple images or video
     let images = [];
-    if (_postImageFiles.length) {
+    let videoURL = null;
+    if (_postVideoFile) {
+      try {
+        btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Enviando vídeo…';
+        videoURL = await uploadVideoToCloudinary(_postVideoFile);
+      } catch(e) { showToast('Erro ao enviar vídeo. Tente novamente.'); reset(); return; }
+    } else if (_postImageFiles.length) {
       try { images = await Promise.all(_postImageFiles.map(f => uploadToCloudinary(f))); }
       catch(e) { showToast(e.name === 'AbortError' ? 'Upload demorou demais.' : 'Erro ao enviar imagem.'); reset(); return; }
     }
@@ -794,6 +833,7 @@ async function createPost() {
       text: text || '',
       images,
       imageURL: images[0] || null,
+      videoURL: videoURL || null,
       authorId:       currentUser.uid,
       authorName:     currentUser.displayName,
       authorPhoto:    currentUser.photoURL || null,
@@ -834,6 +874,7 @@ async function createPost() {
       }
     }
     document.getElementById('post-text').value = '';
+    _postVideoFile = null;
     removePostImage();
     hideLinkPreview();
     // Reset poll
@@ -1014,7 +1055,7 @@ function postHTML(id, p) {
     </div>
     ${p.repostOf ? repostBlockHTML(p.repostOf) : ''}
     ${p.text ? `<div class="post-body">${parsePostText(p.text)}</div>` : ''}
-    ${(p.images?.length > 1) ? carouselHTML(id, p.images) : (p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" onerror="this.style.display='none'" onclick="openLightbox([this.src])" style="cursor:zoom-in">` : '')}
+    ${p.videoURL ? `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:420px;border-radius:var(--radius-md);background:#000;display:block;margin-bottom:.5rem" onclick="event.stopPropagation()"></video>` : (p.images?.length > 1) ? carouselHTML(id, p.images) : (p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" onerror="this.style.display='none'" onclick="openLightbox([this.src])" style="cursor:zoom-in">` : '')}
     ${p.poll ? pollHTML(id, p.poll) : ''}
     ${p.linkPreview ? linkPreviewCardHTML(p.linkPreview) : ''}
     ${topEmoji.length || totalRxn ? `
@@ -1578,6 +1619,92 @@ async function loadTrendingHashtags() {
   } catch(e) {
     if (el) el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">—</p>`;
   }
+}
+
+// ── Birthday widget ────────────────────────────────────────────
+async function loadBirthdayWidget() {
+  const widget = document.getElementById('birthdays-widget');
+  const list   = document.getElementById('birthdays-list');
+  if (!widget || !list) return;
+  try {
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${mm}-${dd}`; // MM-DD format for birthday matching
+
+    const friendsSnap = await db.collection('friendships')
+      .where('users', 'array-contains', currentUser.uid).get();
+    const friendUids = [];
+    friendsSnap.docs.forEach(d => d.data().users.forEach(u => { if (u !== currentUser.uid) friendUids.push(u); }));
+    if (!friendUids.length) return;
+
+    const chunks = [];
+    for (let i = 0; i < friendUids.length; i += 10) chunks.push(friendUids.slice(i, i + 10));
+    const friendDocs = (await Promise.all(chunks.map(c =>
+      db.collection('users').where(firebase.firestore.FieldPath.documentId(), 'in', c).get()
+    ))).flatMap(s => s.docs);
+
+    const birthdays = friendDocs.filter(d => {
+      const bd = d.data().birthdate;
+      if (!bd) return false;
+      const parts = bd.split('-');
+      if (parts.length < 3) return false;
+      return `${parts[1]}-${parts[2]}` === todayStr;
+    });
+
+    if (!birthdays.length) return;
+    widget.style.display = '';
+    list.innerHTML = birthdays.map(d => {
+      const u = d.data();
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">`
+        : `<div style="width:32px;height:32px;border-radius:50%;background:${getAvatarColor(d.id)};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">${(u.displayName||'?')[0].toUpperCase()}</div>`;
+      return `<div style="display:flex;align-items:center;gap:.6rem;padding:.4rem 0;border-bottom:0.5px solid var(--border);cursor:pointer"
+                   onclick="location.href='${PAGES}perfil.html?uid=${d.id}'">
+        ${av}
+        <div>
+          <div style="font-size:13px;font-weight:600">${sanitize(u.displayName||'Usuário')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">Hoje é aniversário!</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(_) {}
+}
+
+// ── Memories widget ────────────────────────────────────────────
+async function loadMemoriesWidget() {
+  const widget = document.getElementById('memories-widget');
+  const list   = document.getElementById('memories-list');
+  if (!widget || !list) return;
+  try {
+    const now = new Date();
+    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    const start = new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate());
+    const end   = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+
+    const snap = await db.collection('posts')
+      .where('authorId', '==', currentUser.uid)
+      .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(start))
+      .where('createdAt', '<', firebase.firestore.Timestamp.fromDate(end))
+      .orderBy('createdAt', 'desc')
+      .limit(3)
+      .get();
+
+    if (snap.empty) return;
+    widget.style.display = '';
+    const yearAgoLabel = oneYearAgo.getFullYear();
+    list.innerHTML = `<p style="font-size:12px;color:var(--text-muted);margin-bottom:.5rem">Você postou isto em ${yearAgoLabel}:</p>` +
+      snap.docs.map(d => {
+        const p = d.data();
+        const preview = p.text ? sanitize(p.text).slice(0, 80) + (p.text.length > 80 ? '…' : '') : '';
+        const img = p.imageURL ? `<img src="${p.imageURL}" style="width:100%;height:80px;object-fit:cover;border-radius:var(--radius-sm);margin-top:.3rem" loading="lazy">` : '';
+        return `<div style="padding:.4rem 0;border-bottom:0.5px solid var(--border);cursor:pointer"
+                     onclick="location.href='${PAGES}post.html?id=${d.id}'">
+          ${preview ? `<div style="font-size:13px;line-height:1.4">${preview}</div>` : ''}
+          ${img}
+        </div>`;
+      }).join('');
+  } catch(_) {}
 }
 
 // ── Stories ────────────────────────────────────────────────────
