@@ -20,9 +20,16 @@
       min-width: 0;
       overflow: hidden;
     }
+    /* Faz .live-video-col distribuir altura via flex para o container */
+    .live-video-col {
+      display: flex;
+      flex-direction: column;
+    }
     #agora-video-container {
-      position: absolute;
-      inset: 0;
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
     }
     .live-overlay-top {
       position: absolute;
@@ -499,7 +506,7 @@ function renderHostScreen(liveId, title) {
   document.getElementById('app-root').innerHTML = `
     <div class="live-layout">
       <div class="live-video-col">
-        <div id="agora-video-container" style="position:absolute;inset:0">
+        <div id="agora-video-container">
           <video id="host-video" autoplay muted playsinline webkit-playsinline
                  style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block"></video>
         </div>
@@ -532,12 +539,7 @@ function renderHostScreen(liveId, title) {
   _liveVideoEl = vid;
   vid.srcObject = _hostMediaStream;
 
-  vid.play()
-    .then(() => {
-      const r = vid.getBoundingClientRect();
-      showToast(`✅ frames:${vid.videoWidth}x${vid.videoHeight} box:${Math.round(r.width)}x${Math.round(r.height)} top:${Math.round(r.top)}`);
-    })
-    .catch(e => showToast(`❌ ${e.name}: ${e.message.substring(0,60)}`));
+  vid.play().catch(() => {});
 
   initAgoraHost(liveId);
   subscribeChat(liveId);
@@ -642,7 +644,7 @@ async function joinAsViewer(liveId) {
     document.getElementById('app-root').innerHTML = `
       <div class="live-layout">
         <div class="live-video-col">
-          <div id="agora-video-container" style="position:absolute;inset:0;background:#111">
+          <div id="agora-video-container" style="background:#111">
             <div class="viewer-waiting" id="viewer-waiting">
               <div class="spinner"></div>
               <p style="font-size:14px">Conectando à transmissão…</p>
