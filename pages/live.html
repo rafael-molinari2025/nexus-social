@@ -306,7 +306,7 @@
 <script src="../js/utils.js"></script>
 <script>
 const AGORA_APP_ID      = '6178ae4b6a854914bc111c753bcd6350';
-const AGORA_TOKEN_SERVER = 'https://SUBSTITUA-COM-URL-VERCEL.vercel.app';
+const AGORA_TOKEN_SERVER = 'https://nexus-social-fawn.vercel.app';
 
 async function getAgoraToken(channelName) {
   const res = await fetch(`${AGORA_TOKEN_SERVER}/api/token?channel=${encodeURIComponent(channelName)}`);
