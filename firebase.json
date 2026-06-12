@@ -14,7 +14,9 @@
       "package-lock.json",
       ".eslintrc.json",
       "eslint.config.js",
-      "stylelint.config.js"
+      "stylelint.config.js",
+      "api/**",
+      "vercel.json"
     ],
     "rewrites": [
       {

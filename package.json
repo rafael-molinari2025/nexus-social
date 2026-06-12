@@ -5,6 +5,7 @@
   "devDependencies": {
     "eslint": "^7.32.0",
     "firebase-admin": "^13.10.0",
+    "playwright": "^1.60.0",
     "stylelint": "^16.0.0",
     "stylelint-config-standard": "^35.0.0"
   },
@@ -13,5 +14,8 @@
     "lint:css": "stylelint \"css/**/*.css\"",
     "audit": "npm audit --audit-level=moderate",
     "audit:ci": "npm audit --audit-level=high"
+  },
+  "dependencies": {
+    "agora-token": "^2.0.5"
   }
 }

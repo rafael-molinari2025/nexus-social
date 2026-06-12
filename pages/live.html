@@ -305,7 +305,15 @@
 <script src="../js/firebase-config.js"></script>
 <script src="../js/utils.js"></script>
 <script>
-const AGORA_APP_ID = '6178ae4b6a854914bc111c753bcd6350';
+const AGORA_APP_ID      = '6178ae4b6a854914bc111c753bcd6350';
+const AGORA_TOKEN_SERVER = 'https://SUBSTITUA-COM-URL-VERCEL.vercel.app';
+
+async function getAgoraToken(channelName) {
+  const res = await fetch(`${AGORA_TOKEN_SERVER}/api/token?channel=${encodeURIComponent(channelName)}`);
+  if (!res.ok) throw new Error('Não foi possível obter o token de acesso.');
+  const { token } = await res.json();
+  return token;
+}
 
 const _params  = new URLSearchParams(location.search);
 const _liveId  = _params.get('id');
@@ -485,15 +493,16 @@ function renderHostScreen(liveId, title) {
 
 async function initAgoraHost(liveId) {
   try {
+    const token = await getAgoraToken(liveId);
     _agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     await _agoraClient.setClientRole('host');
-    await _agoraClient.join(AGORA_APP_ID, liveId, null, null);
+    await _agoraClient.join(AGORA_APP_ID, liveId, token, null);
     _localAudio = await AgoraRTC.createMicrophoneAudioTrack();
     _localVideo = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '720p_1' });
     _localVideo.play('agora-video-container');
     await _agoraClient.publish([_localAudio, _localVideo]);
   } catch(e) {
-    showToast('Erro ao acessar câmera/microfone. Verifique as permissões.');
+    showToast('Erro ao iniciar transmissão. Verifique câmera e microfone.');
     console.error('Agora host error:', e);
   }
 }
@@ -617,6 +626,7 @@ async function joinAsViewer(liveId) {
 }
 
 async function initAgoraViewer(liveId) {
+  const token = await getAgoraToken(liveId);
   _agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
   await _agoraClient.setClientRole('audience', { level: 1 });
 
@@ -638,7 +648,7 @@ async function initAgoraViewer(liveId) {
     }
   });
 
-  await _agoraClient.join(AGORA_APP_ID, liveId, null, null);
+  await _agoraClient.join(AGORA_APP_ID, liveId, token, null);
 }
 
 function leaveViewer(liveId) {
