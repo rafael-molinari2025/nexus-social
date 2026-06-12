@@ -72,18 +72,40 @@
 
     @media (max-width: 768px) {
       .eventos-page { padding: 1rem .5rem calc(80px + 1rem); }
-      .ev-grid { grid-template-columns: repeat(2, 1fr); gap: .6rem; }
-      .ev-cover { height: 90px; }
-      .ev-body { padding: .55rem .65rem .5rem; }
-      .ev-title { font-size: 12px; margin-bottom: .25rem; line-height: 1.3; }
-      .ev-meta { gap: .15rem; margin-bottom: .4rem; }
-      .ev-meta-row { font-size: 10px; }
-      .ev-host { font-size: 10px; }
-      .ev-attendees { font-size: 10px; margin-top: .25rem; }
-      .ev-rsvp { padding: 0 .5rem .5rem; gap: .25rem; }
-      .ev-rsvp-btn { font-size: 10px; padding: .3rem .2rem; }
-      .ev-date-badge { font-size: 10px; padding: .2rem .4rem; }
-      .ev-privacy-badge { font-size: 10px; padding: .2rem .4rem; }
+      .ev-grid { grid-template-columns: 1fr; gap: .75rem; }
+
+      /* Card horizontal: imagem à esquerda, conteúdo à direita */
+      .ev-card {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        grid-template-rows: 1fr auto;
+      }
+      .ev-cover {
+        grid-column: 1;
+        grid-row: 1 / 3;
+        height: auto;
+        min-height: 110px;
+        border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+      }
+      .ev-cover img {
+        border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+      }
+      .ev-body {
+        grid-column: 2;
+        grid-row: 1;
+        padding: .65rem .75rem .4rem;
+      }
+      .ev-rsvp {
+        grid-column: 2;
+        grid-row: 2;
+        padding: 0 .75rem .65rem;
+        flex-wrap: wrap;
+        gap: .3rem;
+      }
+      .ev-rsvp-btn { font-size: 11px; }
+      .ev-title { font-size: 13px; }
+      .ev-meta-row { font-size: 11px; }
+      .ev-host, .ev-attendees { font-size: 11px; }
     }
   </style>
 </head>
