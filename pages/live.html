@@ -406,29 +406,25 @@ async function startLive() {
 
   const btn = document.getElementById('btn-go-live');
   btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Acessando câmera…';
 
-  // Passo 1: capturar câmera AGORA — ainda dentro do gesto do usuário
-  // (antes de qualquer await de rede, para garantir permissão no Android)
-  if (_previewStream) {
+  // Reutiliza _previewStream se disponível (sabemos que funciona — testCamera confirmou)
+  // Evita re-aquisição da câmera que falha em alguns dispositivos Android
+  if (_previewStream && _previewStream.active) {
+    _hostMediaStream = _previewStream;
+    _previewStream = null;
     const prevVid = document.getElementById('preview-video');
     if (prevVid) prevVid.srcObject = null;
-    _previewStream.getTracks().forEach(t => t.stop());
-    _previewStream = null;
-  }
-  if (_hostMediaStream) {
-    _hostMediaStream.getTracks().forEach(t => t.stop());
-    _hostMediaStream = null;
-  }
-  try {
-    _hostMediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: true
-    });
-  } catch(e) {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-broadcast"></i> Ir ao vivo agora';
-    return showToast('Permissão de câmera/microfone negada. Verifique as configurações do navegador.');
+  } else {
+    if (_previewStream) { _previewStream.getTracks().forEach(t => t.stop()); _previewStream = null; }
+    if (_hostMediaStream) { _hostMediaStream.getTracks().forEach(t => t.stop()); _hostMediaStream = null; }
+    btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Acessando câmera…';
+    try {
+      _hostMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch(e) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-broadcast"></i> Ir ao vivo agora';
+      return showToast('Permissão de câmera/microfone negada. Verifique as configurações do navegador.');
+    }
   }
 
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Iniciando…';
@@ -482,7 +478,7 @@ function renderHostScreen(liveId, title) {
     <div class="live-layout">
       <div class="live-video-col">
         <div id="agora-video-container" style="width:100%;height:100%;background:#000;position:relative;overflow:hidden">
-          <video id="host-video" autoplay muted playsinline
+          <video id="host-video" autoplay muted playsinline webkit-playsinline
                  style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block"></video>
         </div>
         <div class="live-overlay-top">
@@ -530,12 +526,13 @@ async function initAgoraHost(liveId) {
     await _agoraClient.setClientRole('host');
     await _agoraClient.join(AGORA_APP_ID, liveId, token, null);
 
-    // Custom tracks a partir da stream já capturada
+    // Clone das tracks para Agora — impede que o SDK consuma/pare as tracks originais
+    // que estão sendo exibidas no <video id="host-video">
     _localVideo = AgoraRTC.createCustomVideoTrack({
-      mediaStreamTrack: _hostMediaStream.getVideoTracks()[0]
+      mediaStreamTrack: _hostMediaStream.getVideoTracks()[0].clone()
     });
     _localAudio = AgoraRTC.createCustomAudioTrack({
-      mediaStreamTrack: _hostMediaStream.getAudioTracks()[0]
+      mediaStreamTrack: _hostMediaStream.getAudioTracks()[0].clone()
     });
 
     await _agoraClient.publish([_localAudio, _localVideo]);
