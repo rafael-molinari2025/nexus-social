@@ -319,11 +319,12 @@ const _params  = new URLSearchParams(location.search);
 const _liveId  = _params.get('id');
 const _asHost  = _params.get('host') === '1';
 
-let currentUser   = null;
-let _agoraClient  = null;
-let _localAudio   = null;
-let _localVideo   = null;
-let _micMuted     = false;
+let currentUser      = null;
+let _agoraClient     = null;
+let _localAudio      = null;
+let _localVideo      = null;
+let _hostMediaStream = null; // getUserMedia stream (mais compatível com mobile)
+let _micMuted        = false;
 let _camOff       = false;
 let _chatUnsub    = null;
 let _liveUnsub    = null;
@@ -501,41 +502,52 @@ async function initAgoraHost(liveId) {
     await _agoraClient.setClientRole('host');
     await _agoraClient.join(AGORA_APP_ID, liveId, token, null);
 
-    [_localAudio, _localVideo] = await Promise.all([
-      AgoraRTC.createMicrophoneAudioTrack(),
-      AgoraRTC.createCameraVideoTrack({ facingMode: 'user' })
-    ]);
+    // Usa getUserMedia diretamente — mais compatível com Chrome Android
+    _hostMediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: true
+    });
 
+    // Exibe preview local com <video> nativo (sabemos que funciona)
     const container = document.getElementById('agora-video-container');
-    container.style.cssText += ';position:relative;overflow:hidden';
-    _localVideo.play(container);
+    container.style.position = 'relative';
+    const previewEl = document.createElement('video');
+    previewEl.srcObject = _hostMediaStream;
+    previewEl.autoplay   = true;
+    previewEl.muted      = true;  // mudo localmente para evitar eco
+    previewEl.playsInline = true;
+    previewEl.setAttribute('webkit-playsinline', '');
+    previewEl.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;position:absolute;top:0;left:0;';
+    container.appendChild(previewEl);
+    await previewEl.play().catch(() => {});
 
-    // Garante que o <video> gerado pelo Agora preencha o container no mobile
-    setTimeout(() => {
-      container.querySelectorAll('video').forEach(v => {
-        v.style.width  = '100%';
-        v.style.height = '100%';
-        v.style.objectFit = 'cover';
-        v.setAttribute('playsinline', '');
-        v.setAttribute('webkit-playsinline', '');
-      });
-    }, 600);
+    // Cria custom tracks do Agora a partir das tracks do getUserMedia
+    _localVideo = AgoraRTC.createCustomVideoTrack({
+      mediaStreamTrack: _hostMediaStream.getVideoTracks()[0]
+    });
+    _localAudio = AgoraRTC.createCustomAudioTrack({
+      mediaStreamTrack: _hostMediaStream.getAudioTracks()[0]
+    });
 
     await _agoraClient.publish([_localAudio, _localVideo]);
   } catch(e) {
     console.error('Agora host error:', e);
     const code = e?.code ?? e?.data?.code ?? '';
     const msg  = e?.message || String(e);
-    showToast(`Agora erro ${code ? '#'+code+': ' : ''}${msg.substring(0, 120)}`);
+    if (/NotAllowed|Permission|denied/i.test(msg)) {
+      showToast('Permissão de câmera/microfone negada. Verifique as permissões do navegador.');
+    } else {
+      showToast(`Erro ao iniciar: ${code ? '#'+code+' ' : ''}${msg.substring(0, 100)}`);
+    }
     const endBtn = document.querySelector('.ctrl-end');
     if (endBtn) endBtn.onclick = () => { location.href = '../index.html'; };
   }
 }
 
 function toggleMic() {
-  if (!_localAudio) return;
+  if (!_hostMediaStream) return;
   _micMuted = !_micMuted;
-  _localAudio.setEnabled(!_micMuted);
+  _hostMediaStream.getAudioTracks().forEach(t => { t.enabled = !_micMuted; });
   const btn = document.getElementById('btn-mic');
   if (_micMuted) {
     btn.classList.add('off');
@@ -549,9 +561,11 @@ function toggleMic() {
 }
 
 function toggleCam() {
-  if (!_localVideo) return;
+  if (!_hostMediaStream) return;
   _camOff = !_camOff;
-  _localVideo.setEnabled(!_camOff);
+  _hostMediaStream.getVideoTracks().forEach(t => { t.enabled = !_camOff; });
+  const previewVid = document.querySelector('#agora-video-container video');
+  if (previewVid) previewVid.style.visibility = _camOff ? 'hidden' : '';
   const btn = document.getElementById('btn-cam');
   if (_camOff) {
     btn.classList.add('off');
@@ -569,6 +583,8 @@ async function endLive(liveId) {
   try {
     _localAudio?.close();
     _localVideo?.close();
+    _hostMediaStream?.getTracks().forEach(t => t.stop());
+    _hostMediaStream = null;
     await _agoraClient?.leave();
     _chatUnsub?.();
     _liveUnsub?.();
@@ -787,6 +803,7 @@ function subscribeViewerCount(liveId) {
 window.addEventListener('pagehide', () => {
   _localAudio?.close();
   _localVideo?.close();
+  _hostMediaStream?.getTracks().forEach(t => t.stop());
   _agoraClient?.leave().catch(() => {});
   _chatUnsub?.();
   _liveUnsub?.();
