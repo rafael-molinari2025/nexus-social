@@ -323,12 +323,15 @@ let currentUser      = null;
 let _agoraClient     = null;
 let _localAudio      = null;
 let _localVideo      = null;
-let _hostMediaStream = null; // getUserMedia stream (mais compatível com mobile)
+let _hostMediaStream = null;
 let _micMuted        = false;
-let _camOff       = false;
-let _chatUnsub    = null;
-let _liveUnsub    = null;
-let _previewStream = null;
+let _camOff          = false;
+let _chatUnsub       = null;
+let _liveUnsub       = null;
+let _previewStream   = null;
+// Elemento <video> persistente — criado UMA vez e movido entre containers
+// (nunca destruído via innerHTML, pois isso pode liberar a câmera no Android)
+let _liveVideoEl     = null;
 
 requireAuth(async user => {
   currentUser = user;
@@ -342,6 +345,18 @@ requireAuth(async user => {
   }
 });
 
+// ── Elemento <video> persistente ───────────────────────────────
+function getLiveVideoEl() {
+  if (!_liveVideoEl) {
+    _liveVideoEl = document.createElement('video');
+    _liveVideoEl.autoplay    = true;
+    _liveVideoEl.muted       = true;
+    _liveVideoEl.playsInline = true;
+    _liveVideoEl.setAttribute('webkit-playsinline', '');
+  }
+  return _liveVideoEl;
+}
+
 // ── Tela de início ─────────────────────────────────────────────
 function showStartScreen() {
   document.getElementById('app-root').innerHTML = `
@@ -352,7 +367,7 @@ function showStartScreen() {
         </h2>
 
         <div class="live-preview-box">
-          <video id="preview-video" autoplay muted playsinline></video>
+          <div id="preview-video-slot" style="width:100%;height:100%"></div>
           <div class="preview-placeholder" id="preview-ph">
             <i class="ti ti-camera-off" style="font-size:36px"></i>
             <span style="font-size:13px">Teste sua câmera antes de começar</span>
@@ -381,6 +396,11 @@ function showStartScreen() {
         </p>
       </div>
     </div>`;
+
+  // Coloca o elemento <video> persistente no slot da preview
+  const vid = getLiveVideoEl();
+  vid.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+  document.getElementById('preview-video-slot').appendChild(vid);
 }
 
 async function testCamera() {
@@ -388,9 +408,11 @@ async function testCamera() {
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Solicitando permissão…';
   try {
+    if (_previewStream) { _previewStream.getTracks().forEach(t => t.stop()); }
     _previewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    const vid = document.getElementById('preview-video');
+    const vid = getLiveVideoEl();
     vid.srcObject = _previewStream;
+    await vid.play().catch(() => {});
     document.getElementById('preview-ph').style.display = 'none';
     btn.innerHTML = '<i class="ti ti-check" style="color:var(--green-500)"></i> Câmera e microfone OK';
   } catch(e) {
@@ -407,19 +429,22 @@ async function startLive() {
   const btn = document.getElementById('btn-go-live');
   btn.disabled = true;
 
-  // Reutiliza _previewStream se disponível (sabemos que funciona — testCamera confirmou)
-  // Evita re-aquisição da câmera que falha em alguns dispositivos Android
+  const vid = getLiveVideoEl();
+
+  // Se testCamera já capturou stream ativa, reutiliza sem parar a câmera
   if (_previewStream && _previewStream.active) {
     _hostMediaStream = _previewStream;
     _previewStream = null;
-    const prevVid = document.getElementById('preview-video');
-    if (prevVid) prevVid.srcObject = null;
+    // _liveVideoEl.srcObject já está setado — não toca nele
   } else {
+    // Nenhum preview — pede câmera agora (dentro do gesto do usuário)
     if (_previewStream) { _previewStream.getTracks().forEach(t => t.stop()); _previewStream = null; }
     if (_hostMediaStream) { _hostMediaStream.getTracks().forEach(t => t.stop()); _hostMediaStream = null; }
     btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Acessando câmera…';
     try {
       _hostMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      vid.srcObject = _hostMediaStream;
+      await vid.play().catch(() => {});
     } catch(e) {
       btn.disabled = false;
       btn.innerHTML = '<i class="ti ti-broadcast"></i> Ir ao vivo agora';
@@ -474,12 +499,15 @@ async function startLive() {
 // ── Tela do host ───────────────────────────────────────────────
 function renderHostScreen(liveId, title) {
   document.title = `Nexus — AO VIVO`;
+
+  // Salva referência ao <video> ANTES de trocar o innerHTML
+  const vid = getLiveVideoEl();
+
   document.getElementById('app-root').innerHTML = `
     <div class="live-layout">
       <div class="live-video-col">
         <div id="agora-video-container" style="width:100%;height:100%;background:#000;position:relative;overflow:hidden">
-          <video id="host-video" autoplay muted playsinline webkit-playsinline
-                 style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block"></video>
+          <div id="host-video-slot" style="position:absolute;inset:0"></div>
         </div>
         <div class="live-overlay-top">
           <span class="live-badge-red">AO VIVO</span>
@@ -506,6 +534,11 @@ function renderHostScreen(liveId, title) {
       ${chatPanelHTML(liveId)}
     </div>`;
 
+  // Move o <video> persistente para o slot — sem destruir/recriar, sem perder câmera
+  vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block';
+  document.getElementById('host-video-slot').appendChild(vid);
+  vid.play().catch(() => {});
+
   initAgoraHost(liveId);
   subscribeChat(liveId);
   subscribeViewerCount(liveId);
@@ -513,36 +546,26 @@ function renderHostScreen(liveId, title) {
 
 async function initAgoraHost(liveId) {
   try {
-    // Exibe stream no elemento já presente no DOM (mesma abordagem do testCamera que funciona)
-    const hostVid = document.getElementById('host-video');
-    if (hostVid && _hostMediaStream) {
-      hostVid.srcObject = _hostMediaStream;
-      await hostVid.play().catch(() => {});
-    }
-
-    // Conecta ao canal Agora com token
+    // O vídeo local já está sendo exibido por _liveVideoEl — não precisa tocar nele
+    // Apenas conecta ao canal Agora para transmitir para espectadores
     const token = await getAgoraToken(liveId);
     _agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     await _agoraClient.setClientRole('host');
     await _agoraClient.join(AGORA_APP_ID, liveId, token, null);
 
-    // Clone das tracks para Agora — impede que o SDK consuma/pare as tracks originais
-    // que estão sendo exibidas no <video id="host-video">
-    _localVideo = AgoraRTC.createCustomVideoTrack({
-      mediaStreamTrack: _hostMediaStream.getVideoTracks()[0].clone()
-    });
-    _localAudio = AgoraRTC.createCustomAudioTrack({
-      mediaStreamTrack: _hostMediaStream.getAudioTracks()[0].clone()
-    });
+    // Clone das tracks para Agora — não interfere com a exibição local
+    const vTrack = _hostMediaStream?.getVideoTracks()[0];
+    const aTrack = _hostMediaStream?.getAudioTracks()[0];
+    if (vTrack) _localVideo = AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: vTrack.clone() });
+    if (aTrack) _localAudio = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: aTrack.clone() });
 
-    await _agoraClient.publish([_localAudio, _localVideo]);
+    const toPublish = [_localAudio, _localVideo].filter(Boolean);
+    if (toPublish.length) await _agoraClient.publish(toPublish);
   } catch(e) {
     console.error('Agora host error:', e);
     const code = e?.code ?? e?.data?.code ?? '';
     const msg  = e?.message || String(e);
-    showToast(`Erro ao iniciar: ${code ? '#'+code+' ' : ''}${msg.substring(0, 100)}`);
-    const endBtn = document.querySelector('.ctrl-end');
-    if (endBtn) endBtn.onclick = () => { location.href = '../index.html'; };
+    showToast(`Erro ao transmitir: ${code ? '#'+code+' ' : ''}${msg.substring(0, 80)}`);
   }
 }
 
@@ -566,8 +589,7 @@ function toggleCam() {
   if (!_hostMediaStream) return;
   _camOff = !_camOff;
   _hostMediaStream.getVideoTracks().forEach(t => { t.enabled = !_camOff; });
-  const previewVid = document.querySelector('#agora-video-container video');
-  if (previewVid) previewVid.style.visibility = _camOff ? 'hidden' : '';
+  if (_liveVideoEl) _liveVideoEl.style.visibility = _camOff ? 'hidden' : '';
   const btn = document.getElementById('btn-cam');
   if (_camOff) {
     btn.classList.add('off');
@@ -587,6 +609,7 @@ async function endLive(liveId) {
     _localVideo?.close();
     _hostMediaStream?.getTracks().forEach(t => t.stop());
     _hostMediaStream = null;
+    if (_liveVideoEl) { _liveVideoEl.srcObject = null; }
     await _agoraClient?.leave();
     _chatUnsub?.();
     _liveUnsub?.();
