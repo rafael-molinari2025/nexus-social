@@ -497,9 +497,27 @@ async function initAgoraHost(liveId) {
     _agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
     await _agoraClient.setClientRole('host');
     await _agoraClient.join(AGORA_APP_ID, liveId, token, null);
-    _localAudio = await AgoraRTC.createMicrophoneAudioTrack();
-    _localVideo = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '720p_1' });
-    _localVideo.play('agora-video-container');
+
+    [_localAudio, _localVideo] = await Promise.all([
+      AgoraRTC.createMicrophoneAudioTrack(),
+      AgoraRTC.createCameraVideoTrack({ facingMode: 'user' })
+    ]);
+
+    const container = document.getElementById('agora-video-container');
+    container.style.cssText += ';position:relative;overflow:hidden';
+    _localVideo.play(container);
+
+    // Garante que o <video> gerado pelo Agora preencha o container no mobile
+    setTimeout(() => {
+      container.querySelectorAll('video').forEach(v => {
+        v.style.width  = '100%';
+        v.style.height = '100%';
+        v.style.objectFit = 'cover';
+        v.setAttribute('playsinline', '');
+        v.setAttribute('webkit-playsinline', '');
+      });
+    }, 600);
+
     await _agoraClient.publish([_localAudio, _localVideo]);
   } catch(e) {
     console.error('Agora host error:', e);
@@ -638,7 +656,18 @@ async function initAgoraViewer(liveId) {
     await _agoraClient.subscribe(user, mediaType);
     if (mediaType === 'video') {
       document.getElementById('viewer-waiting')?.remove();
-      user.videoTrack.play('agora-video-container');
+      const container = document.getElementById('agora-video-container');
+      container.style.cssText += ';position:relative;overflow:hidden';
+      user.videoTrack.play(container);
+      setTimeout(() => {
+        container.querySelectorAll('video').forEach(v => {
+          v.style.width  = '100%';
+          v.style.height = '100%';
+          v.style.objectFit = 'cover';
+          v.setAttribute('playsinline', '');
+          v.setAttribute('webkit-playsinline', '');
+        });
+      }, 600);
     }
     if (mediaType === 'audio') {
       user.audioTrack.play();
