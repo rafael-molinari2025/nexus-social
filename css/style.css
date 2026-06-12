@@ -160,6 +160,7 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   min-height: 100vh;
+  overflow-x: hidden;
   transition: background var(--transition-slow), color var(--transition-slow);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -354,6 +355,7 @@ ul, ol { list-style: none; }
   flex-direction: column;
   gap: .875rem;
   min-height: calc(100vh - var(--topbar-h));
+  min-width: 0;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   background: var(--bg);
@@ -1374,6 +1376,9 @@ textarea.form-input {
 
   /* Composer */
   .composer { padding: .875rem 1rem; gap: .6rem; }
+  .composer-actions { flex-wrap: wrap; gap: .1rem; }
+  .composer-action-btn { width: 30px; height: 30px; font-size: 15px; }
+  .composer-privacy-btn { padding: .25rem .55rem; font-size: 11px; }
 
   /* Notif panel mobile */
   .notif-panel {
