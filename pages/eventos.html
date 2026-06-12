@@ -90,6 +90,15 @@
       .ev-cover img {
         border-radius: var(--radius-lg) 0 0 var(--radius-lg);
       }
+      /* Badges: empilhados verticalmente na coluna estreita */
+      .ev-date-badge {
+        top: .5rem; left: .5rem; right: auto;
+        font-size: 10px; padding: .18rem .4rem;
+      }
+      .ev-privacy-badge {
+        top: auto; bottom: .5rem; right: auto; left: .5rem;
+        font-size: 10px; padding: .15rem .4rem;
+      }
       .ev-body {
         grid-column: 2;
         grid-row: 1;
@@ -102,7 +111,8 @@
         flex-wrap: wrap;
         gap: .3rem;
       }
-      .ev-rsvp-btn { font-size: 11px; }
+      /* Botões: tamanho natural para não cortar texto */
+      .ev-rsvp-btn { flex: 0 0 auto; font-size: 11px; padding: .35rem .55rem; white-space: nowrap; }
       .ev-title { font-size: 13px; }
       .ev-meta-row { font-size: 11px; }
       .ev-host, .ev-attendees { font-size: 11px; }
