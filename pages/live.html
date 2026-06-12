@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Ao Vivo</title>
+  <meta name="description" content="Transmissão ao vivo no Nexus.">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <style>
+    .live-layout {
+      display: flex;
+      height: calc(100vh - var(--topbar-h));
+    }
+    .live-video-col {
+      flex: 1;
+      background: #000;
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+    }
+    #agora-video-container {
+      width: 100%;
+      height: 100%;
+    }
+    #agora-video-container > div {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .live-overlay-top {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      right: 1rem;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .live-badge-red {
+      background: #e53e3e;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      letter-spacing: .06em;
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+    .live-badge-red::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      background: #fff;
+      border-radius: 50%;
+      animation: livepulse 1.2s infinite;
+    }
+    @keyframes livepulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .3; }
+    }
+    .live-viewers-badge {
+      background: rgba(0,0,0,.6);
+      color: #fff;
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      gap: .35rem;
+    }
+    .live-title-overlay {
+      position: absolute;
+      bottom: 80px;
+      left: 1rem;
+      right: 1rem;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .live-title-text {
+      display: inline-block;
+      background: rgba(0,0,0,.65);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 5px 14px;
+      border-radius: var(--radius-md);
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .live-controls {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: .75rem;
+      align-items: center;
+      z-index: 10;
+    }
+    .live-ctrl-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 21px;
+      transition: background .15s;
+      outline: none;
+    }
+    .ctrl-mute   { background: rgba(255,255,255,.18); color: #fff; }
+    .ctrl-mute:hover  { background: rgba(255,255,255,.3); }
+    .ctrl-mute.off    { background: #e53e3e; color: #fff; }
+    .ctrl-cam    { background: rgba(255,255,255,.18); color: #fff; }
+    .ctrl-cam:hover   { background: rgba(255,255,255,.3); }
+    .ctrl-cam.off     { background: #e53e3e; color: #fff; }
+    .ctrl-end    { background: #e53e3e; color: #fff; }
+    .ctrl-end:hover   { background: #c53030; }
+    .ctrl-leave  { background: rgba(255,255,255,.18); color: #fff; }
+    .ctrl-leave:hover { background: rgba(255,255,255,.3); }
+
+    /* Viewer waiting screen */
+    .viewer-waiting {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #888;
+      gap: .85rem;
+      background: #111;
+      z-index: 5;
+    }
+
+    /* Chat panel */
+    .live-chat-col {
+      width: 320px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      border-left: 0.5px solid var(--border);
+      background: var(--surface);
+    }
+    .live-chat-header {
+      padding: .875rem 1rem;
+      border-bottom: 0.5px solid var(--border);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    .live-chat-msgs {
+      flex: 1;
+      overflow-y: auto;
+      padding: .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+    }
+    .live-chat-msg {
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .live-chat-msg .msg-sender {
+      font-weight: 600;
+      color: var(--purple-600);
+      margin-right: .3rem;
+      cursor: pointer;
+    }
+    .live-chat-input-row {
+      display: flex;
+      gap: .5rem;
+      padding: .75rem;
+      border-top: 0.5px solid var(--border);
+    }
+    .live-chat-input {
+      flex: 1;
+      padding: .5rem .75rem;
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-full);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--font-sans);
+      outline: none;
+    }
+    .live-chat-input:focus { border-color: var(--purple-600); }
+    .live-send-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: var(--purple-600);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Start screen */
+    .live-start-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - var(--topbar-h));
+      padding: 1.5rem 1rem;
+    }
+    .live-start-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 2rem 1.75rem;
+      width: 100%;
+      max-width: 460px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .live-preview-box {
+      background: #111;
+      border-radius: var(--radius-lg);
+      aspect-ratio: 16/9;
+      overflow: hidden;
+      position: relative;
+    }
+    #preview-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .preview-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      gap: .5rem;
+      pointer-events: none;
+    }
+
+    /* Ended screen */
+    .live-ended-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - var(--topbar-h));
+      gap: 1rem;
+      color: var(--text-muted);
+      padding: 2rem;
+      text-align: center;
+    }
+
+    @media (max-width: 768px) {
+      .live-layout {
+        flex-direction: column;
+        height: auto;
+      }
+      .live-video-col {
+        height: 55vw;
+        min-height: 220px;
+      }
+      .live-chat-col {
+        width: 100%;
+        height: 45vh;
+        border-left: none;
+        border-top: 0.5px solid var(--border);
+      }
+      .live-controls { gap: .5rem; }
+      .live-ctrl-btn { width: 42px; height: 42px; font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div style="padding-top: var(--topbar-h)">
+  <div id="app-root">
+    <div class="loading-screen"><div class="spinner"></div></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.1.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+const AGORA_APP_ID = '6178ae4b6a854914bc111c753bcd6350';
+
+const _params  = new URLSearchParams(location.search);
+const _liveId  = _params.get('id');
+const _asHost  = _params.get('host') === '1';
+
+let currentUser   = null;
+let _agoraClient  = null;
+let _localAudio   = null;
+let _localVideo   = null;
+let _micMuted     = false;
+let _camOff       = false;
+let _chatUnsub    = null;
+let _liveUnsub    = null;
+let _previewStream = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, 'live');
+
+  if (_liveId) {
+    joinAsViewer(_liveId);
+  } else {
+    showStartScreen();
+  }
+});
+
+// ── Tela de início ─────────────────────────────────────────────
+function showStartScreen() {
+  document.getElementById('app-root').innerHTML = `
+    <div class="live-start-wrap">
+      <div class="live-start-card">
+        <h2 style="font-size:20px;font-weight:700;text-align:center">
+          <i class="ti ti-broadcast" style="color:#e53e3e"></i> Iniciar transmissão ao vivo
+        </h2>
+
+        <div class="live-preview-box">
+          <video id="preview-video" autoplay muted playsinline></video>
+          <div class="preview-placeholder" id="preview-ph">
+            <i class="ti ti-camera-off" style="font-size:36px"></i>
+            <span style="font-size:13px">Teste sua câmera antes de começar</span>
+          </div>
+        </div>
+
+        <button class="btn" id="btn-test-cam" onclick="testCamera()"
+                style="justify-content:center;gap:.5rem">
+          <i class="ti ti-camera"></i> Testar câmera e microfone
+        </button>
+
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Título da transmissão</label>
+          <input class="form-input" id="live-title" type="text" maxlength="80"
+                 placeholder="Sobre o que é essa live?"
+                 onkeydown="if(event.key==='Enter')startLive()">
+        </div>
+
+        <button class="btn btn-primary" id="btn-go-live" onclick="startLive()"
+                style="justify-content:center;height:46px;font-size:15px;gap:.5rem">
+          <i class="ti ti-broadcast"></i> Ir ao vivo agora
+        </button>
+
+        <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:-.5rem 0 0">
+          Seus amigos receberão uma notificação quando você começar
+        </p>
+      </div>
+    </div>`;
+}
+
+async function testCamera() {
+  const btn = document.getElementById('btn-test-cam');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Solicitando permissão…';
+  try {
+    _previewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const vid = document.getElementById('preview-video');
+    vid.srcObject = _previewStream;
+    document.getElementById('preview-ph').style.display = 'none';
+    btn.innerHTML = '<i class="ti ti-check" style="color:var(--green-500)"></i> Câmera e microfone OK';
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-camera"></i> Testar câmera e microfone';
+    showToast('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+  }
+}
+
+async function startLive() {
+  const title = (document.getElementById('live-title')?.value || '').trim();
+  if (!title) return showToast('Dê um título para sua transmissão.');
+
+  const btn = document.getElementById('btn-go-live');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Iniciando…';
+
+  if (_previewStream) {
+    _previewStream.getTracks().forEach(t => t.stop());
+    _previewStream = null;
+  }
+
+  try {
+    const ref = await db.collection('lives').add({
+      hostUid:    currentUser.uid,
+      hostName:   currentUser.displayName || 'Usuário',
+      hostPhoto:  currentUser.photoURL || null,
+      title,
+      status:     'live',
+      viewerCount: 0,
+      peakViewers: 0,
+      startedAt:  firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Notificar amigos
+    db.collection('friendships').where('users', 'array-contains', currentUser.uid).get()
+      .then(async snap => {
+        if (snap.empty) return;
+        const batch = db.batch();
+        snap.docs.forEach(d => {
+          const friendUid = d.data().users.find(u => u !== currentUser.uid);
+          if (!friendUid) return;
+          const nRef = db.collection('notifications').doc(friendUid).collection('items').doc();
+          batch.set(nRef, {
+            type: 'live_started',
+            message: `${currentUser.displayName || 'Alguém'} está ao vivo: "${title}"`,
+            link: `${PAGES}live.html?id=${ref.id}`,
+            fromUid: currentUser.uid,
+            fromName: currentUser.displayName || 'Usuário',
+            read: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        });
+        await batch.commit().catch(() => {});
+      }).catch(() => {});
+
+    renderHostScreen(ref.id, title);
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-broadcast"></i> Ir ao vivo agora';
+    showToast('Erro ao iniciar live. Tente novamente.');
+  }
+}
+
+// ── Tela do host ───────────────────────────────────────────────
+function renderHostScreen(liveId, title) {
+  document.title = `Nexus — AO VIVO`;
+  document.getElementById('app-root').innerHTML = `
+    <div class="live-layout">
+      <div class="live-video-col">
+        <div id="agora-video-container" style="width:100%;height:100%;background:#000"></div>
+        <div class="live-overlay-top">
+          <span class="live-badge-red">AO VIVO</span>
+          <span class="live-viewers-badge">
+            <i class="ti ti-eye" style="font-size:12px"></i>
+            <span id="viewer-count">0</span>
+          </span>
+        </div>
+        <div class="live-title-overlay">
+          <span class="live-title-text">${sanitize(title)}</span>
+        </div>
+        <div class="live-controls">
+          <button class="live-ctrl-btn ctrl-mute" id="btn-mic" onclick="toggleMic()" title="Silenciar">
+            <i class="ti ti-microphone"></i>
+          </button>
+          <button class="live-ctrl-btn ctrl-end" onclick="endLive('${liveId}')" title="Encerrar live">
+            <i class="ti ti-phone-off"></i>
+          </button>
+          <button class="live-ctrl-btn ctrl-cam" id="btn-cam" onclick="toggleCam()" title="Câmera">
+            <i class="ti ti-video"></i>
+          </button>
+        </div>
+      </div>
+      ${chatPanelHTML(liveId)}
+    </div>`;
+
+  initAgoraHost(liveId);
+  subscribeChat(liveId);
+  subscribeViewerCount(liveId);
+}
+
+async function initAgoraHost(liveId) {
+  try {
+    _agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+    await _agoraClient.setClientRole('host');
+    await _agoraClient.join(AGORA_APP_ID, liveId, null, null);
+    _localAudio = await AgoraRTC.createMicrophoneAudioTrack();
+    _localVideo = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '720p_1' });
+    _localVideo.play('agora-video-container');
+    await _agoraClient.publish([_localAudio, _localVideo]);
+  } catch(e) {
+    showToast('Erro ao acessar câmera/microfone. Verifique as permissões.');
+    console.error('Agora host error:', e);
+  }
+}
+
+function toggleMic() {
+  if (!_localAudio) return;
+  _micMuted = !_micMuted;
+  _localAudio.setEnabled(!_micMuted);
+  const btn = document.getElementById('btn-mic');
+  if (_micMuted) {
+    btn.classList.add('off');
+    btn.innerHTML = '<i class="ti ti-microphone-off"></i>';
+    btn.title = 'Ativar microfone';
+  } else {
+    btn.classList.remove('off');
+    btn.innerHTML = '<i class="ti ti-microphone"></i>';
+    btn.title = 'Silenciar';
+  }
+}
+
+function toggleCam() {
+  if (!_localVideo) return;
+  _camOff = !_camOff;
+  _localVideo.setEnabled(!_camOff);
+  const btn = document.getElementById('btn-cam');
+  if (_camOff) {
+    btn.classList.add('off');
+    btn.innerHTML = '<i class="ti ti-video-off"></i>';
+    btn.title = 'Ligar câmera';
+  } else {
+    btn.classList.remove('off');
+    btn.innerHTML = '<i class="ti ti-video"></i>';
+    btn.title = 'Desligar câmera';
+  }
+}
+
+async function endLive(liveId) {
+  if (!confirm('Encerrar a transmissão?')) return;
+  try {
+    _localAudio?.close();
+    _localVideo?.close();
+    await _agoraClient?.leave();
+    _chatUnsub?.();
+    _liveUnsub?.();
+    await db.collection('lives').doc(liveId).update({
+      status:   'ended',
+      endedAt:  firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Transmissão encerrada.');
+    setTimeout(() => { location.href = '../index.html'; }, 1500);
+  } catch(e) {
+    showToast('Erro ao encerrar. Tente novamente.');
+  }
+}
+
+// ── Tela do espectador ─────────────────────────────────────────
+async function joinAsViewer(liveId) {
+  try {
+    const snap = await db.collection('lives').doc(liveId).get();
+    if (!snap.exists) {
+      showEndedScreen('Live não encontrada.');
+      return;
+    }
+    const live = snap.data();
+    if (live.status === 'ended') {
+      showEndedScreen('Esta transmissão já foi encerrada.');
+      return;
+    }
+
+    document.title = `Nexus — ${live.title || 'Ao Vivo'}`;
+    document.getElementById('app-root').innerHTML = `
+      <div class="live-layout">
+        <div class="live-video-col">
+          <div id="agora-video-container" style="width:100%;height:100%;background:#111">
+            <div class="viewer-waiting" id="viewer-waiting">
+              <div class="spinner"></div>
+              <p style="font-size:14px">Conectando à transmissão…</p>
+            </div>
+          </div>
+          <div class="live-overlay-top">
+            <div style="display:flex;flex-direction:column;gap:.4rem">
+              <span class="live-badge-red">AO VIVO</span>
+              <span style="background:rgba(0,0,0,.6);color:#fff;font-size:12px;padding:3px 12px;border-radius:var(--radius-full);font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                ${sanitize(live.hostName||'Usuário')}
+              </span>
+            </div>
+            <span class="live-viewers-badge">
+              <i class="ti ti-eye" style="font-size:12px"></i>
+              <span id="viewer-count">${live.viewerCount||0}</span>
+            </span>
+          </div>
+          <div class="live-title-overlay">
+            <span class="live-title-text">${sanitize(live.title||'')}</span>
+          </div>
+          <div class="live-controls">
+            <button class="live-ctrl-btn ctrl-leave" onclick="leaveViewer('${liveId}')" title="Sair da live">
+              <i class="ti ti-door-exit"></i>
+            </button>
+          </div>
+        </div>
+        ${chatPanelHTML(liveId)}
+      </div>`;
+
+    await initAgoraViewer(liveId);
+    subscribeChat(liveId);
+    subscribeViewerCount(liveId);
+    incrementViewers(liveId);
+
+    _liveUnsub = db.collection('lives').doc(liveId).onSnapshot(s => {
+      if (s.data()?.status === 'ended') {
+        _agoraClient?.leave().catch(() => {});
+        _chatUnsub?.();
+        _liveUnsub?.();
+        showEndedScreen('A transmissão foi encerrada.');
+      }
+    });
+  } catch(e) {
+    showEndedScreen('Não foi possível conectar à transmissão.');
+    console.error('joinAsViewer error:', e);
+  }
+}
+
+async function initAgoraViewer(liveId) {
+  _agoraClient = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+  await _agoraClient.setClientRole('audience', { level: 1 });
+
+  _agoraClient.on('user-published', async (user, mediaType) => {
+    await _agoraClient.subscribe(user, mediaType);
+    if (mediaType === 'video') {
+      document.getElementById('viewer-waiting')?.remove();
+      user.videoTrack.play('agora-video-container');
+    }
+    if (mediaType === 'audio') {
+      user.audioTrack.play();
+    }
+  });
+
+  _agoraClient.on('user-unpublished', (user, mediaType) => {
+    if (mediaType === 'video') {
+      const c = document.getElementById('agora-video-container');
+      if (c) c.innerHTML = `<div class="viewer-waiting"><i class="ti ti-camera-off" style="font-size:36px"></i><p style="font-size:13px">Câmera pausada pelo host</p></div>`;
+    }
+  });
+
+  await _agoraClient.join(AGORA_APP_ID, liveId, null, null);
+}
+
+function leaveViewer(liveId) {
+  _agoraClient?.leave().catch(() => {});
+  _chatUnsub?.();
+  _liveUnsub?.();
+  db.collection('lives').doc(liveId).update({
+    viewerCount: firebase.firestore.FieldValue.increment(-1)
+  }).catch(() => {});
+  location.href = '../index.html';
+}
+
+function incrementViewers(liveId) {
+  db.collection('lives').doc(liveId).update({
+    viewerCount: firebase.firestore.FieldValue.increment(1)
+  }).catch(() => {});
+  window.addEventListener('pagehide', () => {
+    db.collection('lives').doc(liveId).update({
+      viewerCount: firebase.firestore.FieldValue.increment(-1)
+    }).catch(() => {});
+  });
+}
+
+function showEndedScreen(msg) {
+  document.getElementById('app-root').innerHTML = `
+    <div class="live-ended-wrap">
+      <i class="ti ti-broadcast-off" style="font-size:56px;color:var(--border)"></i>
+      <p style="font-size:16px;font-weight:600">${sanitize(msg)}</p>
+      <button class="btn btn-primary" onclick="location.href='../index.html'" style="gap:.4rem">
+        <i class="ti ti-home"></i> Voltar ao feed
+      </button>
+    </div>`;
+}
+
+// ── Chat ───────────────────────────────────────────────────────
+function chatPanelHTML(liveId) {
+  return `
+    <div class="live-chat-col">
+      <div class="live-chat-header">
+        <i class="ti ti-message-circle" style="color:var(--purple-600)"></i> Chat ao vivo
+      </div>
+      <div class="live-chat-msgs" id="chat-msgs"></div>
+      <div class="live-chat-input-row">
+        <input class="live-chat-input" id="chat-input" type="text" maxlength="200"
+               placeholder="Mensagem…"
+               onkeydown="if(event.key==='Enter')sendMsg('${liveId}')">
+        <button class="live-send-btn" onclick="sendMsg('${liveId}')">
+          <i class="ti ti-send"></i>
+        </button>
+      </div>
+    </div>`;
+}
+
+function subscribeChat(liveId) {
+  _chatUnsub = db.collection('lives').doc(liveId).collection('messages')
+    .orderBy('createdAt', 'asc')
+    .limitToLast(150)
+    .onSnapshot(snap => {
+      const box = document.getElementById('chat-msgs');
+      if (!box) return;
+      snap.docChanges().forEach(ch => {
+        if (ch.type !== 'added') return;
+        const d = ch.doc.data();
+        const el = document.createElement('div');
+        el.className = 'live-chat-msg';
+        el.innerHTML = `<span class="msg-sender" onclick="location.href='perfil.html?uid=${d.senderUid}'">${sanitize(d.senderName||'Usuário')}</span>${sanitize(d.text||'')}`;
+        box.appendChild(el);
+        box.scrollTop = box.scrollHeight;
+      });
+    });
+}
+
+async function sendMsg(liveId) {
+  const input = document.getElementById('chat-input');
+  const text  = (input?.value || '').trim();
+  if (!text || !currentUser) return;
+  input.value = '';
+  try {
+    await db.collection('lives').doc(liveId).collection('messages').add({
+      senderUid:   currentUser.uid,
+      senderName:  currentUser.displayName || 'Usuário',
+      senderPhoto: currentUser.photoURL || null,
+      text,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(_) {
+    showToast('Não foi possível enviar a mensagem.');
+  }
+}
+
+// ── Contador de espectadores ───────────────────────────────────
+function subscribeViewerCount(liveId) {
+  db.collection('lives').doc(liveId).onSnapshot(s => {
+    const el = document.getElementById('viewer-count');
+    if (el) el.textContent = s.data()?.viewerCount || 0;
+  });
+}
+
+// ── Cleanup ao sair da página ──────────────────────────────────
+window.addEventListener('pagehide', () => {
+  _localAudio?.close();
+  _localVideo?.close();
+  _agoraClient?.leave().catch(() => {});
+  _chatUnsub?.();
+  _liveUnsub?.();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const input = document.getElementById('chat-input');
+    if (input && document.activeElement === input) input.blur();
+  }
+});
+</script>
+</body>
+</html>

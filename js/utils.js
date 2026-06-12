@@ -273,6 +273,9 @@ function renderTopbar(user, activePage = 'feed') {
         <a href="${PAGES}eventos.html" class="user-dropdown-item">
           <i class="ti ti-calendar-event" aria-hidden="true"></i> Eventos
         </a>
+        <a href="${PAGES}live.html" class="user-dropdown-item" style="color:#e53e3e">
+          <i class="ti ti-broadcast" aria-hidden="true"></i> Ir ao vivo
+        </a>
         <a href="${PAGES}tendencias.html" class="user-dropdown-item">
           <i class="ti ti-trending-up" aria-hidden="true"></i> Tendências
         </a>

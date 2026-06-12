@@ -241,6 +241,12 @@
     .link-preview-composer { position:relative; }
     .link-preview-dismiss { position:absolute; top:.3rem; right:.3rem; background:rgba(0,0,0,.45); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
 
+    @keyframes livepulse2 {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .4; transform: scale(.85); }
+    }
+    #lives-strip::-webkit-scrollbar { display: none; }
+
     @media (max-width: 768px) {
       .stories-bar { padding: .65rem .75rem; }
     }
@@ -269,6 +275,20 @@
 
   <!-- Feed central -->
   <main class="feed-col">
+
+    <!-- Lives strip -->
+    <div id="lives-strip-wrap" style="display:none;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:.75rem;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem .4rem">
+        <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:.4rem">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e53e3e;animation:livepulse2 1.2s infinite"></span>
+          Ao vivo agora
+        </span>
+        <button class="btn btn-sm" onclick="location.href='${PAGES}live.html'" style="gap:.3rem;font-size:11px">
+          <i class="ti ti-broadcast" aria-hidden="true"></i> Ir ao vivo
+        </button>
+      </div>
+      <div id="lives-strip" style="display:flex;gap:.5rem;padding:.25rem 1rem .875rem;overflow-x:auto;scrollbar-width:none"></div>
+    </div>
 
     <!-- Stories -->
     <div class="stories-bar" id="stories-bar">
@@ -313,6 +333,11 @@
           </div>
           <div class="composer-footer">
             <div class="composer-actions">
+              <button class="composer-action-btn" title="Transmissão ao vivo"
+                      onclick="location.href='${PAGES}live.html'"
+                      style="color:#e53e3e">
+                <i class="ti ti-broadcast" aria-hidden="true"></i>
+              </button>
               <button class="composer-action-btn" title="Foto"
                       onclick="document.getElementById('post-image-input').click()">
                 <i class="ti ti-photo" aria-hidden="true"></i>
@@ -550,6 +575,7 @@ requireAuth(async user => {
     })
     .catch(() => {});
 
+  loadActiveLives();
   loadTrendingHashtags();
   loadBirthdayWidget();
   loadMemoriesWidget();
@@ -1619,6 +1645,60 @@ async function loadTrendingHashtags() {
   } catch(e) {
     if (el) el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">—</p>`;
   }
+}
+
+// ── Lives strip ────────────────────────────────────────────────
+async function loadActiveLives() {
+  try {
+    const snap = await db.collection('lives')
+      .where('status', '==', 'live')
+      .orderBy('startedAt', 'desc')
+      .limit(12)
+      .get();
+    if (snap.empty) return;
+
+    const wrap  = document.getElementById('lives-strip-wrap');
+    const strip = document.getElementById('lives-strip');
+    if (!wrap || !strip) return;
+
+    wrap.style.display = '';
+    strip.innerHTML = snap.docs.map(d => {
+      const lv = d.data();
+      const cl = getAvatarColor(lv.hostUid);
+      const av = lv.hostPhoto
+        ? `<img src="${lv.hostPhoto}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2.5px solid #e53e3e" onerror="this.style.display='none'">`
+        : `<div style="width:52px;height:52px;border-radius:50%;background:${cl};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;border:2.5px solid #e53e3e">${(lv.hostName||'?')[0].toUpperCase()}</div>`;
+      return `<div onclick="location.href='${PAGES}live.html?id=${d.id}'"
+                   style="min-width:72px;max-width:72px;display:flex;flex-direction:column;align-items:center;gap:.35rem;cursor:pointer;flex-shrink:0">
+        <div style="position:relative">
+          ${av}
+          <span style="position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);background:#e53e3e;color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:var(--radius-full);white-space:nowrap">AO VIVO</span>
+        </div>
+        <span style="font-size:11px;text-align:center;width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${sanitize(lv.hostName||'Usuário')}</span>
+      </div>`;
+    }).join('');
+
+    // Atualizar em tempo real
+    db.collection('lives').where('status','==','live').onSnapshot(s => {
+      if (s.empty) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      strip.innerHTML = s.docs.map(d => {
+        const lv = d.data();
+        const cl = getAvatarColor(lv.hostUid);
+        const av = lv.hostPhoto
+          ? `<img src="${lv.hostPhoto}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2.5px solid #e53e3e" onerror="this.style.display='none'">`
+          : `<div style="width:52px;height:52px;border-radius:50%;background:${cl};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;border:2.5px solid #e53e3e">${(lv.hostName||'?')[0].toUpperCase()}</div>`;
+        return `<div onclick="location.href='${PAGES}live.html?id=${d.id}'"
+                     style="min-width:72px;max-width:72px;display:flex;flex-direction:column;align-items:center;gap:.35rem;cursor:pointer;flex-shrink:0">
+          <div style="position:relative">
+            ${av}
+            <span style="position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);background:#e53e3e;color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:var(--radius-full);white-space:nowrap">AO VIVO</span>
+          </div>
+          <span style="font-size:11px;text-align:center;width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${sanitize(lv.hostName||'Usuário')}</span>
+        </div>`;
+      }).join('');
+    });
+  } catch(_) {}
 }
 
 // ── Birthday widget ────────────────────────────────────────────
