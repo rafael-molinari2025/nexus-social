@@ -408,8 +408,11 @@ async function startLive() {
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Iniciando…';
 
   if (_previewStream) {
+    const prevVid = document.getElementById('preview-video');
+    if (prevVid) { prevVid.srcObject = null; prevVid.load(); }
     _previewStream.getTracks().forEach(t => t.stop());
     _previewStream = null;
+    await new Promise(r => setTimeout(r, 600)); // aguarda câmera liberar no Android
   }
 
   try {
