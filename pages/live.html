@@ -500,21 +500,12 @@ async function startLive() {
 function renderHostScreen(liveId, title) {
   document.title = `Nexus — AO VIVO`;
 
-  const vid = getLiveVideoEl();
-
-  // Stash: move o vídeo para fora de #app-root ANTES de substituir innerHTML.
-  // Isso mantém o elemento no documento e evita que o Android pause a câmera
-  // ao detectar um elemento <video> sendo removido do DOM.
-  const stash = document.createElement('div');
-  stash.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0';
-  document.body.appendChild(stash);
-  stash.appendChild(vid);
-
   document.getElementById('app-root').innerHTML = `
     <div class="live-layout">
       <div class="live-video-col">
-        <div id="agora-video-container" style="width:100%;height:100%;background:#000;position:relative;overflow:hidden">
-          <div id="host-video-slot" style="position:absolute;inset:0"></div>
+        <div id="agora-video-container" style="position:relative;width:100%;height:100%">
+          <video id="host-video" autoplay muted playsinline webkit-playsinline
+                 style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;transform:translateZ(0)"></video>
         </div>
         <div class="live-overlay-top">
           <span class="live-badge-red">AO VIVO</span>
@@ -541,21 +532,16 @@ function renderHostScreen(liveId, title) {
       ${chatPanelHTML(liveId)}
     </div>`;
 
-  // Move do stash para o slot definitivo
-  vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block';
-  document.getElementById('host-video-slot').appendChild(vid);
-  stash.remove();
-
-  // Diagnóstico: mostra estado real da stream/vídeo (remover após confirmar funciona)
-  const vt = _hostMediaStream?.getVideoTracks() || [];
-  const _dbg = `stream:${_hostMediaStream?.active} tracks:${vt.map(t=>t.readyState)} src:${!!vid.srcObject} paused:${vid.paused}`;
-
-  // Reassigna srcObject caso Android tenha limpado durante o movimento
-  vid.srcObject = _hostMediaStream || vid.srcObject;
+  const vid = document.getElementById('host-video');
+  _liveVideoEl = vid;
+  vid.srcObject = _hostMediaStream;
 
   vid.play()
-    .then(() => showToast(`✅ ${vid.videoWidth}x${vid.videoHeight} | ${_dbg}`))
-    .catch(e => showToast(`❌ ${e.name} | ${_dbg}`));
+    .then(() => {
+      const r = vid.getBoundingClientRect();
+      showToast(`✅ frames:${vid.videoWidth}x${vid.videoHeight} box:${Math.round(r.width)}x${Math.round(r.height)} top:${Math.round(r.top)}`);
+    })
+    .catch(e => showToast(`❌ ${e.name}: ${e.message.substring(0,60)}`));
 
   initAgoraHost(liveId);
   subscribeChat(liveId);
