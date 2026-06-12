@@ -659,7 +659,8 @@ function openLightbox(srcs, startIdx = 0) {
       <img id="_lb_img" src="" alt="Foto"
         style="max-width:92vw;max-height:88vh;object-fit:contain;border-radius:8px;
                cursor:default;user-select:none;display:block;box-shadow:0 8px 40px rgba(0,0,0,.5)"
-        onclick="event.stopPropagation()" draggable="false">
+        onclick="event.stopPropagation()" draggable="false"
+        onerror="this.style.opacity='.25';this.alt='Imagem indisponível'">
       <button id="_lb_next" onclick="event.stopPropagation();_lbNav(1)" aria-label="Próxima"
         style="position:absolute;right:.75rem;width:44px;height:44px;border-radius:50%;
                background:rgba(255,255,255,.18);border:none;color:#fff;font-size:22px;

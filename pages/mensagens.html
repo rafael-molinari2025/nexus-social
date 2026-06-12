@@ -1343,6 +1343,12 @@ function mobileBackToList() {
       <p>Selecione uma conversa ou busque um usuário para começar a conversar.</p>
     </div>`;
 }
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const open = document.querySelector('.modal-overlay.open');
+  if (open) open.remove();
+});
 </script>
 </body>
 </html>

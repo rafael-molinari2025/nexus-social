@@ -1071,8 +1071,10 @@ function openPostMenu(event, postId, authorName, authorId) {
   const btn = event.currentTarget;
   btn.style.position = 'relative';
   btn.appendChild(menu);
-  const close = e => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); } };
-  setTimeout(() => document.addEventListener('click', close), 50);
+  const removeMenu = () => { menu.remove(); document.removeEventListener('click', close); document.removeEventListener('keydown', closeOnEsc); };
+  const close = e => { if (!menu.contains(e.target)) removeMenu(); };
+  const closeOnEsc = e => { if (e.key === 'Escape') removeMenu(); };
+  setTimeout(() => { document.addEventListener('click', close); document.addEventListener('keydown', closeOnEsc); }, 50);
 }
 
 function muteUser(uid, name) {
@@ -1311,7 +1313,9 @@ async function repostPost(postId) {
         ${p.text ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.5">${sanitize(p.text).slice(0,180)}${p.text.length>180?'…':''}</div>` : ''}
         ${p.imageURL ? `<img src="${p.imageURL}" style="width:100%;border-radius:6px;margin-top:.4rem;max-height:120px;object-fit:cover">` : ''}
       </div>
-      <textarea class="composer-textarea" id="repost-comment-text" placeholder="Adicione um comentário (opcional)…" style="min-height:80px;margin-top:.25rem" maxlength="500"></textarea>
+      <textarea class="composer-textarea" id="repost-comment-text" placeholder="Adicione um comentário (opcional)…" style="min-height:80px;margin-top:.25rem" maxlength="500"
+        oninput="(function(el){const c=document.getElementById('repost-cc');if(c){const n=el.value.length;c.textContent=n?n+'/500':'';c.style.color=n>450?'var(--coral-400)':'var(--text-muted)'}})(this)"></textarea>
+      <div id="repost-cc" style="text-align:right;font-size:11px;color:var(--text-muted);min-height:1em"></div>
       <button class="btn btn-primary" style="justify-content:center;margin-top:.25rem" id="repost-submit-btn" onclick="submitRepost('${postId}',this)">
         <i class="ti ti-repeat"></i> Repostar no feed
       </button>
@@ -1994,6 +1998,23 @@ async function loadTrendingCommunities() {
     }).join('');
   } catch(e) {}
 }
+
+// ── Fechar modais com Escape ───────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  // dynamic modals (created programmatically)
+  const dynamic = document.querySelector('#repost-modal, #share-comm-modal, #poll-vote-modal');
+  if (dynamic) { dynamic.remove(); return; }
+  // static modals
+  if (document.getElementById('story-create-modal')?.classList.contains('open')) { closeStoryModal(); return; }
+  if (document.getElementById('report-modal')?.classList.contains('open')) { closeReportModal(); return; }
+  if (document.getElementById('edit-post-modal')?.classList.contains('open')) {
+    document.getElementById('edit-post-modal').classList.remove('open'); return;
+  }
+  // likers modal
+  const overlay = document.querySelector('.modal-overlay.open');
+  if (overlay) overlay.remove();
+});
 </script>
 </body>
 </html>

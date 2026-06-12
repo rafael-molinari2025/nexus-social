@@ -528,6 +528,13 @@ function showError(msg) {
       <button class="btn" onclick="history.back()">Voltar</button>
     </div>`;
 }
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  document.getElementById('edit-post-modal')?.classList.remove('open');
+  const dyn = document.querySelector('.modal-overlay.open:not(#edit-post-modal)');
+  if (dyn) dyn.remove();
+});
 </script>
 </body>
 </html>

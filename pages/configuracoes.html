@@ -129,6 +129,36 @@
   </div>
 </div>
 
+<!-- Modal exclusão de conta -->
+<div class="modal-overlay" id="delete-account-modal"
+     onclick="if(event.target===this)closeDeleteModal()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--coral-400)">
+        <i class="ti ti-alert-triangle"></i> Excluir minha conta
+      </span>
+      <button class="btn btn-icon" onclick="closeDeleteModal()">&times;</button>
+    </div>
+    <p style="font-size:14px;color:var(--text-secondary);margin-bottom:1.25rem;line-height:1.6">
+      Esta ação é <strong>permanente e irreversível</strong>. Todos os seus dados, posts, conversas e amizades serão excluídos.
+    </p>
+    <div class="form-group" style="margin-bottom:1rem">
+      <label class="form-label">Digite sua senha para confirmar</label>
+      <input class="form-input" type="password" id="delete-pass-input" placeholder="••••••••"
+             onkeydown="if(event.key==='Enter')confirmDeleteAccount()">
+    </div>
+    <div id="delete-modal-error" style="display:none;font-size:13px;color:var(--coral-400);margin-bottom:.75rem"></div>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn" style="flex:1" onclick="closeDeleteModal()">Cancelar</button>
+      <button class="btn" id="delete-confirm-btn"
+              style="flex:1;border-color:var(--coral-400);color:var(--coral-400)"
+              onclick="confirmDeleteAccount()">
+        <i class="ti ti-trash"></i> Excluir definitivamente
+      </button>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -351,12 +381,27 @@ async function _deleteUserFirestoreData(uid) {
   await db.collection('users').doc(uid).delete();
 }
 
-async function deleteAccount() {
-  if (!confirm('Tem certeza? Esta ação é permanente e todos os seus dados serão excluídos.')) return;
-  const pass = prompt('Digite sua senha para confirmar:');
-  if (!pass) return;
-  const btn = document.querySelector('[onclick="deleteAccount()"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo…'; }
+function deleteAccount() {
+  const modal = document.getElementById('delete-account-modal');
+  const inp = document.getElementById('delete-pass-input');
+  const err = document.getElementById('delete-modal-error');
+  if (inp) inp.value = '';
+  if (err) err.style.display = 'none';
+  if (modal) { modal.classList.add('open'); setTimeout(() => inp?.focus(), 100); }
+}
+
+function closeDeleteModal() {
+  const modal = document.getElementById('delete-account-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function confirmDeleteAccount() {
+  const pass = document.getElementById('delete-pass-input')?.value;
+  const err  = document.getElementById('delete-modal-error');
+  const btn  = document.getElementById('delete-confirm-btn');
+  if (!pass) { if (err) { err.textContent = 'Digite sua senha.'; err.style.display = 'block'; } return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Excluindo…'; }
+  if (err) err.style.display = 'none';
   try {
     const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, pass);
     await currentUser.reauthenticateWithCredential(credential);
@@ -364,11 +409,19 @@ async function deleteAccount() {
     await currentUser.delete();
     window.location.href = '../index.html';
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Excluir minha conta'; }
-    if (e.code === 'auth/wrong-password') showToast('Senha incorreta. Conta não excluída.');
-    else { console.error(e); showToast('Erro ao excluir conta. Tente novamente.'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Excluir definitivamente'; }
+    if (err) {
+      err.textContent = e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'
+        ? 'Senha incorreta. Conta não excluída.'
+        : 'Erro ao excluir conta. Tente novamente.';
+      err.style.display = 'block';
+    }
   }
 }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDeleteModal();
+});
 </script>
 </body>
 </html>

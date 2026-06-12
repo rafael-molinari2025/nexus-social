@@ -38,6 +38,7 @@
 let currentUser = null;
 let _lastSavedDoc = null;
 let _loading = false;
+let _totalSaved = 0;
 const PAGE_SIZE = 20;
 
 requireAuth(async user => {
@@ -64,6 +65,7 @@ async function loadSaved(reset = true) {
     if (snap.docs.length) _lastSavedDoc = snap.docs[snap.docs.length - 1];
 
     if (snap.empty && reset) {
+      _totalSaved = 0;
       el.innerHTML = `<div class="empty-state card">
         <i class="ti ti-bookmark-off" style="font-size:2.5rem;color:var(--text-muted)"></i>
         <p>Nenhum post salvo ainda.<br>Clique no ícone <i class="ti ti-bookmark"></i> em qualquer post para salvar.</p>
@@ -72,14 +74,16 @@ async function loadSaved(reset = true) {
       _loading = false; return;
     }
 
+    if (reset) _totalSaved = snap.docs.length;
+    else _totalSaved += snap.docs.length;
+    document.getElementById('saved-count').textContent = `${_totalSaved} salvo${_totalSaved !== 1 ? 's' : ''}`;
+
     const html = snap.docs.map(doc => postHTML(doc.id, doc.data())).join('');
     if (reset) {
       el.innerHTML = `<div class="card">${html}</div>`;
     } else {
       el.querySelector('.card')?.insertAdjacentHTML('beforeend', html);
     }
-
-    if (!reset) document.getElementById('saved-count').textContent = '';
 
     lm.innerHTML = snap.docs.length === PAGE_SIZE
       ? `<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:.5rem" onclick="loadSaved(false)">

@@ -437,7 +437,7 @@
     try {
       const usernameSnap = await db.collection('users').where('username', '==', username).get();
       if (!usernameSnap.empty) {
-        await user.delete();
+        try { await user.delete(); } catch(_) {}
         btn.disabled = false;
         btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
         return showError('Este nome de usuário já está em uso. Escolha outro.');
@@ -501,9 +501,9 @@
       await auth.sendPasswordResetEmail(email);
       const el = document.getElementById('auth-error');
       el.textContent = 'Link enviado para ' + email + '. Verifique sua caixa de entrada.';
-      el.style.background = '#E1F5EE';
-      el.style.borderColor = '#2EA875';
-      el.style.color = '#0F6E56';
+      el.style.background = 'var(--green-50, rgba(46,168,117,0.12))';
+      el.style.borderColor = 'var(--green-400, #2EA875)';
+      el.style.color = 'var(--green-700, #0F6E56)';
       el.style.display = 'block';
     } catch(e) {
       showError('Não encontramos uma conta com esse e-mail. Verifique e tente novamente.');
