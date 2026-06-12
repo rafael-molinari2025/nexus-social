@@ -149,8 +149,12 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
+    .msg-wrap {
+      max-width: 65%; min-width: 0; display: flex; flex-direction: column;
+    }
+    .msg-row.mine .msg-wrap { align-items: flex-end; }
     .msg-bubble {
-      max-width: 65%; padding: .55rem .85rem;
+      padding: .55rem .85rem;
       border-radius: 18px; font-size: 14px; line-height: 1.45;
       word-break: break-word; position: relative;
     }
@@ -672,7 +676,7 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
         }).join('')}</div>` : '';
     html += `<div class="msg-row${isMine ? ' mine' : ''}" id="msg-${doc.id}">
         ${avatarHtml}
-        <div>
+        <div class="msg-wrap">
           <div class="msg-bubble" ondblclick="showMsgReactionPicker(event,'${doc.id}')" style="cursor:default">
             ${m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : ''}
             ${m.text ? sanitize(m.text).replace(/\n/g,'<br>') : ''}
@@ -1058,7 +1062,7 @@ function renderGroupMessages(docs, participantData, showLoadOlder) {
         }).join('')}</div>` : '';
     html += `<div class="msg-row${isMine?' mine':''}" id="msg-${doc.id}">
       ${avatarHtml}
-      <div>
+      <div class="msg-wrap">
         ${!isMine ? `<div style="font-size:11px;font-weight:600;color:${cl.bg === '#EEF2FF' ? '#4F46E5' : cl.color};margin-bottom:.15rem">${sanitize(sender.displayName)}</div>` : ''}
         <div class="msg-bubble" ondblclick="showMsgReactionPicker(event,'${doc.id}')" style="cursor:default">
           ${m.imageURL ? `<img src="${m.imageURL}" alt="" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : ''}
