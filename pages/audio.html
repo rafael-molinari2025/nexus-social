@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Salas de Áudio</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <style>
+    .audio-page { max-width: 820px; margin: 0 auto; padding: 1.5rem .75rem; }
+    @media (max-width: 768px) { .audio-page { padding: 1rem .5rem calc(80px + 1rem); } }
+
+    /* Sala ativa */
+    .room-active {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+      border-radius: var(--radius-xl); padding: 1.5rem; margin-bottom: 1.5rem; color: #fff;
+    }
+    .room-active-header { display: flex; align-items: flex-start; gap: .75rem; margin-bottom: 1rem; }
+    .room-active-info { flex: 1; }
+    .room-active-title { font-size: 18px; font-weight: 700; margin-bottom: .2rem; }
+    .room-active-meta  { font-size: 12px; opacity: .7; }
+    .room-live-badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: #EF4444; border-radius: var(--radius-full);
+      padding: .25rem .75rem; font-size: 12px; font-weight: 700;
+    }
+    .room-live-badge i { font-size: 10px; animation: pulse 1.4s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+    /* Participantes */
+    .participants-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: .75rem; margin: 1rem 0; }
+    .participant {
+      display: flex; flex-direction: column; align-items: center; gap: .35rem;
+      padding: .5rem; border-radius: var(--radius-md); text-align: center;
+      cursor: default;
+    }
+    .participant.speaking .participant-av { box-shadow: 0 0 0 3px #10B981, 0 0 12px rgba(16,185,129,.5); }
+    .participant.muted .participant-av { opacity: .6; }
+    .participant-av {
+      width: 52px; height: 52px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; position: relative;
+      border: 2px solid rgba(255,255,255,.2);
+    }
+    .participant-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .mute-icon {
+      position: absolute; bottom: -2px; right: -2px;
+      background: #EF4444; border-radius: 50%;
+      width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; border: 2px solid #312e81;
+    }
+    .participant-name { font-size: 11px; color: rgba(255,255,255,.85); max-width: 70px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .participant-role  { font-size: 10px; color: rgba(255,255,255,.5); }
+
+    /* Controles */
+    .room-controls {
+      display: flex; align-items: center; justify-content: center; gap: .75rem;
+      margin-top: 1rem; flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; transition: all var(--transition); flex-shrink: 0;
+    }
+    .ctrl-btn.mute-btn { background: rgba(255,255,255,.15); color: #fff; }
+    .ctrl-btn.mute-btn.muted { background: #EF4444; color: #fff; }
+    .ctrl-btn.mute-btn:hover { transform: scale(1.08); }
+    .ctrl-btn.leave-btn { background: #EF4444; color: #fff; }
+    .ctrl-btn.leave-btn:hover { background: #DC2626; transform: scale(1.08); }
+    .ctrl-btn.raise-btn { background: rgba(255,255,255,.15); color: #fff; }
+    .ctrl-btn.raise-btn.raised { background: #F59E0B; color: #fff; }
+
+    /* Lista de salas */
+    .room-list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .875rem; }
+    .room-list-title  { font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-muted); display: flex; align-items: center; gap: .3rem; }
+    .room-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem 1.1rem; margin-bottom: .65rem;
+      display: flex; align-items: center; gap: .875rem;
+      cursor: pointer; transition: box-shadow var(--transition);
+    }
+    .room-card:hover { box-shadow: var(--shadow-md); }
+    .room-card-icon {
+      width: 48px; height: 48px; border-radius: var(--radius-md); flex-shrink: 0;
+      background: linear-gradient(135deg, #4F46E5, #7C3AED);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: #fff;
+    }
+    .room-card-info { flex: 1; min-width: 0; }
+    .room-card-title { font-size: 15px; font-weight: 600; }
+    .room-card-host  { font-size: 12px; color: var(--text-muted); }
+    .room-card-count {
+      display: flex; align-items: center; gap: .3rem;
+      font-size: 12px; color: var(--text-muted); flex-shrink: 0;
+    }
+
+    /* Criar sala */
+    .create-room-form {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1.1rem; margin-bottom: 1.25rem;
+    }
+    .create-room-form .form-group { margin-bottom: .65rem; }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div style="padding-top: var(--topbar-h)">
+  <div class="audio-page">
+
+    <!-- Sala ativa (visível quando dentro de uma sala) -->
+    <div id="active-room" style="display:none" class="room-active">
+      <div class="room-active-header">
+        <div class="room-active-info">
+          <div class="room-active-title" id="room-title-display">Sala</div>
+          <div class="room-active-meta" id="room-meta-display"></div>
+        </div>
+        <span class="room-live-badge"><i class="ti ti-radio"></i> AO VIVO</span>
+      </div>
+      <div class="participants-grid" id="participants-grid"></div>
+      <div class="room-controls">
+        <button class="ctrl-btn mute-btn" id="mute-btn" title="Silenciar/Ativar" onclick="toggleMute()">
+          <i class="ti ti-microphone" id="mute-icon"></i>
+        </button>
+        <button class="ctrl-btn raise-btn" id="raise-btn" title="Levantar a mão" onclick="toggleRaiseHand()">
+          <i class="ti ti-hand-stop"></i>
+        </button>
+        <button class="ctrl-btn leave-btn" title="Sair da sala" onclick="leaveRoom()">
+          <i class="ti ti-phone-off"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Criar nova sala -->
+    <div class="create-room-form">
+      <div style="font-size:13px;font-weight:600;margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem">
+        <i class="ti ti-plus" style="color:var(--purple-600)"></i> Criar nova sala
+      </div>
+      <div class="form-group">
+        <input class="form-input" id="new-room-title" placeholder="Título da sala (ex: Papo sobre tecnologia)" maxlength="60">
+      </div>
+      <div class="form-group">
+        <input class="form-input" id="new-room-emoji" placeholder="Emoji (opcional)" maxlength="2" style="max-width:80px">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="createRoom()">
+        <i class="ti ti-radio"></i> Criar e entrar
+      </button>
+    </div>
+
+    <!-- Lista de salas abertas -->
+    <div class="room-list-header">
+      <div class="room-list-title"><i class="ti ti-microphone" style="font-size:14px;color:var(--purple-600)"></i> Salas abertas</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadRooms()"><i class="ti ti-refresh"></i> Atualizar</button>
+    </div>
+    <div id="rooms-list">
+      <div class="loading-screen" style="min-height:140px"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- Agora Web SDK v4 -->
+<script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.1.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let agoraClient  = null;
+let localTrack   = null;
+let currentRoomId = null;
+let isMuted       = false;
+let handRaised    = false;
+let participantsMap = {}; // uid → { displayName, photoURL, muted, handRaised }
+let roomListener   = null;
+let participantsListener = null;
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, '');
+
+  // Re-entrar sala se estava numa antes (page refresh)
+  const savedRoom = sessionStorage.getItem('nexus_audio_room');
+  if (savedRoom) joinRoom(savedRoom).catch(() => sessionStorage.removeItem('nexus_audio_room'));
+
+  loadRooms();
+});
+
+// ── Lista de salas ─────────────────────────────────────────────
+async function loadRooms() {
+  const el = document.getElementById('rooms-list');
+  try {
+    const snap = await db.collection('audio_rooms')
+      .where('status', '==', 'open')
+      .orderBy('createdAt', 'desc')
+      .limit(20).get();
+
+    if (snap.empty) {
+      el.innerHTML = `<div class="empty-state">
+        <i class="ti ti-microphone-off" style="font-size:40px;color:var(--text-muted)"></i>
+        <p>Nenhuma sala aberta. Crie a primeira!</p>
+      </div>`;
+      return;
+    }
+
+    el.innerHTML = snap.docs.map(doc => {
+      const r = doc.data();
+      const count = r.participantCount || 0;
+      return `<div class="room-card" onclick="joinRoom('${doc.id}')">
+        <div class="room-card-icon">${r.emoji || '🎙️'}</div>
+        <div class="room-card-info">
+          <div class="room-card-title">${sanitize(r.title)}</div>
+          <div class="room-card-host"><i class="ti ti-user" style="font-size:11px"></i> ${sanitize(r.hostName)}</div>
+        </div>
+        <div class="room-card-count"><i class="ti ti-users"></i> ${count}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('loadRooms:', e);
+    el.innerHTML = `<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Erro ao carregar salas.</p></div>`;
+  }
+}
+
+// ── Criar sala ─────────────────────────────────────────────────
+async function createRoom() {
+  const title = document.getElementById('new-room-title').value.trim();
+  if (!title) return showToast('Digite o título da sala.');
+  const emoji = document.getElementById('new-room-emoji').value.trim() || '🎙️';
+
+  try {
+    const ref = await db.collection('audio_rooms').add({
+      title, emoji,
+      hostUid:  currentUser.uid,
+      hostName: currentUser.displayName || 'Usuário',
+      status:   'open',
+      participantCount: 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('new-room-title').value = '';
+    document.getElementById('new-room-emoji').value = '';
+    await joinRoom(ref.id);
+    loadRooms();
+  } catch(e) {
+    showToast('Erro ao criar sala.');
+    console.error(e);
+  }
+}
+
+// ── Entrar numa sala ───────────────────────────────────────────
+async function joinRoom(roomId) {
+  if (currentRoomId) await leaveRoom();
+
+  const roomDoc = await db.collection('audio_rooms').doc(roomId).get();
+  if (!roomDoc.exists || roomDoc.data().status !== 'open') {
+    showToast('Sala não encontrada ou fechada.');
+    return;
+  }
+  const room = roomDoc.data();
+  currentRoomId = roomId;
+  sessionStorage.setItem('nexus_audio_room', roomId);
+
+  // Mostra UI da sala
+  document.getElementById('room-title-display').textContent = room.title;
+  document.getElementById('active-room').style.display = '';
+  document.getElementById('room-meta-display').textContent = `Criada por ${room.hostName}`;
+
+  // Adiciona participante ao Firestore
+  await db.collection('audio_rooms').doc(roomId).collection('participants').doc(currentUser.uid).set({
+    uid:         currentUser.uid,
+    displayName: currentUser.displayName || 'Usuário',
+    photoURL:    currentUser.photoURL || null,
+    muted:       false,
+    handRaised:  false,
+    joinedAt:    firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  // Atualiza contagem
+  db.collection('audio_rooms').doc(roomId).update({
+    participantCount: firebase.firestore.FieldValue.increment(1)
+  });
+
+  // Listener de participantes
+  participantsListener = db.collection('audio_rooms').doc(roomId).collection('participants')
+    .onSnapshot(snap => {
+      participantsMap = {};
+      snap.docs.forEach(d => { participantsMap[d.id] = d.data(); });
+      renderParticipants();
+    });
+
+  // Agora RTC (áudio apenas)
+  try {
+    agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'opus' });
+
+    agoraClient.on('user-published', async (remoteUser, mediaType) => {
+      if (mediaType !== 'audio') return;
+      await agoraClient.subscribe(remoteUser, 'audio');
+      remoteUser.audioTrack?.play();
+    });
+    agoraClient.on('user-unpublished', (remoteUser, mediaType) => {
+      if (mediaType === 'audio') remoteUser.audioTrack?.stop();
+    });
+
+    // Token do servidor Agora
+    const tokenRes = await fetch(`https://nexus-social-fawn.vercel.app/api/token?channel=${roomId}`);
+    const { token } = await tokenRes.json();
+
+    await agoraClient.join('8bcdfd0d63bd4caab7e75bfe24fba59a', roomId, token, currentUser.uid);
+    localTrack = await AgoraRTC.createMicrophoneAudioTrack();
+    await agoraClient.publish([localTrack]);
+  } catch(e) {
+    console.warn('Agora audio:', e.message);
+    showToast('Áudio conectado em modo básico.');
+  }
+}
+
+// ── Sair da sala ───────────────────────────────────────────────
+async function leaveRoom() {
+  if (!currentRoomId) return;
+
+  // Para Agora
+  if (localTrack) { localTrack.stop(); localTrack.close(); localTrack = null; }
+  if (agoraClient) { await agoraClient.leave(); agoraClient = null; }
+
+  // Remove participante
+  await db.collection('audio_rooms').doc(currentRoomId)
+    .collection('participants').doc(currentUser.uid).delete();
+  db.collection('audio_rooms').doc(currentRoomId).update({
+    participantCount: firebase.firestore.FieldValue.increment(-1)
+  });
+
+  // Fecha sala se for o host e não há mais participantes
+  const roomDoc = await db.collection('audio_rooms').doc(currentRoomId).get();
+  if (roomDoc.data()?.hostUid === currentUser.uid) {
+    const partSnap = await db.collection('audio_rooms').doc(currentRoomId).collection('participants').get();
+    if (partSnap.empty) {
+      db.collection('audio_rooms').doc(currentRoomId).update({ status: 'closed' });
+    }
+  }
+
+  if (participantsListener) { participantsListener(); participantsListener = null; }
+  document.getElementById('active-room').style.display = 'none';
+  sessionStorage.removeItem('nexus_audio_room');
+  currentRoomId = null;
+  isMuted = false;
+  handRaised = false;
+  loadRooms();
+}
+
+// ── Mute / Hand raise ─────────────────────────────────────────
+async function toggleMute() {
+  isMuted = !isMuted;
+  if (localTrack) localTrack.setEnabled(!isMuted);
+  const btn  = document.getElementById('mute-btn');
+  const icon = document.getElementById('mute-icon');
+  btn.classList.toggle('muted', isMuted);
+  icon.className = isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone';
+  if (currentRoomId) {
+    db.collection('audio_rooms').doc(currentRoomId)
+      .collection('participants').doc(currentUser.uid)
+      .update({ muted: isMuted });
+  }
+}
+
+async function toggleRaiseHand() {
+  handRaised = !handRaised;
+  document.getElementById('raise-btn').classList.toggle('raised', handRaised);
+  if (currentRoomId) {
+    db.collection('audio_rooms').doc(currentRoomId)
+      .collection('participants').doc(currentUser.uid)
+      .update({ handRaised });
+  }
+  if (handRaised) showToast('Mão levantada ✋');
+}
+
+// ── Renderizar participantes ──────────────────────────────────
+function renderParticipants() {
+  const grid = document.getElementById('participants-grid');
+  const parts = Object.values(participantsMap);
+  grid.innerHTML = parts.map(p => {
+    const cl = getAvatarColor(p.uid);
+    const av = p.photoURL
+      ? `<img src="${p.photoURL}" alt="">`
+      : `<span style="color:${cl.color}">${getInitials(p.displayName||'?')}</span>`;
+    const muteIcon = p.muted ? `<div class="mute-icon"><i class="ti ti-microphone-off"></i></div>` : '';
+    const handIcon = p.handRaised ? ' ✋' : '';
+    return `<div class="participant${p.muted?' muted':''}">
+      <div class="participant-av" style="background:${cl.bg}">${av}${muteIcon}</div>
+      <div class="participant-name">${sanitize((p.displayName||'?').split(' ')[0])}${handIcon}</div>
+    </div>`;
+  }).join('') || '<p style="color:rgba(255,255,255,.5);font-size:13px">Nenhum participante</p>';
+}
+</script>
+</body>
+</html>

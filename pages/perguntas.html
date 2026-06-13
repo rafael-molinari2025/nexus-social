@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Perguntas Anônimas</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <style>
+    .qa-page { max-width: 680px; margin: 0 auto; padding: 1.5rem .75rem; }
+    @media (max-width: 768px) { .qa-page { padding: 1rem .5rem calc(80px + 1rem); } }
+
+    .qa-header { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem; }
+    .qa-title  { font-size: 20px; font-weight: 700; }
+
+    /* Caixa pública de envio */
+    .qa-send-box {
+      background: linear-gradient(135deg, #6D28D9 0%, #7C3AED 100%);
+      border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.5rem; color: #fff;
+    }
+    .qa-send-box h2 { font-size: 16px; font-weight: 700; margin-bottom: .25rem; }
+    .qa-send-box p  { font-size: 13px; opacity: .8; margin-bottom: 1rem; }
+    .qa-send-box textarea {
+      width: 100%; border: none; border-radius: var(--radius-md);
+      padding: .75rem 1rem; font-size: 14px; font-family: var(--font-sans);
+      resize: none; outline: none; background: rgba(255,255,255,.15);
+      color: #fff; min-height: 80px; box-sizing: border-box;
+    }
+    .qa-send-box textarea::placeholder { color: rgba(255,255,255,.6); }
+    .qa-send-footer { display: flex; align-items: center; justify-content: space-between; margin-top: .65rem; }
+    .qa-anon-toggle { display: flex; align-items: center; gap: .4rem; font-size: 12px; opacity: .85; cursor: pointer; }
+    .qa-anon-toggle input { cursor: pointer; }
+
+    /* Tabs */
+    .qa-tabs { display: flex; gap: .4rem; margin-bottom: 1.25rem; }
+    .qa-tab {
+      padding: .4rem 1rem; border: 0.5px solid var(--border);
+      border-radius: var(--radius-full); background: none;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); font-family: var(--font-sans);
+    }
+    .qa-tab.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+
+    /* Cards de perguntas */
+    .qa-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem 1.1rem;
+      margin-bottom: .75rem; transition: box-shadow var(--transition);
+    }
+    .qa-card:hover { box-shadow: var(--shadow-sm); }
+    .qa-question {
+      font-size: 15px; font-weight: 500; margin-bottom: .65rem;
+      color: var(--text-primary); line-height: 1.5;
+    }
+    .qa-answer {
+      font-size: 14px; color: var(--text-secondary); line-height: 1.6;
+      background: var(--gray-50); border-radius: var(--radius-sm);
+      padding: .6rem .875rem; margin-bottom: .5rem;
+    }
+    .qa-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: .5rem; }
+    .qa-anon-badge {
+      display: inline-flex; align-items: center; gap: .2rem;
+      background: var(--gray-100); border-radius: var(--radius-full);
+      padding: .15rem .5rem; font-size: 11px; color: var(--text-muted);
+    }
+    .qa-pending-badge {
+      display: inline-flex; align-items: center; gap: .2rem;
+      background: #FEF3C7; color: #92400E;
+      border-radius: var(--radius-full); padding: .15rem .5rem; font-size: 11px;
+    }
+
+    /* Caixa de resposta */
+    .qa-reply-box { margin-top: .65rem; }
+    .qa-reply-box textarea {
+      width: 100%; border: 0.5px solid var(--border); border-radius: var(--radius-md);
+      padding: .6rem .875rem; font-size: 13px; font-family: var(--font-sans);
+      resize: none; outline: none; background: var(--surface);
+      color: var(--text-primary); min-height: 64px; box-sizing: border-box;
+    }
+    .qa-reply-box textarea:focus { border-color: var(--purple-400); }
+    .qa-reply-actions { display: flex; gap: .5rem; margin-top: .4rem; justify-content: flex-end; }
+
+    /* Like button */
+    .qa-like-btn {
+      display: inline-flex; align-items: center; gap: .3rem;
+      border: none; background: none; cursor: pointer; padding: .2rem .5rem;
+      font-size: 12px; color: var(--text-muted); font-family: var(--font-sans);
+      border-radius: var(--radius-sm); transition: background var(--transition);
+    }
+    .qa-like-btn:hover { background: var(--gray-50); }
+    .qa-like-btn.liked { color: #E53E3E; }
+    .qa-like-btn i { font-size: 14px; }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div style="padding-top: var(--topbar-h)">
+  <div class="qa-page">
+
+    <div class="qa-header">
+      <button onclick="history.back()" class="btn btn-ghost btn-sm">
+        <i class="ti ti-arrow-left"></i>
+      </button>
+      <div class="qa-title">
+        <i class="ti ti-message-question" style="color:var(--purple-600)"></i>
+        Perguntas Anônimas
+      </div>
+    </div>
+
+    <!-- Caixa de envio (visível para visitantes do perfil) -->
+    <div class="qa-send-box" id="send-box" style="display:none">
+      <h2 id="send-box-name">Faça uma pergunta</h2>
+      <p>Sua pergunta chegará anonimamente. Seja respeitoso.</p>
+      <textarea id="question-text" placeholder="Digite sua pergunta..." maxlength="300"></textarea>
+      <div class="qa-send-footer">
+        <label class="qa-anon-toggle">
+          <input type="checkbox" id="anon-check" checked>
+          Enviar anonimamente
+        </label>
+        <button class="btn btn-sm" id="send-btn"
+                style="background:#fff;color:var(--purple-600);font-weight:600"
+                onclick="sendQuestion()">
+          <i class="ti ti-send"></i> Enviar
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabs (visível apenas para o dono) -->
+    <div class="qa-tabs" id="qa-tabs" style="display:none">
+      <button class="qa-tab active" id="tab-pending"   onclick="switchTab('pending')"><i class="ti ti-clock"></i> Pendentes</button>
+      <button class="qa-tab"        id="tab-answered"  onclick="switchTab('answered')"><i class="ti ti-check"></i> Respondidas</button>
+    </div>
+
+    <div id="qa-list">
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let profileUid   = null;
+let isOwner      = false;
+let currentTab   = 'pending';
+
+requireAuth(async user => {
+  currentUser = user;
+  const params = new URLSearchParams(location.search);
+  profileUid = params.get('uid') || user.uid;
+  isOwner    = profileUid === user.uid;
+
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(userData, '');
+
+  if (!isOwner) {
+    // Visitante: mostra caixa de envio
+    const ownerData = await getUserData(profileUid);
+    const name = ownerData?.displayName || 'usuário';
+    document.getElementById('send-box-name').textContent = `Pergunte algo para ${name}`;
+    document.getElementById('send-box').style.display = '';
+  } else {
+    // Dono: mostra abas
+    document.getElementById('qa-tabs').style.display = 'flex';
+  }
+
+  loadQuestions(currentTab);
+});
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['pending','answered'].forEach(t =>
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab)
+  );
+  loadQuestions(tab);
+}
+
+async function loadQuestions(tab) {
+  const el = document.getElementById('qa-list');
+  el.innerHTML = '<div class="loading-screen" style="min-height:150px"><div class="spinner"></div></div>';
+  try {
+    let q = db.collection('questions').doc(profileUid).collection('items');
+
+    if (isOwner) {
+      q = tab === 'pending'
+        ? q.where('status', '==', 'pending').orderBy('createdAt', 'desc').limit(40)
+        : q.where('status', '==', 'answered').orderBy('createdAt', 'desc').limit(40);
+    } else {
+      // Visitante vê apenas respondidas
+      q = q.where('status', '==', 'answered').orderBy('createdAt', 'desc').limit(40);
+    }
+
+    const snap = await q.get();
+    if (snap.empty) {
+      el.innerHTML = `<div class="empty-state">
+        <i class="ti ti-message-question" style="font-size:40px;color:var(--text-muted)"></i>
+        <p>${isOwner ? 'Nenhuma pergunta ainda.' : 'Nenhuma pergunta respondida ainda.'}</p>
+      </div>`;
+      return;
+    }
+    el.innerHTML = snap.docs.map(doc => questionCardHTML(doc.id, doc.data())).join('');
+  } catch(e) {
+    console.error('loadQuestions:', e);
+    el.innerHTML = `<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Erro ao carregar.</p></div>`;
+  }
+}
+
+function questionCardHTML(id, q) {
+  const isLiked = (q.likes || []).includes(currentUser?.uid);
+  const likeCount = (q.likes || []).length;
+
+  const fromLabel = q.anonymous
+    ? `<span class="qa-anon-badge"><i class="ti ti-user-question" style="font-size:10px"></i> Anônimo</span>`
+    : `<span style="font-size:11px;color:var(--text-muted)">${sanitize(q.fromName||'Alguém')}</span>`;
+
+  const statusBadge = q.status === 'pending'
+    ? `<span class="qa-pending-badge"><i class="ti ti-clock" style="font-size:10px"></i> Aguardando resposta</span>`
+    : '';
+
+  const answerSection = q.answer
+    ? `<div class="qa-answer">
+        <strong style="font-size:12px;color:var(--purple-600)">Resposta:</strong><br>
+        ${sanitize(q.answer)}
+      </div>`
+    : '';
+
+  const replyBox = isOwner && q.status === 'pending'
+    ? `<div class="qa-reply-box">
+        <textarea id="reply-${id}" placeholder="Escreva sua resposta..." maxlength="500"></textarea>
+        <div class="qa-reply-actions">
+          <button class="btn btn-ghost btn-sm" onclick="deleteQuestion('${id}')">
+            <i class="ti ti-trash"></i> Ignorar
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="answerQuestion('${id}')">
+            <i class="ti ti-send"></i> Responder
+          </button>
+        </div>
+      </div>`
+    : '';
+
+  return `<div class="qa-card" id="qa-${id}">
+    <div class="qa-question">${sanitize(q.text)}</div>
+    ${answerSection}
+    <div class="qa-meta">
+      ${fromLabel}
+      <span>·</span>
+      <span>${timeAgo(q.createdAt)}</span>
+      ${statusBadge}
+      <button class="qa-like-btn${isLiked?' liked':''}" id="qalike-${id}" onclick="likeQuestion('${id}')">
+        <i class="ti ti-heart${isLiked?'-filled':''}"></i> ${likeCount||''}
+      </button>
+    </div>
+    ${replyBox}
+  </div>`;
+}
+
+async function sendQuestion() {
+  const text = document.getElementById('question-text').value.trim();
+  if (!text) return showToast('Digite sua pergunta.');
+  const anon = document.getElementById('anon-check').checked;
+  const btn  = document.getElementById('send-btn');
+  btn.disabled = true;
+  try {
+    await db.collection('questions').doc(profileUid).collection('items').add({
+      text,
+      anonymous: anon,
+      fromUid:   anon ? null : currentUser.uid,
+      fromName:  anon ? null : (currentUser.displayName || 'Usuário'),
+      status:    'pending',
+      likes:     [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('question-text').value = '';
+    showToast('Pergunta enviada!');
+    if (!anon) {
+      createNotification(profileUid, 'mention', {
+        message: `${currentUser.displayName} enviou uma pergunta para você.`,
+        link: `perguntas.html?uid=${profileUid}`,
+        fromUid: currentUser.uid,
+        fromName: currentUser.displayName
+      });
+    }
+  } catch(e) {
+    showToast('Erro ao enviar.');
+  }
+  btn.disabled = false;
+}
+
+async function answerQuestion(qId) {
+  const text = document.getElementById('reply-' + qId)?.value.trim();
+  if (!text) return showToast('Escreva uma resposta.');
+  try {
+    await db.collection('questions').doc(profileUid).collection('items').doc(qId).update({
+      answer: text,
+      status: 'answered',
+      answeredAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('qa-' + qId)?.remove();
+    showToast('Resposta publicada!');
+  } catch(e) { showToast('Erro ao responder.'); }
+}
+
+async function deleteQuestion(qId) {
+  try {
+    await db.collection('questions').doc(profileUid).collection('items').doc(qId).delete();
+    document.getElementById('qa-' + qId)?.remove();
+    showToast('Pergunta ignorada.');
+  } catch(e) { showToast('Erro.'); }
+}
+
+async function likeQuestion(qId) {
+  const ref = db.collection('questions').doc(profileUid).collection('items').doc(qId);
+  const snap = await ref.get();
+  const likes = snap.data()?.likes || [];
+  const liked = likes.includes(currentUser.uid);
+  await ref.update({
+    likes: liked
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+  });
+  const btn = document.getElementById('qalike-' + qId);
+  const newCount = liked ? likes.length - 1 : likes.length + 1;
+  if (btn) {
+    btn.classList.toggle('liked', !liked);
+    btn.innerHTML = `<i class="ti ti-heart${!liked?'-filled':''}"></i> ${newCount||''}`;
+  }
+}
+</script>
+</body>
+</html>

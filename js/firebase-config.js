@@ -25,3 +25,9 @@ try { storage = firebase.storage(); } catch(e) { /* SDK não carregado nesta pá
 
 // Provedor Google para login social
 const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+// Firebase Messaging (push notifications)
+// VAPID key: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair
+const FCM_VAPID_KEY = 'SUA_VAPID_KEY_AQUI'; // TODO: substitua pelo valor do Firebase Console
+let messaging;
+try { messaging = firebase.messaging(); } catch(e) { /* SDK não carregado */ }

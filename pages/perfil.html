@@ -396,6 +396,7 @@ async function renderProfile(uid) {
         ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
              <button class="btn btn-primary btn-sm" onclick="location.href='mensagens.html?with=${uid}'">✉ Mensagem</button>
              <button class="btn btn-sm" disabled>✓ Amigos</button>
+             <button class="btn btn-sm" onclick="location.href='perguntas.html?uid=${uid}'" title="Fazer pergunta anônima"><i class="ti ti-message-question"></i></button>
              ${blockBtn}${reportBtn}${shareBtn}
            </div>`
         : hasPendingRequest
@@ -403,6 +404,7 @@ async function renderProfile(uid) {
           : `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
                <button class="btn btn-primary btn-sm" onclick="location.href='mensagens.html?with=${uid}'">✉ Mensagem</button>
                <button class="btn btn-sm" onclick="sendFriendRequest('${uid}', this)">+ Adicionar</button>
+               <button class="btn btn-sm" onclick="location.href='perguntas.html?uid=${uid}'" title="Fazer pergunta anônima"><i class="ti ti-message-question"></i></button>
                ${blockBtn}${reportBtn}${shareBtn}
              </div>`;
 
@@ -457,6 +459,7 @@ async function renderProfile(uid) {
         <button class="profile-tab" onclick="switchTab('communities')"><i class="ti ti-building-community" aria-hidden="true"></i> Comunidades</button>
         <button class="profile-tab" onclick="switchTab('scraps')"><i class="ti ti-message" aria-hidden="true"></i> Recados</button>
         <button class="profile-tab" onclick="switchTab('depoimentos')"><i class="ti ti-quote" aria-hidden="true"></i> Depoimentos</button>
+        <button class="profile-tab" onclick="location.href='perguntas.html?uid=${uid}'"><i class="ti ti-message-question" aria-hidden="true"></i> Perguntas</button>
       </div>
       <div class="card-body">
         <div class="tab-content active" id="tab-posts"><div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div></div>

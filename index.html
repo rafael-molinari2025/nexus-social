@@ -310,13 +310,19 @@
 
     <!-- Composer -->
     <div class="card" id="composer-card">
+      <div id="draft-banner" style="display:none;align-items:center;gap:.6rem;background:var(--purple-50);border:0.5px solid var(--purple-200);border-radius:var(--radius-md);padding:.5rem .875rem;margin-bottom:.5rem;font-size:13px;color:var(--purple-700)">
+        <i class="ti ti-device-floppy" style="font-size:15px"></i>
+        <span>Você tem um rascunho salvo.</span>
+        <button onclick="loadDraft()" style="background:none;border:none;font-size:13px;font-weight:600;color:var(--purple-600);cursor:pointer;padding:0;font-family:var(--font-sans)">Restaurar</button>
+        <button onclick="discardDraft()" style="background:none;border:none;font-size:13px;color:var(--text-muted);cursor:pointer;padding:0;margin-left:auto;font-family:var(--font-sans)">Descartar</button>
+      </div>
       <div class="composer">
         <div id="composer-avatar"></div>
         <div class="composer-box">
           <div style="position:relative">
             <textarea class="composer-textarea" id="post-text"
               placeholder="O que você está pensando? Use #hashtags e @menções"
-              oninput="updateCharCount();checkMentionInput(this);detectLinkInText(this.value)" maxlength="2000"></textarea>
+              oninput="updateCharCount();checkMentionInput(this);detectLinkInText(this.value);showDraftBtn(this.value)" maxlength="2000"></textarea>
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
           </div>
           <div class="composer-char-count" id="post-char-count"></div>
@@ -353,6 +359,9 @@
               </button>
               <button class="composer-action-btn" title="Itálico (_texto_)" onclick="insertItalic()">
                 <i class="ti ti-italic" aria-hidden="true"></i>
+              </button>
+              <button class="composer-action-btn" title="Salvar rascunho" id="draft-btn" onclick="saveDraft()" style="display:none">
+                <i class="ti ti-device-floppy" aria-hidden="true"></i>
               </button>
               <button class="composer-privacy-btn" id="privacy-btn" onclick="cyclePrivacy()" title="Privacidade">
                 <i class="ti ti-world" id="privacy-icon" aria-hidden="true"></i>
@@ -579,6 +588,7 @@ requireAuth(async user => {
   loadTrendingHashtags();
   loadBirthdayWidget();
   loadMemoriesWidget();
+  checkForDraft();
 
   document.getElementById('auth-loading')?.remove();
 });
@@ -751,6 +761,49 @@ function removePostImage() {
   const w = document.getElementById('image-preview-wrap');
   w.style.display = 'none'; w.innerHTML = '';
   document.getElementById('post-image-input').value = '';
+}
+
+// ── Rascunhos ──────────────────────────────────────────────────
+const DRAFT_KEY = 'nexus_post_draft';
+
+function showDraftBtn(val) {
+  const btn = document.getElementById('draft-btn');
+  if (btn) btn.style.display = val.trim() ? 'inline-flex' : 'none';
+}
+
+function saveDraft() {
+  const text = document.getElementById('post-text')?.value || '';
+  if (!text.trim()) return;
+  localStorage.setItem(DRAFT_KEY, JSON.stringify({ text, savedAt: Date.now() }));
+  showToast('Rascunho salvo!');
+}
+
+function loadDraft() {
+  const raw = localStorage.getItem(DRAFT_KEY);
+  if (!raw) return;
+  try {
+    const { text } = JSON.parse(raw);
+    const ta = document.getElementById('post-text');
+    if (ta) { ta.value = text; updateCharCount(); detectLinkInText(text); showDraftBtn(text); }
+    document.getElementById('draft-banner').style.display = 'none';
+  } catch(e) {}
+}
+
+function discardDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+  document.getElementById('draft-banner').style.display = 'none';
+}
+
+function checkForDraft() {
+  const raw = localStorage.getItem(DRAFT_KEY);
+  if (!raw) return;
+  try {
+    const { text, savedAt } = JSON.parse(raw);
+    if (!text?.trim()) return;
+    const age = Date.now() - savedAt;
+    if (age > 7 * 24 * 3600 * 1000) { localStorage.removeItem(DRAFT_KEY); return; }
+    document.getElementById('draft-banner').style.display = 'flex';
+  } catch(e) {}
 }
 
 function togglePoll() {
@@ -941,6 +994,8 @@ async function createPost() {
       document.getElementById('poll-form').style.display = 'none';
       const pb = document.getElementById('poll-btn'); if (pb) pb.style.color = '';
     }
+    localStorage.removeItem(DRAFT_KEY);
+    document.getElementById('draft-btn').style.display = 'none';
     showToast('Post publicado!');
   } catch(e) {
     console.error(e);

@@ -215,6 +215,38 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == visitorUid;
     }
 
+    // ── Salas de áudio ────────────────────────────────────────────
+    match /audio_rooms/{roomId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.hostUid == request.auth.uid;
+      allow update: if request.auth != null
+        && (resource.data.hostUid == request.auth.uid
+            || request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['participantCount', 'status']));
+      allow delete: if request.auth != null
+        && resource.data.hostUid == request.auth.uid;
+
+      match /participants/{uid} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // ── Perguntas anônimas ────────────────────────────────────────
+    match /questions/{uid}/items/{itemId} {
+      // Dono lê tudo; outros leem apenas respondidas
+      allow read: if request.auth != null
+        && (request.auth.uid == uid || resource.data.status == 'answered');
+      // Qualquer autenticado pode enviar
+      allow create: if request.auth != null;
+      // Dono responde / apaga; outros podem curtir
+      allow update: if request.auth != null
+        && (request.auth.uid == uid
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']));
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
     // ── Galeria de fotos ─────────────────────────────────────────
     match /photos/{photoId} {
       allow read: if request.auth != null;

@@ -90,6 +90,11 @@ function requireAuth(callback) {
       window.location.href = loginPath;
     } else {
       callback(user);
+      // Registrar FCM token uma vez por sessão
+      if (!sessionStorage.getItem('_fcm_ok')) {
+        sessionStorage.setItem('_fcm_ok', '1');
+        requestBrowserNotifications(user.uid);
+      }
       // Migração silenciosa: garante displayName_lower no Firestore (uma vez por sessão)
       if (!sessionStorage.getItem('_dln_ok')) {
         sessionStorage.setItem('_dln_ok', '1');
@@ -169,10 +174,46 @@ function _fireBrowserNotif(notif) {
   } catch(e) {}
 }
 
-function requestBrowserNotifications() {
-  if (!('Notification' in window) || Notification.permission !== 'default') return;
-  Notification.requestPermission();
+async function requestBrowserNotifications(userId) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'denied') return;
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+  if (permission !== 'granted') return;
+  if (typeof messaging === 'undefined' || !messaging) return;
+  if (typeof FCM_VAPID_KEY === 'undefined' || FCM_VAPID_KEY === 'SUA_VAPID_KEY_AQUI') return;
+  try {
+    const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: swReg });
+    if (token && userId) {
+      await db.collection('users').doc(userId).update({ fcmToken: token });
+    }
+  } catch(e) { console.warn('FCM token:', e.message); }
 }
+
+async function sendPushToUser(toUid, title, body, url, tag) {
+  if (!toUid || !auth.currentUser) return;
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    await fetch('https://nexus-social-fawn.vercel.app/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+      body: JSON.stringify({ toUid, title, body, url, tag })
+    });
+  } catch(e) {}
+}
+
+const _PUSH_TITLES = {
+  friend_request: 'Solicitação de amizade',
+  friend_accept:  'Pedido de amizade aceito!',
+  post_like:      'Curtiu seu post',
+  post_comment:   'Comentou no seu post',
+  scrap:          'Novo recado no seu perfil',
+  mention:        'Mencionou você',
+  community_join: 'Entrou na sua comunidade',
+  poll_vote:      'Votou na sua enquete'
+};
 
 async function createNotification(toUid, type, data) {
   try {
@@ -182,6 +223,8 @@ async function createNotification(toUid, type, data) {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       ...data
     });
+    const title = _PUSH_TITLES[type] || 'Nexus';
+    sendPushToUser(toUid, title, data.message || '', data.link || '/', type);
   } catch (e) { /* silencioso */ }
 }
 
@@ -245,6 +288,8 @@ function renderTopbar(user, activePage = 'feed') {
       <button class="topbar-nav-btn${activePage==='communities'?' active':''}" title="Comunidades" onclick="location.href='${PAGES}comunidades.html'"><i class="ti ti-users-group" aria-hidden="true"></i></button>
       <button class="topbar-nav-btn${activePage==='events'?' active':''}" title="Eventos" onclick="location.href='${PAGES}eventos.html'"><i class="ti ti-calendar-event" aria-hidden="true"></i></button>
       <button class="topbar-nav-btn${activePage==='trends'?' active':''}" title="Tendências" onclick="location.href='${PAGES}tendencias.html'"><i class="ti ti-trending-up" aria-hidden="true"></i></button>
+      <button class="topbar-nav-btn${activePage==='audio'?' active':''}" title="Salas de Áudio" onclick="location.href='${PAGES}audio.html'"><i class="ti ti-microphone" aria-hidden="true"></i></button>
+      <button class="topbar-nav-btn${activePage==='analytics'?' active':''}" title="Analytics" onclick="location.href='${PAGES}analytics.html'"><i class="ti ti-chart-bar" aria-hidden="true"></i></button>
       <div class="notif-topbar-wrap">
         <button class="topbar-nav-btn${activePage==='notifications'?' active':''}" title="Notificações" id="notif-btn" onclick="toggleNotifPanel('${user.uid}')">
           <i class="ti ti-bell" aria-hidden="true"></i>
