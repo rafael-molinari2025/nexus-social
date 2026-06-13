@@ -28,6 +28,6 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 // Firebase Messaging (push notifications)
 // VAPID key: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair
-const FCM_VAPID_KEY = 'SUA_VAPID_KEY_AQUI'; // TODO: substitua pelo valor do Firebase Console
+const FCM_VAPID_KEY = 'BNo-TiznoJwvMsgJ2S9sOUYD_UO9XNu1T0s3JvDysh3crQBlLyMO355Utl0DxWYOcwV_pRGhUCic81dRuuHQoS4';
 let messaging;
 try { messaging = firebase.messaging(); } catch(e) { /* SDK não carregado */ }
