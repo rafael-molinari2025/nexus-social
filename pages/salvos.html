@@ -94,6 +94,13 @@
       </button>
     </div>
 
+    <!-- Search -->
+    <div style="position:relative;margin-bottom:.75rem">
+      <i class="ti ti-search" style="position:absolute;left:.65rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:15px;pointer-events:none"></i>
+      <input class="form-input" type="search" id="saved-search" placeholder="Buscar nos posts salvos..."
+             oninput="searchSaved(this.value)" style="padding-left:2.1rem;font-size:13px">
+    </div>
+
     <!-- Collections bar -->
     <div class="coll-bar" id="coll-bar">
       <button class="coll-chip active" id="chip-all" onclick="filterCollection(null)">
@@ -121,8 +128,9 @@ let currentUser     = null;
 let _lastSavedDoc   = null;
 let _loading        = false;
 let _totalSaved     = 0;
-let _activeCollId   = null; // null = all
-let _collections    = [];   // [{id, name, emoji, postIds[]}]
+let _activeCollId   = null;
+let _collections    = [];
+let _searchQuery    = '';
 const PAGE_SIZE     = 20;
 const COLLS_REF     = () => db.collection('bookmark_collections').doc(currentUser.uid).collection('colls');
 const POSTS_REF     = () => db.collection('bookmark_collections').doc(currentUser.uid).collection('posts');
@@ -164,6 +172,9 @@ function renderCollBar() {
 
 function filterCollection(collId) {
   _activeCollId = collId;
+  _searchQuery = '';
+  const si = document.getElementById('saved-search');
+  if (si) si.value = '';
   renderCollBar();
   loadSaved(true);
 }
@@ -448,6 +459,33 @@ async function toggleLike(postId) {
     btn.className = `post-action-btn${!isLiked?' liked':''}`;
     btn.innerHTML = `<i class="ti ti-heart"></i> ${isLiked ? likes.length - 1 : likes.length + 1}`;
   }
+}
+
+function searchSaved(q) {
+  _searchQuery = q.toLowerCase().trim();
+  const posts = document.querySelectorAll('#salvos-list .post');
+  if (!posts.length) return;
+  let visible = 0;
+  posts.forEach(post => {
+    const bodyText   = (post.querySelector('.post-body')?.textContent   || '').toLowerCase();
+    const authorText = (post.querySelector('.post-author')?.textContent || '').toLowerCase();
+    const match = !_searchQuery || bodyText.includes(_searchQuery) || authorText.includes(_searchQuery);
+    post.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const lm = document.getElementById('salvos-load-more');
+  if (lm) lm.style.visibility = _searchQuery ? 'hidden' : '';
+  let noRes = document.getElementById('saved-search-empty');
+  if (_searchQuery && visible === 0) {
+    if (!noRes) {
+      noRes = document.createElement('div');
+      noRes.id = 'saved-search-empty';
+      noRes.className = 'empty-state';
+      noRes.style.padding = '2rem 1rem';
+      noRes.innerHTML = `<i class="ti ti-search-off" style="font-size:2rem;color:var(--text-muted)"></i><p>Nenhum resultado para "${sanitize(_searchQuery)}".</p>`;
+      document.getElementById('salvos-list').appendChild(noRes);
+    } else { noRes.style.display = ''; }
+  } else if (noRes) { noRes.style.display = 'none'; }
 }
 
 async function unsavePost(postId, btn) {

@@ -156,6 +156,19 @@
       </div>
     </div>
 
+    <!-- Notificações -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-bell"></i> Notificações do navegador</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:.875rem">Receba alertas de mensagens e curtidas mesmo com a aba em segundo plano.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">Notificações push</div>
+          <div id="notif-perm-desc" style="font-size:12px;color:var(--text-muted);margin-top:.15rem"></div>
+        </div>
+        <button class="btn btn-sm" id="notif-perm-btn" onclick="toggleNotifPerm()" style="flex-shrink:0">Ativar</button>
+      </div>
+    </div>
+
     <!-- Aparência -->
     <div class="config-section">
       <div class="config-section-title"><i class="ti ti-palette"></i> Aparência</div>
@@ -300,7 +313,41 @@ requireAuth(async user => {
   loadCloseFriends();
   initThemePicker();
   loadVerificationStatus(userData);
+  loadNotifPermState();
 });
+
+function loadNotifPermState() {
+  const btn  = document.getElementById('notif-perm-btn');
+  const desc = document.getElementById('notif-perm-desc');
+  if (!('Notification' in window)) {
+    if (btn)  btn.style.display = 'none';
+    if (desc) desc.textContent  = 'Seu navegador não suporta notificações.';
+    return;
+  }
+  const perm = Notification.permission;
+  if (perm === 'granted') {
+    if (btn)  { btn.textContent = 'Ativo ✓'; btn.disabled = true; btn.style.background = 'var(--green-500,#22c55e)'; btn.style.color = '#fff'; btn.style.borderColor = 'transparent'; }
+    if (desc) { desc.textContent = 'Notificações ativas neste dispositivo.'; desc.style.color = 'var(--green-500,#22c55e)'; }
+  } else if (perm === 'denied') {
+    if (btn)  btn.style.display = 'none';
+    if (desc) { desc.innerHTML = 'Bloqueadas pelo navegador. Habilite em <strong>Configurações do site</strong> para ativar.'; desc.style.color = 'var(--coral-400)'; }
+  } else {
+    if (btn)  { btn.textContent = 'Ativar'; btn.disabled = false; }
+    if (desc) desc.textContent = 'Clique em "Ativar" para receber alertas de novas mensagens e curtidas.';
+  }
+}
+
+async function toggleNotifPerm() {
+  if (!('Notification' in window)) return;
+  const perm = await Notification.requestPermission();
+  loadNotifPermState();
+  if (perm === 'granted') {
+    showToast('Notificações ativadas!');
+    new Notification('Nexus', { body: 'Notificações ativadas com sucesso!', icon: '/icons/icon-192.png', tag: 'nexus-test' });
+  } else if (perm === 'denied') {
+    showToast('Notificações bloqueadas pelo navegador.');
+  }
+}
 
 function initThemePicker() {
   const saved = localStorage.getItem('nexus-theme') || 'auto';

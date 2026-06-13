@@ -401,6 +401,9 @@
       <button class="feed-tab" id="tab-friends" onclick="switchFeedTab('friends')">
         <i class="ti ti-users" style="font-size:14px;vertical-align:-2px" aria-hidden="true"></i> Amigos
       </button>
+      <button class="feed-tab" id="tab-liked" onclick="switchFeedTab('liked')">
+        <i class="ti ti-heart" style="font-size:14px;vertical-align:-2px" aria-hidden="true"></i> Curtidas
+      </button>
     </div>
 
     <!-- Composer -->
@@ -773,6 +776,7 @@ function switchFeedTab(tab) {
   history.replaceState(null, '', location.pathname);
   document.getElementById('tab-all').classList.toggle('active', tab === 'all');
   document.getElementById('tab-friends').classList.toggle('active', tab === 'friends');
+  document.getElementById('tab-liked').classList.toggle('active', tab === 'liked');
   renderHashtagBanner();
   loadPosts();
 }
@@ -1448,7 +1452,33 @@ function filterPostDocs(docs) {
   return docs;
 }
 
+async function loadLikedPosts() {
+  if (_postsUnsub) { _postsUnsub(); _postsUnsub = null; }
+  const list = document.getElementById('posts-list');
+  list.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+  try {
+    const snap = await db.collection('posts')
+      .where('likes', 'array-contains', currentUser.uid)
+      .orderBy('createdAt', 'desc')
+      .limit(30).get();
+    if (snap.empty) {
+      list.innerHTML = `<div class="empty-state card"><i class="ti ti-heart-off"></i><p>Você não curtiu nenhum post ainda.</p></div>`;
+      return;
+    }
+    const docs = snap.docs.filter(d => {
+      const p = d.data();
+      return p.modStatus !== 'removed' && !p.isArchived;
+    });
+    list.innerHTML = `<div class="card" id="posts-container">${docs.map(d => postHTML(d.id, d.data())).join('')}</div>`;
+    _observePostViews();
+  } catch(e) {
+    console.error('loadLikedPosts:', e);
+    list.innerHTML = `<div class="empty-state card"><i class="ti ti-alert-circle"></i><p>Erro ao carregar posts curtidos.</p></div>`;
+  }
+}
+
 function loadPosts() {
+  if (_feedTab === 'liked') { loadLikedPosts(); return; }
   if (_postsUnsub) { _postsUnsub(); _postsUnsub = null; }
   _lastPostDoc   = null;
   _extraPostsHTML = '';

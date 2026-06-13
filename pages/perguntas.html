@@ -132,6 +132,13 @@
       <button class="qa-tab"        id="tab-answered"  onclick="switchTab('answered')"><i class="ti ti-check"></i> Respondidas</button>
     </div>
 
+    <!-- Busca de perguntas (dono) -->
+    <div id="qa-search-wrap" style="display:none;position:relative;margin-bottom:.75rem">
+      <i class="ti ti-search" style="position:absolute;left:.65rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:15px;pointer-events:none"></i>
+      <input class="form-input" type="search" id="qa-search" placeholder="Buscar pergunta..."
+             oninput="searchQuestions(this.value)" style="padding-left:2.1rem;font-size:13px">
+    </div>
+
     <div id="qa-list">
       <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
     </div>
@@ -166,8 +173,9 @@ requireAuth(async user => {
     document.getElementById('send-box-name').textContent = `Pergunte algo para ${name}`;
     document.getElementById('send-box').style.display = '';
   } else {
-    // Dono: mostra abas
+    // Dono: mostra abas e busca
     document.getElementById('qa-tabs').style.display = 'flex';
+    document.getElementById('qa-search-wrap').style.display = '';
   }
 
   loadQuestions(currentTab);
@@ -178,7 +186,32 @@ function switchTab(tab) {
   ['pending','answered'].forEach(t =>
     document.getElementById('tab-' + t).classList.toggle('active', t === tab)
   );
+  const si = document.getElementById('qa-search');
+  if (si) si.value = '';
   loadQuestions(tab);
+}
+
+function searchQuestions(q) {
+  const query = q.toLowerCase().trim();
+  const cards  = document.querySelectorAll('#qa-list .qa-card');
+  if (!cards.length) return;
+  let visible = 0;
+  cards.forEach(card => {
+    const text  = (card.querySelector('.qa-question')?.textContent || '').toLowerCase();
+    const match = !query || text.includes(query);
+    card.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  let noRes = document.getElementById('qa-search-empty');
+  if (query && visible === 0 && cards.length) {
+    if (!noRes) {
+      noRes = document.createElement('div');
+      noRes.id = 'qa-search-empty';
+      noRes.className = 'empty-state';
+      noRes.innerHTML = `<i class="ti ti-search-off" style="font-size:2rem;color:var(--text-muted)"></i><p>Nenhuma pergunta encontrada para "${sanitize(query)}".</p>`;
+      document.getElementById('qa-list').appendChild(noRes);
+    } else noRes.style.display = '';
+  } else if (noRes) noRes.style.display = 'none';
 }
 
 async function loadQuestions(tab) {
