@@ -4,6 +4,7 @@
     "ignore": [
       "firebase.json",
       ".firebaserc",
+      ".git/**",
       ".gitignore",
       "*.zip",
       "**/node_modules/**",
