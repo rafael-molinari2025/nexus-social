@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Moderação</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <style>
+    .mod-page { max-width: 860px; margin: 0 auto; padding: 1.5rem .75rem; }
+    .mod-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1.5rem; }
+    .stat-card {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem; text-align: center;
+    }
+    .stat-num { font-size: 28px; font-weight: 700; }
+    .stat-label { font-size: 12px; color: var(--text-muted); margin-top: .2rem; }
+    .mod-tabs { display: flex; gap: .4rem; margin-bottom: 1.25rem; }
+    .mod-tab {
+      padding: .4rem 1rem; border: 0.5px solid var(--border);
+      border-radius: var(--radius-full); background: none;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); font-family: var(--font-sans);
+    }
+    .mod-tab.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+    .mod-post {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1rem 1.1rem; margin-bottom: .75rem;
+    }
+    .mod-post-header { display: flex; align-items: center; gap: .65rem; margin-bottom: .65rem; }
+    .mod-post-meta { flex: 1; min-width: 0; }
+    .mod-post-author { font-size: 14px; font-weight: 500; }
+    .mod-post-time { font-size: 11px; color: var(--text-muted); }
+    .mod-post-text { font-size: 14px; color: var(--text-secondary); line-height: 1.55; margin-bottom: .75rem; }
+    .mod-badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .2rem .65rem; border-radius: var(--radius-full);
+      font-size: 11px; font-weight: 600; margin-right: .35rem; margin-bottom: .35rem;
+    }
+    .badge-flagged  { background: #FEF3C7; color: #92400E; }
+    .badge-removed  { background: #FEE2E2; color: #991B1B; }
+    .badge-approved { background: #D1FAE5; color: #065F46; }
+    .badge-pending  { background: #EDE9FE; color: #5B21B6; }
+    .mod-reason { font-size: 12px; color: var(--text-muted); margin-bottom: .65rem; font-style: italic; }
+    .mod-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .btn-approve { background: #D1FAE5; color: #065F46; border: none; border-radius: var(--radius-sm); padding: .35rem .85rem; font-size: 13px; cursor: pointer; font-family: var(--font-sans); }
+    .btn-approve:hover { background: #A7F3D0; }
+    .btn-remove  { background: #FEE2E2; color: #991B1B; border: none; border-radius: var(--radius-sm); padding: .35rem .85rem; font-size: 13px; cursor: pointer; font-family: var(--font-sans); }
+    .btn-remove:hover  { background: #FECACA; }
+    .scan-bar { display: flex; align-items: center; gap: .75rem; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: .875rem 1.1rem; margin-bottom: 1.25rem; }
+    .scan-bar-info { flex: 1; font-size: 13px; color: var(--text-secondary); }
+    @media (max-width: 768px) {
+      .mod-page { padding: 1rem .5rem calc(80px + 1rem); }
+    }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+
+<div style="padding-top: var(--topbar-h)">
+  <div class="mod-page">
+    <h1 style="font-size:20px;font-weight:600;margin-bottom:1.25rem">
+      <i class="ti ti-shield-check" style="color:var(--purple-600)"></i> Painel de Moderação
+    </h1>
+
+    <!-- Stats -->
+    <div class="mod-stats" id="mod-stats">
+      <div class="stat-card"><div class="stat-num" id="s-flagged">—</div><div class="stat-label">Sinalizados</div></div>
+      <div class="stat-card"><div class="stat-num" id="s-removed">—</div><div class="stat-label">Removidos</div></div>
+      <div class="stat-card"><div class="stat-num" id="s-pending">—</div><div class="stat-label">Pendentes</div></div>
+      <div class="stat-card"><div class="stat-num" id="s-approved">—</div><div class="stat-label">Aprovados (24h)</div></div>
+    </div>
+
+    <!-- Scan manual -->
+    <div class="scan-bar">
+      <i class="ti ti-radar" style="color:var(--purple-400);font-size:20px;flex-shrink:0"></i>
+      <div class="scan-bar-info">
+        Varredura automática a cada 6h. Execute manualmente para verificar posts recentes agora.
+      </div>
+      <button class="btn btn-primary btn-sm" id="scan-btn" onclick="runScan()">
+        <i class="ti ti-player-play"></i> Varrer agora
+      </button>
+    </div>
+
+    <!-- Abas -->
+    <div class="mod-tabs">
+      <button class="mod-tab active" id="tab-flagged"  onclick="switchTab('flagged')"><i class="ti ti-flag"></i> Sinalizados</button>
+      <button class="mod-tab"        id="tab-removed"  onclick="switchTab('removed')"><i class="ti ti-trash"></i> Removidos</button>
+      <button class="mod-tab"        id="tab-pending"  onclick="switchTab('pending')"><i class="ti ti-clock"></i> Pendentes</button>
+    </div>
+
+    <div id="mod-list">
+      <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+let currentUser = null;
+let currentTab  = 'flagged';
+
+const CATEGORY_LABELS = {
+  racismo:          'Racismo',
+  homofobia:        'Homofobia',
+  politico:         'Político extremista',
+  odio:             'Discurso de ódio',
+  assedio:          'Assédio',
+  sexual_explicito: 'Conteúdo sexual',
+  desinformacao:    'Desinformação',
+  spam:             'Spam'
+};
+
+requireAuth(async user => {
+  currentUser = user;
+  const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+
+  if (!userData.isAdmin) {
+    document.querySelector('.mod-page').innerHTML = `
+      <div class="empty-state" style="margin-top:4rem">
+        <i class="ti ti-lock" style="font-size:48px;color:var(--text-muted)"></i>
+        <p>Acesso restrito a administradores.</p>
+        <a href="../index.html" class="btn btn-primary" style="margin-top:1rem">Voltar ao início</a>
+      </div>`;
+    return;
+  }
+
+  renderTopbar(userData, '');
+  loadStats();
+  loadPosts('flagged');
+});
+
+async function loadStats() {
+  try {
+    const [flagSnap, remSnap, pendSnap, appSnap] = await Promise.all([
+      db.collection('posts').where('modStatus', '==', 'flagged').get(),
+      db.collection('posts').where('modStatus', '==', 'removed').get(),
+      db.collection('posts').where('modStatus', '==', 'pending').get(),
+      db.collection('posts')
+        .where('modStatus', '==', 'approved')
+        .where('modAt', '>=', new Date(Date.now() - 86400000))
+        .get()
+    ]);
+    document.getElementById('s-flagged').textContent  = flagSnap.size;
+    document.getElementById('s-removed').textContent  = remSnap.size;
+    document.getElementById('s-pending').textContent  = pendSnap.size;
+    document.getElementById('s-approved').textContent = appSnap.size;
+  } catch(e) { console.error('loadStats:', e); }
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['flagged','removed','pending'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  });
+  loadPosts(tab);
+}
+
+async function loadPosts(status) {
+  const el = document.getElementById('mod-list');
+  el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+  try {
+    const snap = await db.collection('posts')
+      .where('modStatus', '==', status)
+      .orderBy('createdAt', 'desc')
+      .limit(50).get();
+
+    if (snap.empty) {
+      el.innerHTML = `<div class="empty-state">
+        <i class="ti ti-circle-check" style="font-size:40px;color:#10B981"></i>
+        <p>Nenhum post ${status === 'flagged' ? 'sinalizado' : status === 'removed' ? 'removido' : 'pendente'} no momento.</p>
+      </div>`;
+      return;
+    }
+
+    el.innerHTML = snap.docs.map(doc => postCardHTML(doc.id, doc.data())).join('');
+  } catch(e) {
+    console.error('loadPosts:', e);
+    el.innerHTML = `<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Erro ao carregar. Tente recarregar.</p></div>`;
+  }
+}
+
+function postCardHTML(id, p) {
+  const cl = getAvatarColor(p.authorId);
+  const av = p.authorPhoto
+    ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(p.authorName || '?')}</span>`;
+
+  const statusBadge = {
+    flagged:  '<span class="mod-badge badge-flagged"><i class="ti ti-flag" style="font-size:11px"></i> Sinalizado</span>',
+    removed:  '<span class="mod-badge badge-removed"><i class="ti ti-trash" style="font-size:11px"></i> Removido</span>',
+    pending:  '<span class="mod-badge badge-pending"><i class="ti ti-clock" style="font-size:11px"></i> Pendente</span>',
+    approved: '<span class="mod-badge badge-approved"><i class="ti ti-check" style="font-size:11px"></i> Aprovado</span>'
+  }[p.modStatus] || '';
+
+  const cats = (p.modCategories || [])
+    .map(c => `<span class="mod-badge badge-removed" style="font-size:10px">${CATEGORY_LABELS[c] || c}</span>`)
+    .join('');
+
+  const actions = p.modStatus !== 'approved'
+    ? `<button class="btn-approve" onclick="setModStatus('${id}', 'approved')"><i class="ti ti-check"></i> Aprovar</button>`
+    : '';
+  const removeBtn = p.modStatus !== 'removed'
+    ? `<button class="btn-remove"  onclick="setModStatus('${id}', 'removed')"><i class="ti ti-trash"></i> Remover</button>`
+    : '';
+
+  return `<div class="mod-post" id="mp-${id}">
+    <div class="mod-post-header">
+      <div class="avatar avatar-36" style="background:${cl.bg};flex-shrink:0">${av}</div>
+      <div class="mod-post-meta">
+        <div class="mod-post-author">${sanitize(p.authorName || 'Usuário')}</div>
+        <div class="mod-post-time">${timeAgo(p.createdAt)}</div>
+      </div>
+      <a href="post.html?id=${id}" target="_blank" style="color:var(--text-muted);font-size:13px" title="Abrir post">
+        <i class="ti ti-external-link"></i>
+      </a>
+    </div>
+    ${p.text ? `<div class="mod-post-text">${sanitize(p.text.slice(0, 400))}${p.text.length > 400 ? '…' : ''}</div>` : '<div class="mod-post-text" style="color:var(--text-muted)">[Post sem texto — contém mídia]</div>'}
+    <div style="margin-bottom:.5rem">${statusBadge}${cats}</div>
+    ${p.modReason ? `<div class="mod-reason"><i class="ti ti-info-circle" style="font-size:12px"></i> ${sanitize(p.modReason)}</div>` : ''}
+    <div class="mod-actions">${actions}${removeBtn}</div>
+  </div>`;
+}
+
+async function setModStatus(postId, status) {
+  try {
+    await db.collection('posts').doc(postId).update({
+      modStatus: status,
+      modAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('mp-' + postId)?.remove();
+    showToast(status === 'approved' ? 'Post aprovado.' : 'Post removido.');
+    loadStats();
+  } catch(e) {
+    console.error('setModStatus:', e);
+    showToast('Erro ao atualizar status.');
+  }
+}
+
+async function runScan() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Varrendo…';
+  try {
+    const secret = prompt('Informe o SCAN_SECRET:');
+    if (!secret) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-player-play"></i> Varrer agora'; return; }
+    const res = await fetch('https://nexus-social-fawn.vercel.app/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-scan-secret': secret }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`Varredura concluída: ${data.scanned} posts — ${data.flagged} sinalizados, ${data.blocked} removidos`);
+      loadStats();
+      loadPosts(currentTab);
+    } else {
+      showToast('Erro na varredura: ' + (data.error || 'desconhecido'));
+    }
+  } catch(e) {
+    showToast('Falha ao conectar com o servidor de varredura.');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-player-play"></i> Varrer agora';
+}
+</script>
+</body>
+</html>

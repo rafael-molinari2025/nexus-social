@@ -22,9 +22,16 @@ service cloud.firestore {
             || resource.data.authorId == request.auth.uid);
       allow create: if request.auth != null
         && request.resource.data.authorId == request.auth.uid;
-      // Autor pode editar o próprio post
+      // Autor pode editar o próprio post, mas não pode alterar campos de moderação
       allow update: if request.auth != null
-        && resource.data.authorId == request.auth.uid;
+        && resource.data.authorId == request.auth.uid
+        && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['modStatus', 'modReason', 'modCategories', 'modAt', 'modSource']);
+      // Admin pode atualizar status de moderação
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['modStatus', 'modReason', 'modCategories', 'modAt'])
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
       // Qualquer usuário pode adicionar/remover apenas seu próprio UID em likes
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])

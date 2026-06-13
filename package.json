@@ -4,7 +4,6 @@
   "description": "Rede social Nexus — Firebase Hosting",
   "devDependencies": {
     "eslint": "^7.32.0",
-    "firebase-admin": "^13.10.0",
     "playwright": "^1.60.0",
     "stylelint": "^16.0.0",
     "stylelint-config-standard": "^35.0.0"
@@ -16,6 +15,8 @@
     "audit:ci": "npm audit --audit-level=high"
   },
   "dependencies": {
-    "agora-token": "^2.0.5"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "agora-token": "^2.0.5",
+    "firebase-admin": "^13.10.0"
   }
 }

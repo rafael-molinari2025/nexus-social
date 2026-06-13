@@ -880,6 +880,35 @@ async function createPost() {
       if (opts.length < 2) { showToast('A enquete precisa de pelo menos 2 opções.'); reset(); return; }
       postData.poll = { options: opts.map(t => ({ text: t, votes: [] })) };
     }
+    // ── Moderação de conteúdo (pré-publicação) ─────────────────
+    if (text.trim()) {
+      btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Verificando conteúdo…';
+      try {
+        const modRes = await fetch('https://nexus-social-fawn.vercel.app/api/moderate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const mod = modRes.ok ? await modRes.json() : { decision: 'allow' };
+        if (mod.decision === 'block') {
+          showToast('Publicação bloqueada: ' + (mod.reason || 'o conteúdo viola as diretrizes da plataforma.'));
+          reset(); return;
+        }
+        postData.modStatus     = mod.decision === 'flag' ? 'flagged' : 'approved';
+        postData.modReason     = mod.reason     || '';
+        postData.modCategories = mod.categories || [];
+        if (mod.decision === 'flag') {
+          showToast('Seu post foi sinalizado para revisão e ficará visível apenas para você até a aprovação.');
+        }
+      } catch (_e) {
+        // Falha na API de moderação: marcar como pendente; scanner de fundo revisará
+        postData.modStatus = 'pending';
+      }
+    } else {
+      postData.modStatus = 'approved';
+    }
+    btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Publicando…';
+
     const docRef = await db.collection('posts').add(postData);
     // @mention notifications
     const mentionWords = [...new Set((text.match(/@(\w+)/g)||[]).map(m => m.slice(1).toLowerCase()))];
@@ -941,6 +970,10 @@ function filterPostDocs(docs) {
   return docs.filter(d => {
     const p = d.data();
     if (_mutedUsers.includes(p.authorId)) return false;
+    // Esconder posts removidos pela moderação (exceto para o próprio autor)
+    if (p.modStatus === 'removed' && p.authorId !== currentUser.uid) return false;
+    // Esconder posts sinalizados para outros usuários (autor pode ver o próprio)
+    if (p.modStatus === 'flagged' && p.authorId !== currentUser.uid) return false;
     const prv = p.privacy || 'public';
     if (prv === 'private') return p.authorId === currentUser.uid;
     if (prv === 'friends') return p.authorId === currentUser.uid || _friendIds.has(p.authorId);
