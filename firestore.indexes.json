@@ -72,6 +72,22 @@
         { "fieldPath": "createdBy", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "modStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "modStatus", "order": "ASCENDING" },
+        { "fieldPath": "modAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
