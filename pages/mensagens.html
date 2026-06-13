@@ -584,12 +584,22 @@ async function openConversation(cid, otherUid) {
       <a href="perfil.html?uid=${other.uid}" class="btn btn-sm" title="Ver perfil">
         <i class="ti ti-user"></i>
       </a>
+      <button class="btn btn-sm" onclick="toggleChatSearch()" title="Buscar mensagens" id="chat-search-btn">
+        <i class="ti ti-search"></i>
+      </button>
       <button class="btn btn-sm" onclick="openThemePicker('${cid}')" title="Tema da conversa">
         <i class="ti ti-palette"></i>
       </button>
       <button class="btn btn-sm" onclick="deleteConversation('${cid}')" title="Excluir conversa" style="color:var(--coral-400)">
         <i class="ti ti-trash"></i>
       </button>
+    </div>
+    <div id="chat-search-bar" style="display:none;padding:.4rem 1rem;border-bottom:0.5px solid var(--border);background:var(--surface);align-items:center;gap:.5rem">
+      <i class="ti ti-search" style="color:var(--text-muted);font-size:14px"></i>
+      <input type="text" id="chat-search-input" placeholder="Buscar na conversa..." style="flex:1;border:none;outline:none;background:none;font-size:13px;font-family:var(--font-sans);color:var(--text-primary)"
+        oninput="filterChatMessages(this.value)">
+      <span id="chat-search-count" style="font-size:12px;color:var(--text-muted)"></span>
+      <button onclick="toggleChatSearch()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:0"><i class="ti ti-x"></i></button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="typing-indicator" id="typing-indicator" style="display:none;padding:.25rem 1.25rem;align-items:center;gap:.5rem">
@@ -1066,8 +1076,16 @@ async function openGroupConversation(cid) {
           ${count} participante${count !== 1 ? 's' : ''} · Ver membros
         </div>
       </div>
+      <button class="btn btn-sm" onclick="toggleChatSearch()" title="Buscar mensagens"><i class="ti ti-search"></i></button>
       <button class="btn btn-sm" onclick="showGroupMembers('${cid}')" title="Membros"><i class="ti ti-users"></i></button>
       <button class="btn btn-sm" style="color:var(--coral-400)" onclick="leaveGroup('${cid}')" title="Sair do grupo"><i class="ti ti-door-exit"></i></button>
+    </div>
+    <div id="chat-search-bar" style="display:none;padding:.4rem 1rem;border-bottom:0.5px solid var(--border);background:var(--surface);align-items:center;gap:.5rem">
+      <i class="ti ti-search" style="color:var(--text-muted);font-size:14px"></i>
+      <input type="text" id="chat-search-input" placeholder="Buscar na conversa..." style="flex:1;border:none;outline:none;background:none;font-size:13px;font-family:var(--font-sans);color:var(--text-primary)"
+        oninput="filterChatMessages(this.value)">
+      <span id="chat-search-count" style="font-size:12px;color:var(--text-muted)"></span>
+      <button onclick="toggleChatSearch()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:0"><i class="ti ti-x"></i></button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-area">
@@ -1506,6 +1524,43 @@ document.addEventListener('keydown', e => {
   const open = document.querySelector('.modal-overlay.open');
   if (open) open.remove();
 });
+
+// ── Chat search ────────────────────────────────────────────────
+function toggleChatSearch() {
+  const bar = document.getElementById('chat-search-bar');
+  if (!bar) return;
+  const open = bar.style.display !== 'none';
+  bar.style.display = open ? 'none' : 'flex';
+  if (!open) {
+    document.getElementById('chat-search-input')?.focus();
+  } else {
+    // Clear highlights
+    document.getElementById('chat-search-input').value = '';
+    filterChatMessages('');
+  }
+}
+
+function filterChatMessages(q) {
+  const msgs = document.querySelectorAll('#chat-messages .msg-row');
+  const count = document.getElementById('chat-search-count');
+  if (!q.trim()) {
+    msgs.forEach(m => { m.style.display = ''; });
+    if (count) count.textContent = '';
+    return;
+  }
+  const lower = q.toLowerCase();
+  let found = 0;
+  msgs.forEach(m => {
+    const text = m.querySelector('.msg-bubble')?.textContent?.toLowerCase() || '';
+    const match = text.includes(lower);
+    m.style.display = match ? '' : 'none';
+    if (match) found++;
+  });
+  if (count) count.textContent = found ? `${found} resultado${found !== 1 ? 's' : ''}` : 'Nenhum resultado';
+  // Scroll to first match
+  const first = document.querySelector('#chat-messages .msg-row:not([style*="none"])');
+  first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 
 // ── Chat polls ─────────────────────────────────────────────────
 let _pollConvId = null;

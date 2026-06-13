@@ -156,6 +156,29 @@
       </div>
     </div>
 
+    <!-- Aparência -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-palette"></i> Aparência</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:.875rem">Escolha como o Nexus deve aparecer no seu dispositivo.</p>
+      <div style="display:flex;flex-direction:column;gap:.6rem">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.5rem;border-radius:var(--radius-md);border:0.5px solid var(--border)" id="theme-auto-row">
+          <input type="radio" name="theme-mode" value="auto" id="theme-auto" style="accent-color:var(--purple-600)" onchange="applyThemeMode('auto')">
+          <div>
+            <div style="font-size:13px;font-weight:600">🌓 Automático</div>
+            <div style="font-size:12px;color:var(--text-muted)">Segue a preferência do sistema operacional</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.5rem;border-radius:var(--radius-md);border:0.5px solid var(--border)">
+          <input type="radio" name="theme-mode" value="light" id="theme-light" style="accent-color:var(--purple-600)" onchange="applyThemeMode('light')">
+          <div style="font-size:13px;font-weight:600">☀️ Claro</div>
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.5rem;border-radius:var(--radius-md);border:0.5px solid var(--border)">
+          <input type="radio" name="theme-mode" value="dark" id="theme-dark" style="accent-color:var(--purple-600)" onchange="applyThemeMode('dark')">
+          <div style="font-size:13px;font-weight:600">🌙 Escuro</div>
+        </label>
+      </div>
+    </div>
+
     <!-- Usuários bloqueados -->
     <div class="config-section">
       <div class="config-section-title"><i class="ti ti-ban"></i> Usuários bloqueados</div>
@@ -257,7 +280,31 @@ requireAuth(async user => {
   loadMutedUsers();
   loadPrivacySettings(userData);
   loadCloseFriends();
+  initThemePicker();
 });
+
+function initThemePicker() {
+  const saved = localStorage.getItem('nexus-theme') || 'auto';
+  const radio = document.getElementById(`theme-${saved}`);
+  if (radio) radio.checked = true;
+}
+
+function applyThemeMode(mode) {
+  if (mode === 'auto') {
+    localStorage.removeItem('nexus-theme');
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  } else {
+    localStorage.setItem('nexus-theme', mode);
+    document.documentElement.setAttribute('data-theme', mode);
+  }
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) {
+    const current = document.documentElement.getAttribute('data-theme');
+    btn.querySelector('i').className = current === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
+  }
+  showToast(`Tema ${mode === 'auto' ? 'automático' : mode === 'dark' ? 'escuro' : 'claro'} aplicado!`);
+}
 
 // ── Privacidade ───────────────────────────────────────────────
 function loadPrivacySettings(userData) {

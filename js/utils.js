@@ -62,20 +62,35 @@ function showToast(msg, duration = 3500) {
   t._timer = setTimeout(() => t.classList.remove('show'), duration);
 }
 
-// ── Theme (dark / light) ──────────────────────────────────────
+// ── Theme (dark / light / auto) ───────────────────────────────
+function _applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) btn.querySelector('i').className = theme === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
+}
+
 function initTheme() {
   const saved = localStorage.getItem('nexus-theme');
-  const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  document.documentElement.setAttribute('data-theme', theme);
+  if (!saved || saved === 'auto') {
+    // Follow system preference
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    _applyTheme(dark ? 'dark' : 'light');
+    // React to system changes in real-time when in auto mode
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+      if (localStorage.getItem('nexus-theme') === 'auto' || !localStorage.getItem('nexus-theme')) {
+        _applyTheme(e.matches ? 'dark' : 'light');
+      }
+    });
+  } else {
+    _applyTheme(saved);
+  }
 }
 
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme') || 'light';
   const next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
+  _applyTheme(next);
   localStorage.setItem('nexus-theme', next);
-  const btn = document.getElementById('theme-toggle-btn');
-  if (btn) btn.querySelector('i').className = next === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
 }
 
 // Inicializar tema imediatamente

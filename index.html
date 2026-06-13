@@ -313,6 +313,10 @@
     .link-preview-composer { position:relative; }
     .link-preview-dismiss { position:absolute; top:.3rem; right:.3rem; background:rgba(0,0,0,.45); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
 
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-80px) scale(1.6); }
+    }
     @keyframes livepulse2 {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: .4; transform: scale(.85); }
@@ -401,6 +405,12 @@
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
           </div>
           <div class="composer-char-count" id="post-char-count"></div>
+          <div id="location-wrap" style="display:none;align-items:center;gap:.4rem;margin-top:.35rem">
+            <i class="ti ti-map-pin" style="color:var(--purple-600);font-size:14px;flex-shrink:0"></i>
+            <input type="text" id="post-location" placeholder="Adicionar localização..." maxlength="80"
+              style="flex:1;font-size:13px;border:none;outline:none;background:none;color:var(--text-primary);font-family:var(--font-sans)">
+            <button onclick="clearLocation()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0;font-size:14px;line-height:1"><i class="ti ti-x"></i></button>
+          </div>
           <div id="image-preview-wrap" style="display:none"></div>
           <div id="link-preview-wrap" style="display:none"></div>
           <div id="poll-form" class="poll-form" style="display:none">
@@ -436,6 +446,9 @@
                 <i class="ti ti-italic" aria-hidden="true"></i>
               </button>
               <button class="composer-action-btn" title="Buscar GIF" onclick="openGifPicker()" style="font-size:11px;font-weight:700;letter-spacing:-.03em">GIF</button>
+              <button class="composer-action-btn" title="Adicionar localização" onclick="toggleLocationInput()" id="location-btn">
+                <i class="ti ti-map-pin" aria-hidden="true"></i>
+              </button>
               <button class="composer-action-btn" title="Agendar publicação" onclick="openScheduleModal()" id="schedule-btn">
                 <i class="ti ti-clock" aria-hidden="true"></i>
               </button>
@@ -578,6 +591,27 @@
             style="width:100%;justify-content:center;height:42px" onclick="publishStory()">
       <i class="ti ti-sparkles" aria-hidden="true"></i> Publicar story
     </button>
+  </div>
+</div>
+
+<!-- ── Citar post ────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="quote-modal" onclick="if(event.target===this)closeQuoteModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-quote" style="margin-right:.3rem"></i>Citar post</span>
+      <button class="btn btn-icon" onclick="closeQuoteModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:.75rem">
+      <textarea id="quote-text" class="form-input" placeholder="Adicione seu comentário..." rows="3"
+        style="resize:none;font-size:14px" maxlength="500"></textarea>
+      <div id="quote-preview" style="border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.75rem;background:var(--surface-2)">
+        <div class="spinner" style="margin:auto;width:20px;height:20px"></div>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:.5rem">
+      <button class="btn" onclick="closeQuoteModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="publishQuote()"><i class="ti ti-send"></i> Publicar citação</button>
+    </div>
   </div>
 </div>
 
@@ -938,6 +972,22 @@ function removeGif() {
 }
 
 // ── Posts agendados ────────────────────────────────────────────
+// ── Location ────────────────────────────────────────────────────
+function toggleLocationInput() {
+  const wrap = document.getElementById('location-wrap');
+  const btn  = document.getElementById('location-btn');
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : 'flex';
+  btn.classList.toggle('active', !showing);
+  if (!showing) document.getElementById('post-location').focus();
+  else document.getElementById('post-location').value = '';
+}
+function clearLocation() {
+  document.getElementById('post-location').value = '';
+  document.getElementById('location-wrap').style.display = 'none';
+  document.getElementById('location-btn').classList.remove('active');
+}
+
 const SCHED_KEY = 'nexus_scheduled_posts';
 let _scheduleTime = null;
 
@@ -1207,6 +1257,7 @@ async function createPost() {
       catch(e) { showToast(e.name === 'AbortError' ? 'Upload demorou demais.' : 'Erro ao enviar imagem.'); reset(); return; }
     }
     const hashtags = extractHashtags(text);
+    const locationVal = document.getElementById('post-location')?.value.trim() || null;
     const postData = {
       text: text || '',
       images,
@@ -1222,6 +1273,7 @@ async function createPost() {
       commentsCount: 0,
       privacy:      PRIVACY[_privacyIdx].v,
       hashtags,
+      ...(locationVal ? { location: locationVal } : {}),
       linkPreview:  (_linkPreview && _linkPreview !== false) ? _linkPreview : null,
       createdAt:    firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -1284,6 +1336,7 @@ async function createPost() {
     _postVideoFile = null;
     _gifSelectedUrl = null;
     _scheduleTime = null; updateScheduleBtn();
+    clearLocation();
     removePostImage();
     hideLinkPreview();
     // Reset poll
@@ -1468,6 +1521,7 @@ function postHTML(id, p) {
         <div class="post-author">${sanitize(p.authorName||'Usuário')}${p.authorVerified ? '<span class="verified-badge" title="Conta verificada"><i class="ti ti-check" style="font-size:8px"></i></span>' : ''}</div>
         <div class="post-time">
           ${timeAgo(p.createdAt)}
+          ${p.location ? `<span style="display:inline-flex;align-items:center;gap:2px;color:var(--text-muted)"><i class="ti ti-map-pin" style="font-size:9px"></i>${sanitize(p.location)}</span>` : ''}
           <span class="post-privacy-badge" title="${privOpt.label}">
             <i class="ti ${privOpt.icon}" style="font-size:10px" aria-hidden="true"></i>
           </span>
@@ -1493,6 +1547,7 @@ function postHTML(id, p) {
     </div>
     ${p.repostOf ? repostBlockHTML(p.repostOf) : ''}
     ${p.text ? `<div class="post-body">${parsePostText(p.text)}</div>` : ''}
+    ${p.quoteOf ? quoteBlockHTML(p.quoteOf) : ''}
     ${p.videoURL ? `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:420px;border-radius:var(--radius-md);background:#000;display:block;margin-bottom:.5rem" onclick="event.stopPropagation()"></video>` : (p.images?.length > 1) ? carouselHTML(id, p.images) : (p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" onerror="this.style.display='none'" onclick="openLightbox([this.src])" style="cursor:zoom-in">` : '')}
     ${p.poll ? pollHTML(id, p.poll) : ''}
     ${p.linkPreview ? linkPreviewCardHTML(p.linkPreview) : ''}
@@ -1691,6 +1746,18 @@ function repostBlockHTML(rp) {
   </div>`;
 }
 
+function quoteBlockHTML(qp) {
+  const cl = getAvatarColor(qp.authorId || '');
+  return `<div class="repost-block" style="cursor:pointer" onclick="event.stopPropagation();location.href='${PAGES}post.html?id=${qp.postId}'">
+    <div class="repost-label" style="display:flex;align-items:center;gap:.35rem">
+      <i class="ti ti-quote" style="font-size:12px"></i>
+      <span style="font-weight:600">${sanitize(qp.authorName||'Usuário')}</span>
+    </div>
+    ${qp.text ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.5">${sanitize(qp.text).slice(0,200)}${qp.text.length>200?'…':''}</div>` : ''}
+    ${qp.imageURL ? `<img src="${qp.imageURL}" style="width:100%;border-radius:6px;margin-top:.4rem;max-height:120px;object-fit:cover">` : ''}
+  </div>`;
+}
+
 function pollHTML(postId, poll) {
   const totalVotes = (poll.options||[]).reduce((s, o) => s + (o.votes||[]).length, 0);
   const myVoteIdx  = (poll.options||[]).findIndex(o => (o.votes||[]).includes(currentUser?.uid));
@@ -1768,6 +1835,9 @@ function sharePost(postId) {
         </button>
         <button class="btn" style="justify-content:flex-start;gap:.6rem" onclick="document.getElementById('share-mini-modal').remove();repostPost('${postId}')">
           <i class="ti ti-repeat"></i> Repostar no feed
+        </button>
+        <button class="btn" style="justify-content:flex-start;gap:.6rem" onclick="document.getElementById('share-mini-modal').remove();openQuoteModal('${postId}')">
+          <i class="ti ti-quote"></i> Citar post
         </button>
         <button class="btn" style="justify-content:flex-start;gap:.6rem" onclick="document.getElementById('share-mini-modal').remove();shareInCommunity('${postId}')">
           <i class="ti ti-users-group"></i> Compartilhar em comunidade
@@ -1866,6 +1936,66 @@ async function submitRepost(postId, btn) {
     document.getElementById('repost-modal')?.remove();
     showToast('Post repostado no seu feed!');
   } catch(e) { showToast('Erro ao repostar. Tente novamente.'); btn.disabled = false; btn.innerHTML = '<i class="ti ti-repeat"></i> Repostar no feed'; }
+}
+
+// ── Quote post ─────────────────────────────────────────────────
+let _quotePostId = null;
+
+async function openQuoteModal(postId) {
+  _quotePostId = postId;
+  document.getElementById('quote-text').value = '';
+  document.getElementById('quote-modal').classList.add('open');
+  const preview = document.getElementById('quote-preview');
+  const snap = await db.collection('posts').doc(postId).get();
+  if (!snap.exists) { preview.innerHTML = '<p style="font-size:13px;color:var(--text-muted)">Post não encontrado.</p>'; return; }
+  const p = snap.data();
+  const cl = getAvatarColor(p.authorId);
+  const av = p.authorPhoto
+    ? `<img src="${p.authorPhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(p.authorName)}</span>`;
+  preview.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
+      <div class="avatar avatar-28" style="background:${cl.bg}">${av}</div>
+      <span style="font-size:13px;font-weight:600">${sanitize(p.authorName||'Usuário')}</span>
+      <span style="font-size:11px;color:var(--text-muted)">${timeAgo(p.createdAt)}</span>
+    </div>
+    ${p.text ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.5">${sanitize(p.text).replace(/\n/g,'<br>').slice(0,200)}${p.text.length>200?'…':''}</div>` : ''}
+    ${p.imageURL ? `<img src="${p.imageURL}" style="width:100%;border-radius:6px;margin-top:.5rem;max-height:160px;object-fit:cover">` : ''}`;
+}
+
+function closeQuoteModal() {
+  document.getElementById('quote-modal').classList.remove('open');
+  _quotePostId = null;
+}
+
+async function publishQuote() {
+  const text = document.getElementById('quote-text').value.trim();
+  if (!text) return showToast('Escreva algo para citar este post.');
+  if (!_quotePostId) return;
+  const snap = await db.collection('posts').doc(_quotePostId).get();
+  if (!snap.exists) return showToast('Post não encontrado.');
+  const p = snap.data();
+  const btn = document.querySelector('#quote-modal .btn-primary');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Publicando…';
+  try {
+    await db.collection('posts').add({
+      text,
+      images: [], imageURL: null, videoURL: null,
+      authorId: currentUser.uid,
+      authorName: currentUser.displayName,
+      authorPhoto: currentUser.photoURL || null,
+      quoteOf: { postId: _quotePostId, authorId: p.authorId, authorName: p.authorName||'Usuário', text: (p.text||'').slice(0,200), imageURL: p.imageURL||null },
+      likes: [], bookmarks: [], reactions: {}, commentsCount: 0,
+      privacy: PRIVACY[_privacyIdx].v,
+      hashtags: extractHashtags(text),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    closeQuoteModal();
+    showToast('Citação publicada!');
+  } catch(e) {
+    showToast('Erro ao publicar: ' + e.message);
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Publicar citação';
+  }
 }
 
 async function shareInCommunity(postId) {
@@ -2409,10 +2539,18 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
       </div>
       <div class="story-viewer-body">${body}</div>
       ${s.uid !== currentUser?.uid ? `
-      <div style="position:absolute;bottom:0;left:0;right:0;z-index:10;padding:.75rem .75rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,.6))">
+      <div style="position:absolute;bottom:0;left:0;right:0;z-index:10;padding:.5rem .75rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,.65))">
+        <div style="display:flex;gap:.5rem;margin-bottom:.4rem">
+          ${['❤️','😂','😮','😢','🔥','🎉'].map(e => `
+            <button onclick="event.stopPropagation();reactToStory('${storyId}','${s.uid}','${e}')"
+              style="background:rgba(255,255,255,.15);border:none;border-radius:50%;width:34px;height:34px;font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px);transition:transform .15s"
+              onmouseenter="this.style.transform='scale(1.25)'" onmouseleave="this.style.transform=''">
+              ${e}
+            </button>`).join('')}
+        </div>
         <div style="display:flex;gap:.5rem;align-items:center">
           <input id="story-reply-input" placeholder="Responder a ${sanitize(s.displayName?.split(' ')[0]||'Usuário')}…"
-            style="flex:1;background:rgba(255,255,255,.15);border:none;border-radius:var(--radius-full);color:#fff;padding:.45rem .875rem;font-size:13px;font-family:var(--font-sans);outline:none;backdrop-filter:blur(4px);::placeholder{color:rgba(255,255,255,.6)}"
+            style="flex:1;background:rgba(255,255,255,.15);border:none;border-radius:var(--radius-full);color:#fff;padding:.45rem .875rem;font-size:13px;font-family:var(--font-sans);outline:none;backdrop-filter:blur(4px)"
             onclick="event.stopPropagation()"
             onkeydown="if(event.key==='Enter')sendStoryReply('${storyId}','${s.uid}',${JSON.stringify(s.text||'').replace(/"/g,'&quot;')})">
           <button onclick="event.stopPropagation();sendStoryReply('${storyId}','${s.uid}',${JSON.stringify(s.text||'').replace(/"/g,'&quot;')})"
@@ -2420,7 +2558,14 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
             <i class="ti ti-send"></i>
           </button>
         </div>
-      </div>` : ''}
+      </div>` : `
+      <div style="position:absolute;bottom:0;left:0;right:0;z-index:10;padding:.5rem .75rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,.5));text-align:center">
+        <div id="story-reactions-summary" style="font-size:13px;color:rgba(255,255,255,.8)"></div>
+        <button onclick="event.stopPropagation();showStoryViewers('${storyId}')"
+          style="margin-top:.4rem;background:rgba(255,255,255,.15);border:none;border-radius:var(--radius-full);color:#fff;padding:.3rem .75rem;font-size:12px;cursor:pointer;backdrop-filter:blur(4px)">
+          <i class="ti ti-eye" style="margin-right:.2rem"></i> Ver visualizações
+        </button>
+      </div>`}
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) { clearTimeout(_storyTimer); overlay.remove(); } });
@@ -2517,6 +2662,80 @@ async function sendStoryReply(storyId, authorUid, storyText) {
       fromUid: currentUser.uid, fromName: currentUser.displayName
     });
   } catch(e) { showToast('Erro ao enviar resposta.'); }
+}
+
+// ── Story reactions ────────────────────────────────────────────
+async function reactToStory(storyId, authorUid, emoji) {
+  const overlay = document.getElementById('story-view-overlay');
+  // Floating emoji animation
+  if (overlay) {
+    const el = document.createElement('div');
+    el.textContent = emoji;
+    el.style.cssText = 'position:absolute;bottom:90px;left:50%;transform:translateX(-50%);font-size:36px;pointer-events:none;animation:floatUp .8s ease forwards;z-index:20';
+    overlay.appendChild(el);
+    setTimeout(() => el.remove(), 900);
+  }
+  try {
+    await db.collection('stories').doc(storyId).update({
+      [`reactions.${currentUser.uid}`]: emoji
+    });
+    // Send reaction as DM to author
+    const convId = [currentUser.uid, authorUid].sort().join('_');
+    const convRef = db.collection('conversations').doc(convId);
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) {
+      await convRef.set({
+        participants: [currentUser.uid, authorUid],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastMessage: '', lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+        unread: { [authorUid]: 0 }
+      });
+    }
+    await convRef.collection('messages').add({
+      senderId: currentUser.uid,
+      text: `${emoji} Reagiu ao seu story`,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await convRef.update({
+      lastMessage: `${emoji} Reagiu ao seu story`,
+      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+      [`unread.${authorUid}`]: firebase.firestore.FieldValue.increment(1)
+    });
+  } catch(e) { /* silent */ }
+}
+
+async function showStoryViewers(storyId) {
+  const snap = await db.collection('stories').doc(storyId).get();
+  if (!snap.exists) return;
+  const s = snap.data();
+  const views = s.views || [];
+  const reactions = s.reactions || {};
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `<div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-eye"></i> Visualizações (${views.length})</span>
+      <button class="btn btn-icon" onclick="this.closest('.modal-overlay').remove()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" id="story-viewers-list" style="max-height:320px;overflow-y:auto">
+      <div class="spinner" style="margin:auto;width:20px;height:20px"></div>
+    </div>
+  </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  const users = await Promise.all(views.slice(0,30).map(uid => getUserData(uid)));
+  const list = document.getElementById('story-viewers-list');
+  if (!list) return;
+  list.innerHTML = users.filter(Boolean).map(u => {
+    const cl = getAvatarColor(u.uid);
+    const av = u.photoURL ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+    const rxn = reactions[u.uid] || '';
+    return `<div style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:0.5px solid var(--border)">
+      <div class="avatar avatar-36" style="background:${cl.bg}">${av}</div>
+      <div style="flex:1;font-size:13px;font-weight:600">${sanitize(u.displayName||'Usuário')}</div>
+      ${rxn ? `<span style="font-size:20px">${rxn}</span>` : ''}
+    </div>`;
+  }).join('') || '<p style="font-size:13px;color:var(--text-muted);text-align:center">Nenhuma visualização ainda</p>';
 }
 
 // ── Story creation ─────────────────────────────────────────────
