@@ -970,9 +970,9 @@ function filterPostDocs(docs) {
   return docs.filter(d => {
     const p = d.data();
     if (_mutedUsers.includes(p.authorId)) return false;
-    // Esconder posts removidos pela moderação (exceto para o próprio autor)
-    if (p.modStatus === 'removed' && p.authorId !== currentUser.uid) return false;
-    // Esconder posts sinalizados para outros usuários (autor pode ver o próprio)
+    // Esconder posts removidos pela moderação para todos
+    if (p.modStatus === 'removed') return false;
+    // Esconder posts sinalizados para outros usuários (autor ainda vê o próprio)
     if (p.modStatus === 'flagged' && p.authorId !== currentUser.uid) return false;
     const prv = p.privacy || 'public';
     if (prv === 'private') return p.authorId === currentUser.uid;
