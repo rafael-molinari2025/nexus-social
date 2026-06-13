@@ -387,7 +387,7 @@ ul, ol { list-style: none; }
 
 /* ── Profile card widget ── */
 .profile-banner {
-  height: 76px;
+  height: 120px;
   background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 60%, #A855F7 100%);
   background-size: cover;
   background-position: center center;
