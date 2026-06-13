@@ -238,6 +238,22 @@ function renderPage() {
           </div>
         </div>
 
+        <div class="card" style="margin-top:.75rem" id="rules-card">
+          <div class="card-body">
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+              <span><i class="ti ti-list-check" style="color:var(--purple-600);font-size:14px;vertical-align:-1px"></i> Regras</span>
+              ${isAdmin ? `<button class="btn btn-icon btn-sm" onclick="openRulesEditor()" title="Editar regras" style="font-size:13px"><i class="ti ti-pencil"></i></button>` : ''}
+            </div>
+            <div id="rules-list">
+              ${commData.rules?.length
+                ? commData.rules.map((r,i) => `<div style="font-size:13px;color:var(--text-secondary);padding:.3rem 0;border-bottom:0.5px solid var(--border);display:flex;gap:.5rem">
+                    <span style="color:var(--purple-600);font-weight:700;flex-shrink:0">${i+1}.</span>${sanitize(r)}
+                  </div>`).join('')
+                : `<p style="font-size:13px;color:var(--text-muted)">Nenhuma regra definida${isAdmin ? '. Clique no lápis para adicionar.' : '.'}</p>`}
+            </div>
+          </div>
+        </div>
+
         <div class="card" style="margin-top:.75rem" id="top-members-card">
           <div class="card-body">
             <div class="card-title">Membros em destaque</div>
@@ -430,6 +446,12 @@ function _renderMemberRow(doc, u) {
       ${role==='admin' ? `<div style="font-size:11px;color:var(--indigo-500);font-weight:600">Administrador</div>` : ''}
       ${u.bio ? `<div class="search-result-sub">${sanitize(u.bio)}</div>` : ''}
     </div>
+    ${canRemove && role !== 'admin' ? `<button onclick="promoteToAdmin('${docId}','${sanitize(u.displayName||'Usuário').replace(/'/g,"\\'")}','${u.uid}')"
+      title="Promover a administrador"
+      style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:15px;padding:.25rem;border-radius:4px;flex-shrink:0"
+      onmouseover="this.style.color='var(--indigo-500)'" onmouseout="this.style.color='var(--text-muted)'">
+      <i class="ti ti-shield-plus"></i>
+    </button>` : ''}
     ${canRemove ? `<button onclick="removeMember('${docId}','${sanitize(u.displayName||'Usuário').replace(/'/g,"\\'")}','${u.uid}')"
       title="Remover membro"
       style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:15px;padding:.25rem;border-radius:4px;flex-shrink:0"
@@ -534,6 +556,60 @@ async function removeMember(memberDocId, memberName, memberUid) {
     loadAllMembers();
     loadTopMembers();
   } catch(e) { showToast('Erro ao remover membro.'); }
+}
+
+// ── Regras da comunidade ──────────────────────────────────────
+function openRulesEditor() {
+  const existing = document.getElementById('rules-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'rules-modal';
+  modal.className = 'modal-overlay open';
+  const currentRules = (commData.rules || []).join('\n');
+  modal.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-list-check"></i> Regras da comunidade</span>
+        <button class="btn btn-icon" onclick="document.getElementById('rules-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="padding:1rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.75rem">
+        <p style="font-size:13px;color:var(--text-muted)">Uma regra por linha. Máximo 10 regras, 200 caracteres cada.</p>
+        <textarea id="rules-textarea" class="form-control" rows="8" maxlength="2200" style="resize:vertical"
+          placeholder="Ex: Respeite todos os membros&#10;Sem spam ou publicidade&#10;Conteúdo relevante ao tema">${sanitize(currentRules)}</textarea>
+        <button class="btn btn-primary" onclick="saveRules()">
+          <i class="ti ti-device-floppy"></i> Salvar regras
+        </button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function saveRules() {
+  const raw = document.getElementById('rules-textarea')?.value || '';
+  const rules = raw.split('\n').map(r => r.trim()).filter(Boolean).slice(0, 10);
+  try {
+    await db.collection('communities').doc(commId).update({ rules });
+    commData.rules = rules;
+    document.getElementById('rules-modal')?.remove();
+    const list = document.getElementById('rules-list');
+    if (list) list.innerHTML = rules.length
+      ? rules.map((r,i) => `<div style="font-size:13px;color:var(--text-secondary);padding:.3rem 0;border-bottom:0.5px solid var(--border);display:flex;gap:.5rem">
+          <span style="color:var(--purple-600);font-weight:700;flex-shrink:0">${i+1}.</span>${sanitize(r)}
+        </div>`).join('')
+      : `<p style="font-size:13px;color:var(--text-muted)">Nenhuma regra definida. Clique no lápis para adicionar.</p>`;
+    showToast('Regras salvas!');
+  } catch(e) { showToast('Erro ao salvar regras.'); }
+}
+
+async function promoteToAdmin(memberDocId, memberName, memberUid) {
+  if (!confirm(`Promover ${memberName} a administrador desta comunidade?`)) return;
+  try {
+    await db.collection('community_members').doc(memberDocId).update({ role: 'admin' });
+    showToast(`${memberName} agora é administrador.`);
+    loadAllMembers();
+    loadTopMembers();
+  } catch(e) { showToast('Erro ao promover membro.'); }
 }
 
 async function deleteThisCommunity() {

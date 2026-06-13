@@ -158,6 +158,16 @@
     }
     .story-type-tab.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
 
+    /* ── New posts banner ─────────────────────────────────────────── */
+    .new-posts-banner {
+      display: none; align-items: center; justify-content: center; gap: .5rem;
+      background: var(--purple-600); color: #fff;
+      border-radius: var(--radius-md); padding: .5rem 1rem;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      margin-bottom: .75rem; transition: opacity .2s;
+    }
+    .new-posts-banner:hover { opacity: .9; }
+
     /* ── Feed tabs ────────────────────────────────────────────────── */
     .feed-tabs {
       display: flex; gap: .4rem; margin-bottom: .75rem;
@@ -376,6 +386,12 @@
 
     <!-- Notes bar -->
     <div class="notes-bar" id="notes-bar" style="display:none"></div>
+
+    <!-- New posts banner -->
+    <div class="new-posts-banner" id="new-posts-banner" onclick="dismissNewPosts()">
+      <i class="ti ti-arrow-up" style="font-size:14px"></i>
+      <span id="new-posts-count">Novos posts</span> — clique para atualizar
+    </div>
 
     <!-- Feed tabs -->
     <div class="feed-tabs">
@@ -683,6 +699,8 @@ let _storyImgFile = null;
 let _postsUnsub   = null;
 let _lastPostDoc  = null;
 let _extraPostsHTML = '';
+let _newestPostMillis = 0;
+let _pendingNewPosts  = 0;
 let _mutedUsers   = JSON.parse(localStorage.getItem('nexus-muted') || '[]');
 
 const PRIVACY = [
@@ -739,6 +757,14 @@ requireAuth(async user => {
 
   document.getElementById('auth-loading')?.remove();
 });
+
+function dismissNewPosts() {
+  const banner = document.getElementById('new-posts-banner');
+  if (banner) banner.style.display = 'none';
+  _pendingNewPosts = 0;
+  loadPosts();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 // ── Feed tabs ──────────────────────────────────────────────────
 function switchFeedTab(tab) {
@@ -1439,8 +1465,37 @@ function loadPosts() {
   // "Para você" loads more posts so the algorithmic sort has a bigger pool
   const pageSize = (_feedTab === 'all' && !_hashtagFilter) ? 40 : 20;
 
+  let _firstSnap = true;
+  _newestPostMillis = 0;
+  _pendingNewPosts  = 0;
+
   _postsUnsub = baseQuery.limit(pageSize).onSnapshot(snap => {
       _lastPostDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+
+      // Detect new posts on subsequent snapshots and show banner instead of re-rendering
+      if (!_firstSnap) {
+        let newCount = 0;
+        snap.docs.forEach(d => {
+          const ts = d.data().createdAt?.toMillis?.() || 0;
+          if (ts > _newestPostMillis && d.data().authorId !== currentUser.uid) newCount++;
+        });
+        if (newCount > 0) {
+          _pendingNewPosts += newCount;
+          const banner = document.getElementById('new-posts-banner');
+          const countEl = document.getElementById('new-posts-count');
+          if (banner) banner.style.display = 'flex';
+          if (countEl) countEl.textContent = `${_pendingNewPosts} novo${_pendingNewPosts > 1 ? 's posts' : ' post'}`;
+        }
+        return;
+      }
+      _firstSnap = false;
+
+      // Track newest post timestamp
+      snap.docs.forEach(d => {
+        const ts = d.data().createdAt?.toMillis?.() || 0;
+        if (ts > _newestPostMillis) _newestPostMillis = ts;
+      });
+
       const docs = filterPostDocs(snap.docs);
 
       if (!docs.length && !_extraPostsHTML) {

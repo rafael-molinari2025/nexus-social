@@ -195,6 +195,29 @@
       margin-left: .25rem; transition: color .3s;
     }
     .msg-read-check.read { color: #60a5fa; }
+
+    /* ── Reply ── */
+    .msg-reply-btn {
+      opacity: 0; transition: opacity .15s;
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 13px; padding: 0 2px;
+      vertical-align: middle;
+    }
+    .msg-row:hover .msg-reply-btn { opacity: 1; }
+    .reply-quote {
+      background: rgba(83,74,183,.09);
+      border-left: 3px solid var(--purple-600);
+      border-radius: 4px; padding: .25rem .5rem;
+      margin-bottom: .3rem; cursor: pointer;
+    }
+    .reply-quote-name { font-size: 11px; font-weight: 700; color: var(--purple-600); }
+    .reply-quote-text { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+    .reply-preview-bar {
+      padding: .4rem .875rem; background: var(--surface);
+      border-top: 0.5px solid var(--border);
+      display: flex; align-items: center; gap: .5rem; flex-shrink: 0;
+    }
+
     .msg-reactions { display: flex; flex-wrap: wrap; gap: .2rem; margin-top: .25rem; }
     .msg-reaction-pill {
       font-size: 12px; background: var(--gray-100); border: 0.5px solid var(--border);
@@ -420,6 +443,7 @@ let onlineStatusUnsub  = null;
 let _firstMsgDoc      = null;
 let _loadingOldMsgs   = false;
 let _otherLastReadAt  = null;
+let _replyTarget      = null;
 const MSG_PAGE_SIZE   = 50;
 
 requireAuth(async user => {
@@ -613,6 +637,13 @@ async function openConversation(cid, otherUid) {
       <div class="typing-dots"><span></span><span></span><span></span></div>
       <span style="font-size:12px;color:var(--text-muted)">${sanitize(other.displayName)} está digitando…</span>
     </div>
+    <div class="reply-preview-bar" id="reply-preview-bar" style="display:none">
+      <div style="flex:1;border-left:3px solid var(--purple-600);padding-left:.5rem;overflow:hidden">
+        <div style="font-size:11px;font-weight:700;color:var(--purple-600)" id="reply-preview-name"></div>
+        <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="reply-preview-text"></div>
+      </div>
+      <button onclick="clearReply()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;flex-shrink:0"><i class="ti ti-x"></i></button>
+    </div>
     <div class="chat-input-area">
       <input type="file" id="chat-img-input" accept="image/*" style="display:none"
              onchange="sendImageMessage('${cid}', '${other.uid}', this)">
@@ -786,17 +817,29 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
           const isMineReact = arr.includes(currentUser.uid);
           return `<button class="msg-reaction-pill${isMineReact?' mine':''}" onclick="reactMsg('${doc.id}','${e}')" title="${arr.length} ${isMineReact?'(você)':''}">${e} <span>${arr.length}</span></button>`;
         }).join('')}</div>` : '';
+    const replyBlock = m.replyTo
+      ? `<div class="reply-quote" onclick="document.getElementById('msg-${m.replyTo.msgId}')?.scrollIntoView({behavior:'smooth',block:'center'})">
+           <div class="reply-quote-name">${sanitize(m.replyTo.senderName||'')}</div>
+           <div class="reply-quote-text">${sanitize((m.replyTo.text||'📷 Imagem').slice(0,80))}</div>
+         </div>` : '';
+    const senderName = isMine ? 'Você' : (other.displayName||'Usuário');
+    const previewText = m.imageURL && !m.text ? '📷 Imagem' : (m.text||'').slice(0,80);
     html += `<div class="msg-row${isMine ? ' mine' : ''}" id="msg-${doc.id}">
         ${avatarHtml}
         <div class="msg-wrap">
           <div class="msg-bubble" ondblclick="showMsgReactionPicker(event,'${doc.id}')" style="cursor:default${m.type==='poll'?';padding:.5rem':''}">
+            ${replyBlock}
             ${m.type === 'poll' && m.poll
               ? chatPollHTML(doc.id, activeConvId, m.poll, isMine)
               : (m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
                 + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
           </div>
           ${reactionsHtml}
-          <div class="msg-time">${time}${isMine ? ` <i class="ti ti-checks msg-read-check${_otherLastReadAt && m.createdAt && m.createdAt.toMillis() <= _otherLastReadAt.toMillis() ? ' read' : ''}"></i>` : ''}</div>
+          <div class="msg-time">
+            <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(senderName).replace(/'/g,"\\'")}','${previewText.replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
+            <button class="msg-reply-btn" onclick="forwardMessage('${previewText.replace(/'/g,"\\'")}')" title="Encaminhar"><i class="ti ti-corner-up-right"></i></button>
+            ${time}${isMine ? ` <i class="ti ti-checks msg-read-check${_otherLastReadAt && m.createdAt && m.createdAt.toMillis() <= _otherLastReadAt.toMillis() ? ' read' : ''}"></i>` : ''}
+          </div>
         </div>
       </div>`;
   });
@@ -858,6 +901,108 @@ async function reactMsg(msgId, emoji) {
   });
 }
 
+// ── Forward message ──────────────────────────────────────────
+async function forwardMessage(text) {
+  const existing = document.getElementById('forward-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'forward-modal';
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-corner-up-right"></i> Encaminhar mensagem</span>
+        <button class="btn btn-icon" onclick="document.getElementById('forward-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="padding:.75rem 1.25rem 1rem">
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:.75rem">Selecione uma conversa para encaminhar:</p>
+        <div id="forward-conv-list" style="display:flex;flex-direction:column;gap:.4rem;max-height:280px;overflow-y:auto">
+          <div class="spinner" style="margin:auto;padding:1rem"></div>
+        </div>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+
+  // Load conversations for picker
+  const snap = await db.collection('conversations')
+    .where('participants', 'array-contains', currentUser.uid)
+    .orderBy('lastMessageAt', 'desc').limit(20).get();
+  const el = document.getElementById('forward-conv-list');
+  if (!el) return;
+  if (snap.empty) { el.innerHTML = '<p style="font-size:13px;color:var(--text-muted);text-align:center">Nenhuma conversa.</p>'; return; }
+  const rows = await Promise.all(snap.docs.map(async doc => {
+    const d = doc.data();
+    const isGroup = d.type === 'group';
+    let name, photoURL = null;
+    if (isGroup) {
+      name = d.name || 'Grupo';
+    } else {
+      const otherId = (d.participants || []).find(u => u !== currentUser.uid);
+      const other = otherId ? (await getUserData(otherId)) : null;
+      name = other?.displayName || 'Usuário';
+      photoURL = other?.photoURL || null;
+    }
+    const cl = getAvatarColor(doc.id);
+    const av = photoURL
+      ? `<img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="font-size:12px;font-weight:700;color:${cl.color}">${isGroup ? (d.emoji||'👥') : getInitials(name)}</span>`;
+    return `<div style="display:flex;align-items:center;gap:.6rem;padding:.4rem .5rem;border-radius:var(--radius-md);cursor:pointer;transition:background var(--transition)"
+         onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''"
+         onclick="sendForwarded('${doc.id}','${text.replace(/'/g,"\\'")}','${isGroup?'group':'dm'}','${(d.participants||[]).filter(u=>u!==currentUser.uid)[0]||''}')">
+      <div class="avatar avatar-36" style="background:${cl.bg};flex-shrink:0">${av}</div>
+      <span style="font-size:13px;font-weight:500">${sanitize(name)}</span>
+    </div>`;
+  }));
+  el.innerHTML = rows.join('');
+}
+
+async function sendForwarded(cid, text, type, otherUid) {
+  document.getElementById('forward-modal')?.remove();
+  try {
+    const batch = db.batch();
+    const msgRef = db.collection('conversations').doc(cid).collection('messages').doc();
+    const msgData = {
+      senderId: currentUser.uid,
+      text: `↪ Encaminhado: ${text}`,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      read: false
+    };
+    if (type === 'group') {
+      msgData.senderName = currentUser.displayName;
+      delete msgData.read;
+    }
+    batch.set(msgRef, msgData);
+    const lastMsg = `↪ ${text.slice(0, 50)}`;
+    const convUpdate = {
+      lastMessage: lastMsg,
+      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if (otherUid) convUpdate[`unread.${otherUid}`] = firebase.firestore.FieldValue.increment(1);
+    batch.update(db.collection('conversations').doc(cid), convUpdate);
+    await batch.commit();
+    showToast('Mensagem encaminhada!');
+  } catch(e) { showToast('Erro ao encaminhar.'); }
+}
+
+// ── Reply ────────────────────────────────────────────────────
+function setReply(msgId, senderName, text) {
+  _replyTarget = { msgId, senderName, text };
+  const bar = document.getElementById('reply-preview-bar');
+  if (bar) {
+    bar.style.display = 'flex';
+    document.getElementById('reply-preview-name').textContent = senderName;
+    document.getElementById('reply-preview-text').textContent = text || '📷 Imagem';
+  }
+  document.getElementById('chat-input')?.focus();
+}
+
+function clearReply() {
+  _replyTarget = null;
+  const bar = document.getElementById('reply-preview-bar');
+  if (bar) bar.style.display = 'none';
+}
+
 // ── Typing indicator ────────────────────────────────────────
 let _typingTimer = null;
 
@@ -902,13 +1047,16 @@ async function sendMessage(cid, otherUid) {
 
     // Add message
     const msgRef = db.collection('conversations').doc(cid).collection('messages').doc();
+    const replySnap = _replyTarget ? { ..._replyTarget } : null;
     batch.set(msgRef, {
       senderId: currentUser.uid,
       text,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       read: false,
-      ...(vanishAt ? { vanishAt } : {})
+      ...(vanishAt ? { vanishAt } : {}),
+      ...(replySnap ? { replyTo: replySnap } : {})
     });
+    clearReply();
 
     // Update conversation metadata
     const convRef = db.collection('conversations').doc(cid);
@@ -1118,6 +1266,13 @@ async function openGroupConversation(cid) {
       <button onclick="toggleChatSearch()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:0"><i class="ti ti-x"></i></button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
+    <div class="reply-preview-bar" id="reply-preview-bar" style="display:none">
+      <div style="flex:1;border-left:3px solid var(--purple-600);padding-left:.5rem;overflow:hidden">
+        <div style="font-size:11px;font-weight:700;color:var(--purple-600)" id="reply-preview-name"></div>
+        <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="reply-preview-text"></div>
+      </div>
+      <button onclick="clearReply()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;flex-shrink:0"><i class="ti ti-x"></i></button>
+    </div>
     <div class="chat-input-area">
       <input type="file" id="chat-img-input" accept="image/*" style="display:none"
              onchange="sendGroupImageMessage('${cid}', this)">
@@ -1194,18 +1349,30 @@ function renderGroupMessages(docs, participantData, showLoadOlder) {
           const arr = reactions[e];
           return `<button class="msg-reaction-pill${arr.includes(currentUser.uid)?' mine':''}" onclick="reactMsg('${doc.id}','${e}')">${e} <span>${arr.length}</span></button>`;
         }).join('')}</div>` : '';
+    const replyBlockG = m.replyTo
+      ? `<div class="reply-quote" onclick="document.getElementById('msg-${m.replyTo.msgId}')?.scrollIntoView({behavior:'smooth',block:'center'})">
+           <div class="reply-quote-name">${sanitize(m.replyTo.senderName||'')}</div>
+           <div class="reply-quote-text">${sanitize((m.replyTo.text||'📷 Imagem').slice(0,80))}</div>
+         </div>` : '';
+    const gSenderName = isMine ? 'Você' : (sender.displayName||'Usuário');
+    const gPreviewText = m.imageURL && !m.text ? '📷 Imagem' : (m.text||'').slice(0,80);
     html += `<div class="msg-row${isMine?' mine':''}" id="msg-${doc.id}">
       ${avatarHtml}
       <div class="msg-wrap">
         ${!isMine ? `<div style="font-size:11px;font-weight:600;color:${cl.bg === '#EEF2FF' ? '#4F46E5' : cl.color};margin-bottom:.15rem">${sanitize(sender.displayName)}</div>` : ''}
         <div class="msg-bubble" ondblclick="showMsgReactionPicker(event,'${doc.id}')" style="cursor:default${m.type==='poll'?';padding:.5rem':''}">
+          ${replyBlockG}
           ${m.type === 'poll' && m.poll
             ? chatPollHTML(doc.id, activeConvId, m.poll, isMine)
             : (m.imageURL ? `<img src="${m.imageURL}" alt="" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
               + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
         </div>
         ${reactionsHtml}
-        <div class="msg-time">${time}</div>
+        <div class="msg-time">
+          <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(gSenderName).replace(/'/g,"\\'")}','${gPreviewText.replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
+          <button class="msg-reply-btn" onclick="forwardMessage('${gPreviewText.replace(/'/g,"\\'")}')"><i class="ti ti-corner-up-right"></i></button>
+          ${time}
+        </div>
       </div>
     </div>`;
   });
@@ -1230,13 +1397,16 @@ async function sendGroupMessage(cid) {
       : null;
     const batch  = db.batch();
     const msgRef = db.collection('conversations').doc(cid).collection('messages').doc();
+    const replySnapG = _replyTarget ? { ..._replyTarget } : null;
     batch.set(msgRef, {
       senderId:  currentUser.uid,
       senderName: currentUser.displayName,
       text,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      ...(vanishAt ? { vanishAt } : {})
+      ...(vanishAt ? { vanishAt } : {}),
+      ...(replySnapG ? { replyTo: replySnapG } : {})
     });
+    clearReply();
     const unreadUpdate = {};
     participants.forEach(uid => {
       if (uid !== currentUser.uid) unreadUpdate[`unread.${uid}`] = firebase.firestore.FieldValue.increment(1);
