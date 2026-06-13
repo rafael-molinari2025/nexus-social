@@ -179,7 +179,7 @@ service cloud.firestore {
       allow update: if request.auth != null
         && (resource.data.uid == request.auth.uid
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
-            || request.resource.data.diff(resource.data).affectedKeys().hasOnly([`reactions.${request.auth.uid}`]));
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']));
       allow delete: if request.auth != null
         && resource.data.uid == request.auth.uid;
     }
