@@ -464,6 +464,9 @@ function openShareModal() {
         <button class="share-opt" onclick="navigator.clipboard.writeText(location.href).then(()=>{showToast('Link copiado!');document.getElementById('share-modal').remove()})">
           <i class="ti ti-link" style="color:var(--purple-600)"></i> Copiar link
         </button>
+        <button class="share-opt" onclick="openShareToDMPicker()">
+          <i class="ti ti-message" style="color:var(--purple-600)"></i> No Nexus
+        </button>
         <button class="share-opt" onclick="navigator.share ? navigator.share({title:'Nexus',url:location.href}) : showToast('Compartilhamento nativo não suportado.')">
           <i class="ti ti-dots" style="color:var(--text-secondary)"></i> Mais opções
         </button>
@@ -471,6 +474,105 @@ function openShareModal() {
     </div>`;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+}
+
+function openShareToDMPicker() {
+  document.getElementById('share-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.id = 'share-dm-modal';
+  overlay.innerHTML = `<div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-message" style="color:var(--purple-600)"></i> Enviar via Nexus</span>
+      <button class="btn btn-icon" onclick="document.getElementById('share-dm-modal').remove()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="padding:.25rem .875rem .875rem">
+      <input class="form-input" id="dm-user-search" placeholder="Buscar usuário…"
+             oninput="searchDMUsers(this.value)" autocomplete="off" style="margin-bottom:.5rem">
+      <div id="dm-user-results" style="min-height:60px;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  document.getElementById('dm-user-search')?.focus();
+}
+
+let _dmSearchTimer;
+function searchDMUsers(q) {
+  clearTimeout(_dmSearchTimer);
+  const el = document.getElementById('dm-user-results');
+  if (!el) return;
+  if (!q.trim()) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="spinner" style="margin:.75rem auto;width:20px;height:20px"></div>';
+  _dmSearchTimer = setTimeout(async () => {
+    try {
+      const qLower = q.toLowerCase();
+      const snap = await db.collection('users')
+        .where('displayName_lower', '>=', qLower)
+        .where('displayName_lower', '<=', qLower + '')
+        .limit(8).get();
+      const users = snap.docs.filter(d => d.id !== currentUser.uid);
+      if (!users.length) {
+        el.innerHTML = '<div style="text-align:center;padding:1rem;font-size:13px;color:var(--text-muted)">Nenhum usuário encontrado.</div>';
+        return;
+      }
+      el.innerHTML = users.map(d => {
+        const u  = { uid: d.id, ...d.data() };
+        const cl = getAvatarColor(u.uid);
+        const av = u.photoURL
+          ? `<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+          : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+        return `<div style="display:flex;align-items:center;gap:.65rem;padding:.5rem .25rem;cursor:pointer;border-radius:var(--radius-sm);transition:background var(--transition)"
+                     onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''"
+                     onclick="sendPostToDM('${u.uid}','${sanitize(u.displayName||'').replace(/'/g,"\\'")}')">
+          <div class="avatar avatar-36" style="background:${cl.bg};flex-shrink:0">${av}</div>
+          <div style="font-size:13px;font-weight:500">${sanitize(u.displayName||'Usuário')}</div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      el.innerHTML = '<div style="text-align:center;padding:1rem;font-size:13px;color:var(--text-muted)">Erro ao buscar.</div>';
+    }
+  }, 300);
+}
+
+async function sendPostToDM(toUid, toName) {
+  document.getElementById('share-dm-modal')?.remove();
+  try {
+    const convSnap = await db.collection('conversations')
+      .where('participants', 'array-contains', currentUser.uid).get();
+    let cid = null;
+    convSnap.docs.forEach(d => {
+      const data = d.data();
+      if (!data.type && (data.participants||[]).includes(toUid)) cid = d.id;
+    });
+    if (!cid) {
+      const ref = await db.collection('conversations').add({
+        participants:  [currentUser.uid, toUid],
+        createdAt:     firebase.firestore.FieldValue.serverTimestamp(),
+        lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastMessage:   '📎 Post compartilhado',
+        unread:        { [toUid]: 1 }
+      });
+      cid = ref.id;
+    }
+    const postUrl = location.href;
+    await db.collection('conversations').doc(cid).collection('messages').add({
+      senderId:   currentUser.uid,
+      senderName: currentUser.displayName,
+      text:       `📎 Post: ${postUrl}`,
+      createdAt:  firebase.firestore.FieldValue.serverTimestamp(),
+      read:       false
+    });
+    await db.collection('conversations').doc(cid).update({
+      lastMessage:               '📎 Post compartilhado',
+      lastMessageAt:             firebase.firestore.FieldValue.serverTimestamp(),
+      [`unread.${toUid}`]:       firebase.firestore.FieldValue.increment(1)
+    });
+    showToast(`Post enviado para ${toName}!`);
+  } catch(e) {
+    console.error('sendPostToDM:', e);
+    showToast('Erro ao enviar mensagem.');
+  }
 }
 
 function replyComment(authorName) {

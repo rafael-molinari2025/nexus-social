@@ -608,14 +608,25 @@ async function loadAboutTab(uid) {
     const snap = await db.collection('users').doc(uid).get();
     const d    = snap.data() || {};
     const RSTATUS = { single:'Solteiro(a)', relationship:'Em um relacionamento', married:'Casado(a)', complicated:'É complicado', prefer_not:'Prefiro não dizer' };
+
+    // Bio
+    const bioSection = d.bio
+      ? `<div style="padding:.65rem 0;border-bottom:0.5px solid var(--border)">
+           <div style="font-size:12px;color:var(--text-muted);margin-bottom:.25rem">Sobre</div>
+           <div style="font-size:14px;line-height:1.6">${sanitize(d.bio)}</div>
+         </div>`
+      : '';
+
+    // Info fields
     const fields = [
-      { icon:'ti-briefcase',    key:'work',               label:'Trabalha em' },
-      { icon:'ti-school',       key:'education',          label:'Estudou em' },
-      { icon:'ti-map-pin',      key:'hometown',           label:'Cidade natal' },
-      { icon:'ti-map',          key:'city',               label:'Mora em' },
-      { icon:'ti-world',        key:'website',            label:'Website', link: true },
-      { icon:'ti-heart',        key:'relationshipStatus', label:'Estado civil', transform: v => RSTATUS[v]||v },
-      { icon:'ti-cake',         key:'birthdate',          label:'Nasceu em', transform: v => { try { return new Date(v+'T12:00').toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'}); } catch{return v;} } },
+      { icon:'ti-user',          key:'gender',            label:'Gênero' },
+      { icon:'ti-briefcase',     key:'work',              label:'Trabalha em' },
+      { icon:'ti-school',        key:'education',         label:'Estudou em' },
+      { icon:'ti-map-pin',       key:'hometown',          label:'Cidade natal' },
+      { icon:'ti-map',           key:'city',              label:'Mora em' },
+      { icon:'ti-world',         key:'website',           label:'Website', link: true },
+      { icon:'ti-heart',         key:'relationshipStatus',label:'Estado civil', transform: v => RSTATUS[v]||v },
+      { icon:'ti-cake',          key:'birthdate',         label:'Nasceu em', transform: v => { try { return new Date(v+'T12:00').toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'}); } catch{return v;} } },
     ];
     const rows = fields.map(f => {
       const val = d[f.key];
@@ -633,15 +644,60 @@ async function loadAboutTab(uid) {
       </div>`;
     }).filter(Boolean).join('');
 
-    if (!rows && !isOwn) {
+    // Social links
+    const sl = d.socialLinks || {};
+    const socialDefs = [
+      sl.instagram && { icon:'ti-brand-instagram', color:'#e1306c', href:`https://instagram.com/${sl.instagram}`, label:`@${sl.instagram}` },
+      sl.twitter   && { icon:'ti-brand-x',         color:'var(--text-primary)', href:`https://x.com/${sl.twitter}`, label:`@${sl.twitter}` },
+      sl.linkedin  && { icon:'ti-brand-linkedin',   color:'#0077b5', href:sl.linkedin,                             label:'LinkedIn' },
+      sl.github    && { icon:'ti-brand-github',     color:'var(--text-primary)', href:`https://github.com/${sl.github}`, label:sl.github },
+      sl.tiktok    && { icon:'ti-brand-tiktok',     color:'var(--text-primary)', href:`https://tiktok.com/@${sl.tiktok}`, label:`@${sl.tiktok}` },
+      sl.youtube   && { icon:'ti-brand-youtube',    color:'#ff0000', href:sl.youtube, label:'YouTube' },
+    ].filter(Boolean);
+    const socialSection = socialDefs.length
+      ? `<div style="padding:.65rem 0;border-bottom:0.5px solid var(--border)">
+           <div style="font-size:12px;color:var(--text-muted);margin-bottom:.45rem">Redes sociais</div>
+           <div style="display:flex;flex-wrap:wrap;gap:.35rem">
+             ${socialDefs.map(l =>
+               `<a href="${sanitize(l.href)}" target="_blank" rel="noopener noreferrer"
+                 style="display:inline-flex;align-items:center;gap:.3rem;font-size:12px;color:${l.color};background:var(--gray-50);border:0.5px solid var(--border);border-radius:var(--radius-full);padding:.25rem .65rem;text-decoration:none">
+                 <i class="ti ${l.icon}" style="font-size:14px"></i>${sanitize(l.label)}
+               </a>`).join('')}
+           </div>
+         </div>`
+      : '';
+
+    // Profile completion widget (owner only)
+    let completionBar = '';
+    if (isOwn) {
+      const tracked = ['photoURL','coverURL','bio','city','gender','birthdate','website','work','education'];
+      const filled  = tracked.filter(k => !!d[k]).length;
+      const pct     = Math.round((filled / tracked.length) * 100);
+      completionBar = `<div style="background:var(--gray-50);border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.875rem;margin-bottom:.75rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem">
+          <span style="font-size:13px;font-weight:600">Perfil ${pct}% completo</span>
+          ${pct===100 ? '<span style="font-size:12px;color:#22c55e">✓ Completo!</span>' : `<span style="font-size:12px;color:var(--text-muted)">${tracked.length-filled} campo${tracked.length-filled!==1?'s':''} faltando</span>`}
+        </div>
+        <div style="height:6px;background:var(--gray-200);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--purple-600);border-radius:3px"></div>
+        </div>
+      </div>`;
+    }
+
+    const hasContent = bioSection || rows || socialSection;
+    if (!hasContent && !isOwn) {
       el.innerHTML = '<div class="empty-state"><i class="ti ti-info-circle"></i><p>Nenhuma informação disponível.</p></div>';
       return;
     }
 
     el.innerHTML = `
-      ${rows || '<p style="font-size:13px;color:var(--text-muted);margin:.5rem 0">Nenhuma informação preenchida ainda.</p>'}
-      ${isOwn ? `<button class="btn btn-sm" style="margin-top:.75rem;width:100%;justify-content:center" onclick="location.href='configuracoes.html'">
-        <i class="ti ti-pencil"></i> Editar informações
+      ${completionBar}
+      ${bioSection}
+      ${rows}
+      ${socialSection}
+      ${!hasContent ? '<p style="font-size:13px;color:var(--text-muted);margin:.5rem 0">Nenhuma informação preenchida ainda.</p>' : ''}
+      ${isOwn ? `<button class="btn btn-sm" style="margin-top:.75rem;width:100%;justify-content:center" onclick="openEditModal()">
+        <i class="ti ti-pencil"></i> Editar perfil
       </button>` : ''}`;
   } catch(e) {
     el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Erro ao carregar.</p></div>';
