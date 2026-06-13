@@ -557,6 +557,23 @@
              onchange="previewStoryImage(this)">
     </div>
 
+    <!-- Close Friends toggle -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem;background:var(--surface-2);border-radius:var(--radius-md);margin-bottom:.75rem">
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <span style="font-size:16px">💚</span>
+        <div>
+          <div style="font-size:13px;font-weight:600">Apenas amigos próximos</div>
+          <div style="font-size:11px;color:var(--text-muted)">Só quem está na sua lista de amigos próximos verá</div>
+        </div>
+      </div>
+      <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0">
+        <input type="checkbox" id="story-close-friends" style="opacity:0;width:0;height:0">
+        <span id="story-cf-track" onclick="this.previousElementSibling.click()" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--gray-300);border-radius:11px;transition:.3s">
+          <span style="position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>
+        </span>
+      </label>
+    </div>
+
     <button class="btn btn-primary" id="story-pub-btn"
             style="width:100%;justify-content:center;height:42px" onclick="publishStory()">
       <i class="ti ti-sparkles" aria-hidden="true"></i> Publicar story
@@ -1323,6 +1340,8 @@ function filterPostDocs(docs) {
     if (p.modStatus === 'removed') return false;
     // Esconder posts sinalizados para outros usuários (autor ainda vê o próprio)
     if (p.modStatus === 'flagged' && p.authorId !== currentUser.uid) return false;
+    // Esconder posts arquivados do feed (ficam visíveis só em /pages/arquivo.html)
+    if (p.isArchived) return false;
     const prv = p.privacy || 'public';
     if (prv === 'private') return p.authorId === currentUser.uid;
     if (prv === 'friends') return p.authorId === currentUser.uid || _friendIds.has(p.authorId);
@@ -1458,6 +1477,9 @@ function postHTML(id, p) {
         ${p.authorId === currentUser?.uid ? `
           <button class="btn btn-icon" onclick="startEditPost('${id}')" title="Editar">
             <i class="ti ti-pencil" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i>
+          </button>
+          <button class="btn btn-icon" onclick="archivePost('${id}')" title="Arquivar">
+            <i class="ti ti-archive" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i>
           </button>
           <button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir">
             <i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i>
@@ -1712,6 +1734,13 @@ async function toggleBookmark(postId) {
       : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
   });
   showToast(saved ? 'Removido dos salvos.' : 'Post salvo!');
+}
+
+async function archivePost(postId) {
+  if (!confirm('Arquivar este post? Ele ficará visível apenas para você em Configurações > Arquivo.')) return;
+  await db.collection('posts').doc(postId).update({ isArchived: true });
+  showToast('Post arquivado.');
+  document.getElementById(`post-${postId}`)?.remove();
 }
 
 async function deletePost(postId) {
@@ -2237,7 +2266,12 @@ async function loadStories() {
     const byUser = {};
     docs.forEach(({ id, data: d }) => {
       if (d.expiresAt && (d.expiresAt.toMillis ? d.expiresAt.toMillis() : d.expiresAt._seconds * 1000) < now) return;
-      if (!byUser[d.uid]) byUser[d.uid] = { info: d, ids: [] };
+      // Close friends stories: only author + UIDs in closeFriendsUIDs array can see
+      if (d.closeFriends && d.uid !== currentUser.uid) {
+        const allowed = d.closeFriendsUIDs || [];
+        if (!allowed.includes(currentUser.uid)) return;
+      }
+      if (!byUser[d.uid]) byUser[d.uid] = { info: d, ids: [], isCloseFriends: !!d.closeFriends };
       byUser[d.uid].ids.push(id);
     });
 
@@ -2282,9 +2316,11 @@ async function loadStories() {
         : `<div style="width:100%;height:100%;background:${uc.bg};display:flex;align-items:center;justify-content:center"><span style="color:${uc.color};font-weight:600;font-size:16px">${getInitials(d.displayName)}</span></div>`;
       const seen = localStorage.getItem(ST_VIEWED_KEY + u.ids[0]);
       const idsJson = JSON.stringify(u.ids).replace(/"/g,'&quot;');
+      const cfRing = u.isCloseFriends ? ' style="--story-ring-color:#22c55e"' : '';
       html += `<div class="story-thumb" onclick="viewStory('${u.ids[0]}', ${idsJson}, 0)">
-        <div class="story-ring${seen?' seen':' unseen'}">
+        <div class="story-ring${seen?' seen':' unseen'}"${cfRing}>
           <div class="story-ring-inner">${av}</div>
+          ${u.isCloseFriends ? '<span style="position:absolute;bottom:0;right:0;background:#22c55e;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;border:1.5px solid var(--surface)">💚</span>' : ''}
         </div>
         <div class="story-name">${sanitize((d.displayName||'').split(' ')[0]||'Usuário')}</div>
       </div>`;
@@ -2518,6 +2554,15 @@ function openStoryModal() {
       <p style="font-size:13px;margin-top:.4rem">Clique para selecionar</p>
     </div>`;
   setStoryType('text');
+  // Reset close friends toggle
+  const cb = document.getElementById('story-close-friends');
+  const track = document.getElementById('story-cf-track');
+  const thumb = track?.querySelector('span');
+  if (cb) { cb.checked = false; track.style.background = 'var(--gray-300)'; if(thumb) thumb.style.transform=''; }
+  if (cb) cb.onchange = e => {
+    track.style.background = e.target.checked ? '#22c55e' : 'var(--gray-300)';
+    if (thumb) thumb.style.transform = e.target.checked ? 'translateX(18px)' : '';
+  };
 }
 function closeStoryModal() { document.getElementById('story-create-modal').classList.remove('open'); }
 
@@ -2542,6 +2587,8 @@ async function publishStory() {
   try {
     const ud = await getUserData(currentUser.uid) || {};
     const expires = new Date(Date.now() + 24 * 3600 * 1000);
+    const isCloseFriends = document.getElementById('story-close-friends')?.checked || false;
+    const closeFriendsUIDs = isCloseFriends ? (ud.closeFriends || []) : null;
     const base = {
       uid:         currentUser.uid,
       displayName: ud.displayName || currentUser.displayName || '',
@@ -2550,7 +2597,8 @@ async function publishStory() {
       bgColor:     _storyColor,
       createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
       expiresAt:   firebase.firestore.Timestamp.fromDate(expires),
-      views:       []
+      views:       [],
+      ...(isCloseFriends ? { closeFriends: true, closeFriendsUIDs } : {})
     };
     if (_storyType === 'text') {
       const text = document.getElementById('story-text-input').value.trim();

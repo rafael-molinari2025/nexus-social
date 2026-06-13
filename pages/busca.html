@@ -106,6 +106,22 @@
       </button>
     </div>
 
+    <!-- Filtros contextuais -->
+    <div id="filter-bar" style="display:none;overflow-x:auto;scrollbar-width:none;padding-bottom:.5rem;margin-bottom:.25rem">
+      <!-- Posts filters -->
+      <div id="filter-posts" style="display:none;display:flex;gap:.4rem;flex-wrap:nowrap;min-width:max-content">
+        <button class="search-tab active" style="padding:.3rem .75rem;font-size:12px" id="fp-all" onclick="setPostFilter('all')">Todos</button>
+        <button class="search-tab" style="padding:.3rem .75rem;font-size:12px" id="fp-image" onclick="setPostFilter('image')"><i class="ti ti-photo"></i> Com imagem</button>
+        <button class="search-tab" style="padding:.3rem .75rem;font-size:12px" id="fp-text" onclick="setPostFilter('text')"><i class="ti ti-text-size"></i> Só texto</button>
+        <button class="search-tab" style="padding:.3rem .75rem;font-size:12px" id="fp-poll" onclick="setPostFilter('poll')"><i class="ti ti-chart-bar"></i> Enquetes</button>
+      </div>
+      <!-- People filters -->
+      <div id="filter-people" style="display:none;align-items:center;gap:.5rem">
+        <i class="ti ti-map-pin" style="color:var(--text-muted);font-size:14px"></i>
+        <input type="text" id="city-filter" placeholder="Filtrar por cidade..." style="font-size:13px;padding:.3rem .6rem;border:0.5px solid var(--border);border-radius:var(--radius-full);background:var(--surface);color:var(--text-primary);outline:none;width:160px" oninput="applyPeopleFilters()">
+      </div>
+    </div>
+
     <!-- Resultados -->
     <div id="search-results">
       <div class="empty-search">
@@ -131,6 +147,8 @@ let currentTab = 'people';
 let currentQuery = '';
 let myFriendIds = new Set();
 let pendingRequests = new Set();
+let _postFilter = 'all';
+let _lastPeopleResults = [];
 
 const CATEGORY_COLORS = {
   tecnologia: {bg:'#EEF2FF',c:'#6366F1',icon:'ti-code'},
@@ -177,7 +195,39 @@ function switchTab(tab) {
   document.getElementById('tab-people').classList.toggle('active', tab === 'people');
   document.getElementById('tab-communities').classList.toggle('active', tab === 'communities');
   document.getElementById('tab-posts').classList.toggle('active', tab === 'posts');
+  // Show contextual filter bar
+  const fb = document.getElementById('filter-bar');
+  const fp = document.getElementById('filter-posts');
+  const fpe = document.getElementById('filter-people');
+  fb.style.display = tab === 'communities' ? 'none' : 'block';
+  fp.style.display = tab === 'posts' ? 'flex' : 'none';
+  fpe.style.display = tab === 'people' ? 'flex' : 'none';
   if (currentQuery) doSearch();
+}
+
+function setPostFilter(f) {
+  _postFilter = f;
+  ['all','image','text','poll'].forEach(id => {
+    document.getElementById(`fp-${id}`)?.classList.toggle('active', id === f);
+  });
+  if (currentQuery) doSearch();
+}
+
+function applyPeopleFilters() {
+  const city = (document.getElementById('city-filter')?.value || '').trim().toLowerCase();
+  const el = document.getElementById('search-results');
+  const filtered = city
+    ? _lastPeopleResults.filter(u => (u.city || '').toLowerCase().includes(city))
+    : _lastPeopleResults;
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-search">
+      <div class="empty-search-icon"><i class="ti ti-map-pin-off"></i></div>
+      <div class="empty-search-title">Nenhuma pessoa encontrada em "${sanitize(city)}"</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML = `<div class="result-count">${filtered.length} pessoa${filtered.length !== 1 ? 's' : ''} encontrada${filtered.length !== 1 ? 's' : ''}</div>
+    <div class="people-grid">${filtered.map(u => personCardHTML(u)).join('')}</div>`;
 }
 
 async function doSearch() {
@@ -238,10 +288,9 @@ async function searchPeople(q, el) {
       return;
     }
 
-    el.innerHTML = `
-      <div class="result-count">${results.length} pessoa${results.length !== 1 ? 's' : ''} encontrada${results.length !== 1 ? 's' : ''}</div>
-      <div class="people-grid">${results.map(u => personCardHTML(u)).join('')}</div>
-    `;
+    _lastPeopleResults = results;
+    applyPeopleFilters();
+    return;
   } catch(e) {
     el.innerHTML = `<div class="empty-search"><div class="empty-search-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-search-title">Erro na busca</div><div class="empty-search-sub">Tente novamente</div></div>`;
   }
@@ -388,18 +437,24 @@ async function searchPosts(q, el) {
     const snap = await db.collection('posts')
       .where('hashtags', 'array-contains', tag)
       .orderBy('createdAt', 'desc')
-      .limit(20).get();
-    if (snap.empty) {
+      .limit(40).get();
+
+    let docs = snap.docs;
+    if (_postFilter === 'image') docs = docs.filter(d => d.data().imageURL);
+    else if (_postFilter === 'text') docs = docs.filter(d => !d.data().imageURL && !d.data().poll);
+    else if (_postFilter === 'poll') docs = docs.filter(d => d.data().poll);
+
+    if (!docs.length) {
       el.innerHTML = `<div class="empty-search">
         <div class="empty-search-icon"><i class="ti ti-news-off" aria-hidden="true"></i></div>
         <div class="empty-search-title">Nenhum post encontrado</div>
-        <div class="empty-search-sub">Nenhum post com a hashtag <strong>#${sanitize(tag)}</strong></div>
+        <div class="empty-search-sub">Nenhum post com a hashtag <strong>#${sanitize(tag)}</strong>${_postFilter !== 'all' ? ' nesse formato' : ''}</div>
       </div>`;
       return;
     }
     el.innerHTML = `
-      <div class="result-count">${snap.size} post${snap.size !== 1 ? 's' : ''} encontrado${snap.size !== 1 ? 's' : ''} com <strong>#${sanitize(tag)}</strong></div>
-      <div class="card">${snap.docs.map(doc => postCardHTML(doc.id, doc.data())).join('')}</div>`;
+      <div class="result-count">${docs.length} post${docs.length !== 1 ? 's' : ''} encontrado${docs.length !== 1 ? 's' : ''} com <strong>#${sanitize(tag)}</strong></div>
+      <div class="card">${docs.map(doc => postCardHTML(doc.id, doc.data())).join('')}</div>`;
   } catch(e) {
     el.innerHTML = `<div class="empty-search"><div class="empty-search-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-search-title">Erro na busca</div><div class="empty-search-sub">Tente novamente</div></div>`;
   }

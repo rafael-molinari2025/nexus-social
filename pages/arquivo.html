@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Arquivo</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    .arquivo-page { max-width: 640px; margin: 0 auto; padding: 1.5rem .75rem; }
+    @media (max-width: 768px) { .arquivo-page { padding: 1rem .5rem calc(80px + 1rem); } }
+
+    .arquivo-header {
+      display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem;
+    }
+    .arquivo-header h1 { font-size: 1.2rem; font-weight: 700; margin: 0; }
+    .arquivo-header p { font-size: 13px; color: var(--text-muted); margin: .1rem 0 0; }
+
+    .arch-post {
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 0;
+    }
+    .arch-post:last-child { border-bottom: none; }
+    .arch-post-header { display: flex; align-items: center; gap: .6rem; margin-bottom: .5rem; }
+    .arch-post-meta { flex: 1; min-width: 0; }
+    .arch-post-name { font-size: 14px; font-weight: 600; }
+    .arch-post-date { font-size: 12px; color: var(--text-muted); }
+    .arch-post-text { font-size: 14px; line-height: 1.55; margin-bottom: .5rem; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; }
+    .arch-post-img { width: 100%; max-height: 360px; object-fit: cover; border-radius: var(--radius-md); margin-bottom: .5rem; display: block; }
+    .arch-post-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .arch-badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .2rem .6rem; border-radius: var(--radius-full);
+      background: var(--surface-2); font-size: 11px; color: var(--text-muted);
+    }
+    .arch-load-more { text-align: center; margin: 1.5rem 0; }
+  </style>
+</head>
+<body>
+  <div id="topbar-container"></div>
+
+  <main class="arquivo-page">
+    <div class="arquivo-header">
+      <a href="configuracoes.html" class="btn btn-icon" title="Voltar">
+        <i class="ti ti-arrow-left"></i>
+      </a>
+      <div>
+        <h1><i class="ti ti-archive" style="margin-right:.3rem"></i>Arquivo</h1>
+        <p>Posts arquivados são visíveis apenas para você</p>
+      </div>
+    </div>
+
+    <div class="card" id="arch-list">
+      <div class="empty-state">
+        <i class="ti ti-loader-2 ti-spin"></i>
+        <p>Carregando...</p>
+      </div>
+    </div>
+
+    <div class="arch-load-more" id="arch-load-more" style="display:none">
+      <button class="btn" onclick="loadMore()">Carregar mais</button>
+    </div>
+  </main>
+
+  <script src="../js/firebase-config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script>
+  let currentUser = null;
+  let _lastDoc = null;
+  const PAGE_SIZE = 15;
+
+  requireAuth(async user => {
+    currentUser = user;
+    const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+    renderTopbar(userData, '');
+    await loadArchive(true);
+  });
+
+  async function loadArchive(reset = false) {
+    try {
+      let q = db.collection('posts')
+        .where('authorId', '==', currentUser.uid)
+        .where('isArchived', '==', true)
+        .orderBy('createdAt', 'desc')
+        .limit(PAGE_SIZE);
+      if (!reset && _lastDoc) q = q.startAfter(_lastDoc);
+
+      const snap = await q.get();
+      _lastDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+
+      const list = document.getElementById('arch-list');
+      if (reset) list.innerHTML = '';
+
+      if (snap.empty && reset) {
+        list.innerHTML = `<div class="empty-state">
+          <i class="ti ti-archive-off"></i>
+          <p>Nenhum post arquivado</p>
+          <p style="font-size:13px;color:var(--text-muted)">Posts arquivados no feed aparecerão aqui</p>
+        </div>`;
+        document.getElementById('arch-load-more').style.display = 'none';
+        return;
+      }
+
+      snap.docs.forEach(d => {
+        const p = d.data();
+        list.insertAdjacentHTML('beforeend', archPostHTML(d.id, p));
+      });
+
+      document.getElementById('arch-load-more').style.display =
+        snap.docs.length === PAGE_SIZE ? 'block' : 'none';
+    } catch (e) {
+      document.getElementById('arch-list').innerHTML =
+        `<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Erro ao carregar: ${e.message}</p></div>`;
+    }
+  }
+
+  async function loadMore() { await loadArchive(false); }
+
+  function archPostHTML(id, p) {
+    const cl = getAvatarColor(p.authorId);
+    const av = p.authorPhoto
+      ? `<img src="${p.authorPhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="color:${cl.color}">${getInitials(p.authorName)}</span>`;
+    const dateStr = p.createdAt ? new Date(p.createdAt.toMillis()).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' }) : '';
+    const imgHTML = p.imageURL
+      ? `<img class="arch-post-img" src="${p.imageURL}" loading="lazy" onclick="openLightbox([this.src])" style="cursor:zoom-in">`
+      : '';
+    const text = sanitize(p.text || '');
+    return `
+    <div class="arch-post" id="arch-${id}">
+      <div class="arch-post-header">
+        <div class="avatar avatar-36" style="background:${cl.bg};color:${cl.color}">${av}</div>
+        <div class="arch-post-meta">
+          <div class="arch-post-name">${sanitize(p.authorName || 'Você')}</div>
+          <div class="arch-post-date">${dateStr}</div>
+        </div>
+        <span class="arch-badge"><i class="ti ti-archive" style="font-size:11px"></i> Arquivado</span>
+      </div>
+      ${text ? `<div class="arch-post-text">${text}</div>` : ''}
+      ${imgHTML}
+      <div class="arch-post-actions">
+        <button class="btn btn-sm" onclick="unarchivePost('${id}',this)">
+          <i class="ti ti-archive-off"></i> Desarquivar
+        </button>
+        <button class="btn btn-sm" onclick="deleteArchivedPost('${id}',this)" style="color:var(--red-500)">
+          <i class="ti ti-trash"></i> Excluir
+        </button>
+      </div>
+    </div>`;
+  }
+
+  async function unarchivePost(postId, btn) {
+    btn.disabled = true;
+    await db.collection('posts').doc(postId).update({ isArchived: firebase.firestore.FieldValue.delete() });
+    document.getElementById(`arch-${postId}`)?.remove();
+    showToast('Post restaurado no feed.');
+    const list = document.getElementById('arch-list');
+    if (!list.querySelector('.arch-post')) {
+      list.innerHTML = `<div class="empty-state"><i class="ti ti-archive-off"></i><p>Nenhum post arquivado</p></div>`;
+    }
+  }
+
+  async function deleteArchivedPost(postId, btn) {
+    if (!confirm('Excluir permanentemente? Esta ação não pode ser desfeita.')) return;
+    btn.disabled = true;
+    await db.collection('posts').doc(postId).delete();
+    document.getElementById(`arch-${postId}`)?.remove();
+    showToast('Post excluído permanentemente.');
+    const list = document.getElementById('arch-list');
+    if (!list.querySelector('.arch-post')) {
+      list.innerHTML = `<div class="empty-state"><i class="ti ti-archive-off"></i><p>Nenhum post arquivado</p></div>`;
+    }
+  }
+  </script>
+</body>
+</html>

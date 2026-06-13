@@ -224,11 +224,39 @@
         </div>
       </div>
 
-      <div class="section-divider">Links</div>
+      <div class="section-divider">Links &amp; Redes sociais</div>
 
       <div class="form-group">
-        <label class="form-label">Website / Redes sociais</label>
+        <label class="form-label"><i class="ti ti-world" style="vertical-align:-2px;color:var(--text-muted)"></i> Website</label>
         <input class="form-input" type="url" id="edit-website" placeholder="https://seusite.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label"><i class="ti ti-brand-instagram" style="vertical-align:-2px;color:#e1306c"></i> Instagram</label>
+        <div style="position:relative"><span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px">@</span>
+        <input class="form-input" type="text" id="edit-instagram" placeholder="seuusername" maxlength="40" style="padding-left:1.75rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label"><i class="ti ti-brand-x" style="vertical-align:-2px;color:#000"></i> X / Twitter</label>
+        <div style="position:relative"><span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px">@</span>
+        <input class="form-input" type="text" id="edit-twitter" placeholder="seuusername" maxlength="40" style="padding-left:1.75rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label"><i class="ti ti-brand-linkedin" style="vertical-align:-2px;color:#0077b5"></i> LinkedIn</label>
+        <input class="form-input" type="url" id="edit-linkedin" placeholder="https://linkedin.com/in/seu-perfil">
+      </div>
+      <div class="form-group">
+        <label class="form-label"><i class="ti ti-brand-github" style="vertical-align:-2px;color:var(--text-primary)"></i> GitHub</label>
+        <div style="position:relative"><span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px">@</span>
+        <input class="form-input" type="text" id="edit-github" placeholder="seuusername" maxlength="40" style="padding-left:1.75rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label"><i class="ti ti-brand-tiktok" style="vertical-align:-2px;color:#010101"></i> TikTok</label>
+        <div style="position:relative"><span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px">@</span>
+        <input class="form-input" type="text" id="edit-tiktok" placeholder="seuusername" maxlength="40" style="padding-left:1.75rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label"><i class="ti ti-brand-youtube" style="vertical-align:-2px;color:#ff0000"></i> YouTube</label>
+        <input class="form-input" type="url" id="edit-youtube" placeholder="https://youtube.com/@seucanal">
       </div>
 
       <div class="section-divider">Sobre mim</div>
@@ -461,6 +489,24 @@ async function renderProfile(uid) {
       ${d.city ? `<div class="profile-location"><i class="ti ti-map-pin" aria-hidden="true"></i>${sanitize(d.city)}</div>` : ''}
       ${d.website ? `<div class="profile-location"><i class="ti ti-world" aria-hidden="true"></i><a href="${sanitize(d.website)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none" onclick="event.stopPropagation()">${sanitize(d.website.replace(/^https?:\/\//,''))}</a></div>` : ''}
       ${d.bio  ? `<div class="profile-bio-text">${sanitize(d.bio)}</div>` : ''}
+      ${(() => {
+        const sl = d.socialLinks || {};
+        const links = [
+          sl.instagram && { icon:'ti-brand-instagram', color:'#e1306c', href:`https://instagram.com/${sl.instagram}`, label:`@${sl.instagram}` },
+          sl.twitter   && { icon:'ti-brand-x',         color:'#000',    href:`https://x.com/${sl.twitter}`,         label:`@${sl.twitter}` },
+          sl.linkedin  && { icon:'ti-brand-linkedin',   color:'#0077b5', href:sl.linkedin,                          label:'LinkedIn' },
+          sl.github    && { icon:'ti-brand-github',     color:'var(--text-primary)', href:`https://github.com/${sl.github}`, label:sl.github },
+          sl.tiktok    && { icon:'ti-brand-tiktok',     color:'#010101', href:`https://tiktok.com/@${sl.tiktok}`,  label:`@${sl.tiktok}` },
+          sl.youtube   && { icon:'ti-brand-youtube',    color:'#ff0000', href:sl.youtube,                          label:'YouTube' },
+        ].filter(Boolean);
+        if (!links.length) return '';
+        return `<div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem">${links.map(l =>
+          `<a href="${sanitize(l.href)}" target="_blank" rel="noopener noreferrer"
+            style="display:inline-flex;align-items:center;gap:.3rem;font-size:12px;color:${l.color};background:var(--surface-2,var(--gray-50));border:0.5px solid var(--border);border-radius:var(--radius-full);padding:.2rem .6rem;text-decoration:none;transition:box-shadow var(--transition)"
+            onclick="event.stopPropagation()">
+            <i class="ti ${l.icon}" style="font-size:14px"></i>${sanitize(l.label)}
+          </a>`).join('')}</div>`;
+      })()}
       ${isOwn ? profileCompletenessHTML(d) : ''}
       <div class="profile-stats" style="margin-top:.75rem" id="pstats">
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">amigos</span></div>
@@ -514,7 +560,13 @@ async function renderProfile(uid) {
     document.getElementById('edit-bio').value       = d.bio       || '';
     document.getElementById('edit-birthdate').value = d.birthdate || '';
     document.getElementById('edit-city').value      = d.city      || '';
-    document.getElementById('edit-website').value      = d.website          || '';
+    document.getElementById('edit-website').value      = d.website                    || '';
+    document.getElementById('edit-instagram').value   = d.socialLinks?.instagram    || '';
+    document.getElementById('edit-twitter').value     = d.socialLinks?.twitter      || '';
+    document.getElementById('edit-linkedin').value    = d.socialLinks?.linkedin     || '';
+    document.getElementById('edit-github').value      = d.socialLinks?.github       || '';
+    document.getElementById('edit-tiktok').value      = d.socialLinks?.tiktok       || '';
+    document.getElementById('edit-youtube').value     = d.socialLinks?.youtube      || '';
     document.getElementById('edit-work').value         = d.work             || '';
     document.getElementById('edit-education').value    = d.education        || '';
     document.getElementById('edit-hometown').value     = d.hometown         || '';
@@ -1160,9 +1212,17 @@ async function saveProfile() {
     const education      = document.getElementById('edit-education').value.trim();
     const hometown       = document.getElementById('edit-hometown').value.trim();
     const relStatus      = document.getElementById('edit-relationship').value;
+    const socialLinks = {
+      instagram: document.getElementById('edit-instagram').value.trim().replace(/^@/,''),
+      twitter:   document.getElementById('edit-twitter').value.trim().replace(/^@/,''),
+      linkedin:  document.getElementById('edit-linkedin').value.trim(),
+      github:    document.getElementById('edit-github').value.trim().replace(/^@/,''),
+      tiktok:    document.getElementById('edit-tiktok').value.trim().replace(/^@/,''),
+      youtube:   document.getElementById('edit-youtube').value.trim(),
+    };
     const updates = {
       displayName, displayName_lower: displayName.toLowerCase(),
-      bio, city, website,
+      bio, city, website, socialLinks,
       work, education, hometown,
       relationshipStatus: relStatus || null,
       status: { emoji: statusEmoji, text: statusText }

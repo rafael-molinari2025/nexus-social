@@ -75,6 +75,87 @@
       <div id="status-current" style="font-size:12px;color:var(--text-muted);margin-top:.5rem"></div>
     </div>
 
+    <!-- Privacidade -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-shield-lock"></i> Privacidade</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:1rem">Controle quem pode interagir com você e ver seu conteúdo.</p>
+
+      <div style="display:flex;flex-direction:column;gap:.875rem">
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:.35rem">Quem pode ver meus posts por padrão</label>
+          <select class="form-input" id="priv-posts" style="font-size:13px">
+            <option value="public">🌍 Público (todos)</option>
+            <option value="friends">👥 Só amigos</option>
+          </select>
+        </div>
+        <div class="config-divider" style="margin:.1rem 0"></div>
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:.35rem">Quem pode me enviar mensagem</label>
+          <select class="form-input" id="priv-messages" style="font-size:13px">
+            <option value="all">🌍 Todos</option>
+            <option value="friends">👥 Só amigos</option>
+            <option value="none">🚫 Ninguém</option>
+          </select>
+        </div>
+        <div class="config-divider" style="margin:.1rem 0"></div>
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:.35rem">Quem pode comentar nos meus posts</label>
+          <select class="form-input" id="priv-comments" style="font-size:13px">
+            <option value="all">🌍 Todos</option>
+            <option value="friends">👥 Só amigos</option>
+            <option value="none">🚫 Ninguém</option>
+          </select>
+        </div>
+        <div class="config-divider" style="margin:.1rem 0"></div>
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:.35rem">Quem pode me adicionar como amigo</label>
+          <select class="form-input" id="priv-friends" style="font-size:13px">
+            <option value="all">🌍 Todos</option>
+            <option value="none">🚫 Ninguém (desativar solicitações)</option>
+          </select>
+        </div>
+        <div class="config-divider" style="margin:.1rem 0"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+          <div>
+            <div style="font-size:13px;font-weight:600">Perfil visível na busca</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:.1rem">Outros usuários podem encontrar você pela busca</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0">
+            <input type="checkbox" id="priv-searchable" style="opacity:0;width:0;height:0">
+            <span onclick="this.previousElementSibling.click()" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--gray-300);border-radius:12px;transition:.3s" id="priv-searchable-track">
+              <span style="position:absolute;content:'';height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="margin-top:1rem;align-self:flex-start" onclick="savePrivacySettings()">
+        <i class="ti ti-device-floppy"></i> Salvar privacidade
+      </button>
+    </div>
+
+    <!-- Arquivo de posts -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-archive"></i> Arquivo</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:.875rem">Posts arquivados ficam visíveis apenas para você e podem ser restaurados a qualquer momento.</p>
+      <a href="arquivo.html" class="btn" style="display:inline-flex;align-items:center;gap:.4rem">
+        <i class="ti ti-archive"></i> Ver posts arquivados
+      </a>
+    </div>
+
+    <!-- Amigos próximos -->
+    <div class="config-section">
+      <div class="config-section-title"><i class="ti ti-heart" style="color:#22c55e"></i> Amigos próximos 💚</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:.875rem">Stories marcados como "Amigos próximos" só são visíveis para as pessoas desta lista.</p>
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+        <input type="text" id="cf-search" class="form-input" placeholder="Buscar amigo pelo nome..." style="font-size:13px" oninput="searchCFCandidates()">
+      </div>
+      <div id="cf-candidates" style="display:none;margin-bottom:.75rem"></div>
+      <div id="cf-list">
+        <div class="spinner" style="margin:auto;width:24px;height:24px"></div>
+      </div>
+    </div>
+
     <!-- Usuários bloqueados -->
     <div class="config-section">
       <div class="config-section-title"><i class="ti ti-ban"></i> Usuários bloqueados</div>
@@ -174,7 +255,49 @@ requireAuth(async user => {
   loadBlockedUsers();
   loadCurrentStatus();
   loadMutedUsers();
+  loadPrivacySettings(userData);
+  loadCloseFriends();
 });
+
+// ── Privacidade ───────────────────────────────────────────────
+function loadPrivacySettings(userData) {
+  const priv = userData.privacy || {};
+  const sel = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || el.options[0].value; };
+  sel('priv-posts', priv.postPrivacy || 'public');
+  sel('priv-messages', priv.messagingPrivacy || 'all');
+  sel('priv-comments', priv.commentsPrivacy || 'all');
+  sel('priv-friends', priv.friendRequestsPrivacy || 'all');
+  const cb = document.getElementById('priv-searchable');
+  const track = document.getElementById('priv-searchable-track');
+  const thumb = track?.querySelector('span');
+  const isSearchable = priv.searchable !== false;
+  if (cb) cb.checked = isSearchable;
+  _applyToggleStyle(track, thumb, isSearchable);
+  if (cb) cb.addEventListener('change', e => _applyToggleStyle(track, thumb, e.target.checked));
+}
+
+function _applyToggleStyle(track, thumb, on) {
+  if (!track || !thumb) return;
+  track.style.background = on ? 'var(--purple-600)' : 'var(--gray-300)';
+  thumb.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
+}
+
+async function savePrivacySettings() {
+  const g = id => document.getElementById(id)?.value;
+  const priv = {
+    postPrivacy: g('priv-posts'),
+    messagingPrivacy: g('priv-messages'),
+    commentsPrivacy: g('priv-comments'),
+    friendRequestsPrivacy: g('priv-friends'),
+    searchable: document.getElementById('priv-searchable')?.checked !== false
+  };
+  try {
+    await db.collection('users').doc(currentUser.uid).update({ privacy: priv });
+    showToast('Configurações de privacidade salvas!');
+  } catch (e) {
+    showToast('Erro ao salvar: ' + e.message);
+  }
+}
 
 // ── Silenciados ───────────────────────────────────────────────
 async function loadMutedUsers() {
@@ -422,6 +545,85 @@ async function confirmDeleteAccount() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeDeleteModal();
 });
+
+// ── Amigos próximos ───────────────────────────────────────────
+let _cfList = [];
+
+async function loadCloseFriends() {
+  const el = document.getElementById('cf-list');
+  const d = await getUserData(currentUser.uid) || {};
+  _cfList = d.closeFriends || [];
+  renderCFList();
+}
+
+function renderCFList() {
+  const el = document.getElementById('cf-list');
+  if (!_cfList.length) {
+    el.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Nenhum amigo próximo adicionado ainda.</p>`;
+    return;
+  }
+  Promise.all(_cfList.map(uid => getUserData(uid))).then(users => {
+    el.innerHTML = users.filter(Boolean).map(u => {
+      const cl = getAvatarColor(u.uid);
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      return `<div class="blocked-row">
+        <div class="avatar avatar-40" style="background:${cl.bg}">${av}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">${sanitize(u.displayName||'Usuário')}</div></div>
+        <button class="btn btn-sm" onclick="removeCF('${u.uid}',this)" style="color:var(--red-500)">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>`;
+    }).join('');
+  });
+}
+
+let _cfSearchTimer;
+async function searchCFCandidates() {
+  clearTimeout(_cfSearchTimer);
+  _cfSearchTimer = setTimeout(async () => {
+    const q = document.getElementById('cf-search').value.trim().toLowerCase();
+    const cand = document.getElementById('cf-candidates');
+    if (!q) { cand.style.display = 'none'; return; }
+    const snap = await db.collection('users')
+      .where('displayName_lower', '>=', q).where('displayName_lower', '<=', q + '')
+      .limit(8).get();
+    const results = snap.docs.filter(d => d.id !== currentUser.uid && !_cfList.includes(d.id));
+    if (!results.length) { cand.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Nenhum resultado.</p>`; cand.style.display = 'block'; return; }
+    cand.style.display = 'block';
+    cand.innerHTML = results.map(d => {
+      const u = d.data(); const cl = getAvatarColor(d.id);
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      return `<div class="blocked-row" style="padding:.4rem 0">
+        <div class="avatar avatar-36" style="background:${cl.bg}">${av}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${sanitize(u.displayName||'Usuário')}</div></div>
+        <button class="btn btn-sm btn-primary" onclick="addCF('${d.id}',this)">+ Adicionar</button>
+      </div>`;
+    }).join('');
+  }, 300);
+}
+
+async function addCF(uid, btn) {
+  if (_cfList.includes(uid)) return;
+  btn.disabled = true;
+  _cfList = [..._cfList, uid];
+  await db.collection('users').doc(currentUser.uid).update({ closeFriends: _cfList });
+  renderCFList();
+  document.getElementById('cf-search').value = '';
+  document.getElementById('cf-candidates').style.display = 'none';
+  showToast('Amigo próximo adicionado!');
+}
+
+async function removeCF(uid, btn) {
+  btn.disabled = true;
+  _cfList = _cfList.filter(u => u !== uid);
+  await db.collection('users').doc(currentUser.uid).update({ closeFriends: _cfList });
+  renderCFList();
+  showToast('Removido dos amigos próximos.');
+}
 </script>
 </body>
 </html>
