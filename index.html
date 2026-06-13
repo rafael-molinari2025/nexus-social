@@ -637,7 +637,7 @@ function renderProfileWidget(user) {
       <div class="profile-handle">${sanitize(user.bio || user.email || '')}</div>
       <div class="profile-stats" id="profile-stats">
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">amigos</span></div>
-        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">grupos</span></div>
+        <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">comunidades</span></div>
         <div class="profile-stat"><span class="profile-stat-num">—</span><span class="profile-stat-label">posts</span></div>
       </div>
       <a href="pages/perfil.html?uid=${user.uid}" class="btn btn-sm"
@@ -658,7 +658,7 @@ async function loadProfileStats(uid) {
     const el = document.getElementById('profile-stats');
     if (el) el.innerHTML = `
       <div class="profile-stat"><span class="profile-stat-num">${f.size}</span><span class="profile-stat-label">amigos</span></div>
-      <div class="profile-stat"><span class="profile-stat-num">${c.size}</span><span class="profile-stat-label">grupos</span></div>
+      <div class="profile-stat"><span class="profile-stat-num">${c.size}</span><span class="profile-stat-label">comunidades</span></div>
       <div class="profile-stat"><span class="profile-stat-num">${p.size}</span><span class="profile-stat-label">posts</span></div>`;
   } catch(e) {}
 }
