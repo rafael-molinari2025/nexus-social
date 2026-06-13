@@ -123,7 +123,26 @@
       flex: 1; overflow-y: auto; padding: 1rem 1.25rem;
       display: flex; flex-direction: column; gap: .5rem;
       scroll-behavior: smooth;
+      transition: background .3s;
     }
+
+    /* Theme picker */
+    .theme-picker-sheet {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 800; display: flex; align-items: flex-end; justify-content: center;
+    }
+    .theme-picker-inner {
+      background: var(--surface); border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      width: min(480px, 100vw); padding: 1.25rem 1.25rem 2rem;
+    }
+    .theme-swatches { display: flex; gap: .65rem; flex-wrap: wrap; margin-top: .75rem; }
+    .theme-swatch {
+      width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+      border: 3px solid transparent; transition: transform .15s, border-color .15s;
+      box-shadow: 0 2px 6px rgba(0,0,0,.18);
+    }
+    .theme-swatch.active { border-color: var(--text-primary); transform: scale(1.15); }
+    .theme-swatch:hover { transform: scale(1.1); }
 
     /* Date divider */
     .msg-date-divider {
@@ -535,6 +554,9 @@ async function openConversation(cid, otherUid) {
       <a href="perfil.html?uid=${other.uid}" class="btn btn-sm" title="Ver perfil">
         <i class="ti ti-user"></i>
       </a>
+      <button class="btn btn-sm" onclick="openThemePicker('${cid}')" title="Tema da conversa">
+        <i class="ti ti-palette"></i>
+      </button>
       <button class="btn btn-sm" onclick="deleteConversation('${cid}')" title="Excluir conversa" style="color:var(--coral-400)">
         <i class="ti ti-trash"></i>
       </button>
@@ -722,6 +744,7 @@ function renderMessages(docs, other, showLoadOlder = false) {
     return;
   }
   container.innerHTML = buildMessagesHTML(docs, other, showLoadOlder);
+  if (activeConvId) applyChatTheme(activeConvId);
 }
 
 function scrollToBottom() {
@@ -1350,6 +1373,71 @@ async function deleteConversation(cid) {
     showToast('Conversa excluída.');
     mobileBackToList();
   } catch(e) { showToast('Erro ao excluir conversa.'); }
+}
+
+// ── Chat themes ─────────────────────────────────────────────────
+const CHAT_THEMES = [
+  { id: 'default',  label: 'Padrão',   bg: null,          bubble: null },
+  { id: 'ocean',    label: 'Oceano',   bg: '#e0f2fe',     bubble: '#0284c7' },
+  { id: 'forest',   label: 'Floresta', bg: '#dcfce7',     bubble: '#16a34a' },
+  { id: 'sunset',   label: 'Pôr do sol', bg: '#fff7ed',   bubble: '#ea580c' },
+  { id: 'rose',     label: 'Rosa',     bg: '#fce7f3',     bubble: '#db2777' },
+  { id: 'midnight', label: 'Midnight', bg: '#1e293b',     bubble: '#6366f1' },
+  { id: 'gold',     label: 'Dourado',  bg: '#fef9c3',     bubble: '#b45309' },
+  { id: 'lavender', label: 'Lavanda',  bg: '#f3e8ff',     bubble: '#7c3aed' },
+];
+const THEME_KEY = 'nexus_chat_theme_';
+
+function getChatTheme(cid) {
+  try { return JSON.parse(localStorage.getItem(THEME_KEY + cid) || 'null'); } catch { return null; }
+}
+
+function applyChatTheme(cid) {
+  const t = getChatTheme(cid);
+  const msgs = document.getElementById('chat-messages');
+  if (!msgs) return;
+  if (!t || t.id === 'default') {
+    msgs.style.background = '';
+    document.querySelectorAll('.msg-row.mine .msg-bubble').forEach(el => el.style.background = '');
+    return;
+  }
+  if (t.bg) msgs.style.background = t.bg;
+  if (t.bubble) {
+    document.querySelectorAll('.msg-row.mine .msg-bubble').forEach(el => el.style.background = t.bubble);
+  }
+}
+
+function openThemePicker(cid) {
+  const existing = document.querySelector('.theme-picker-sheet');
+  if (existing) { existing.remove(); return; }
+  const cur = getChatTheme(cid);
+  const swatches = CHAT_THEMES.map(t => {
+    const bg = t.id === 'default' ? 'linear-gradient(135deg,#534AB7,#8B5CF6)' : t.bubble || '#ccc';
+    return `<div class="theme-swatch${cur?.id === t.id || (!cur && t.id==='default') ? ' active' : ''}"
+      style="background:${bg}" title="${t.label}"
+      onclick="setChatTheme('${cid}','${t.id}',this)"></div>`;
+  }).join('');
+  const sheet = document.createElement('div');
+  sheet.className = 'theme-picker-sheet';
+  sheet.onclick = e => { if (e.target === sheet) sheet.remove(); };
+  sheet.innerHTML = `<div class="theme-picker-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <h3 style="font-size:15px;font-weight:600"><i class="ti ti-palette"></i> Tema da conversa</h3>
+      <button onclick="this.closest('.theme-picker-sheet').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">&times;</button>
+    </div>
+    <div class="theme-swatches">${swatches}</div>
+  </div>`;
+  document.body.appendChild(sheet);
+}
+
+function setChatTheme(cid, themeId, swatch) {
+  const t = CHAT_THEMES.find(x => x.id === themeId);
+  if (!t) return;
+  localStorage.setItem(THEME_KEY + cid, JSON.stringify(t));
+  swatch.closest('.theme-swatches').querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+  swatch.classList.add('active');
+  applyChatTheme(cid);
+  showToast(`Tema "${t.label}" aplicado!`);
 }
 
 // ── Mobile: voltar para lista de conversas ───────────────────────

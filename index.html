@@ -1743,10 +1743,45 @@ function sharePost(postId) {
         <button class="btn" style="justify-content:flex-start;gap:.6rem" onclick="document.getElementById('share-mini-modal').remove();shareInCommunity('${postId}')">
           <i class="ti ti-users-group"></i> Compartilhar em comunidade
         </button>
+        <button class="btn" style="justify-content:flex-start;gap:.6rem" onclick="document.getElementById('share-mini-modal').remove();sharePostAsStory('${postId}')">
+          <i class="ti ti-player-play"></i> Compartilhar como Story
+        </button>
+        ${navigator.share ? `<button class="btn" style="justify-content:flex-start;gap:.6rem" onclick="document.getElementById('share-mini-modal').remove();navigator.share({title:'Post no Nexus',url:'${url}'})">
+          <i class="ti ti-share"></i> Compartilhar via...
+        </button>` : ''}
       </div>
     </div>`;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+}
+
+async function sharePostAsStory(postId) {
+  const snap = await db.collection('posts').doc(postId).get();
+  if (!snap.exists) return showToast('Post não encontrado.');
+  const p = snap.data();
+  const userData = await getUserData(currentUser.uid) || { uid: currentUser.uid, displayName: currentUser.displayName };
+  const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
+  const text = (p.text || '').slice(0, 100) + (p.text?.length > 100 ? '…' : '');
+  const storyData = {
+    uid: currentUser.uid,
+    displayName: userData.displayName || currentUser.displayName || '',
+    photoURL: userData.photoURL || currentUser.photoURL || null,
+    type: p.imageURL ? 'image' : 'text',
+    text: text || `Post de ${p.authorName}`,
+    imageURL: p.imageURL || null,
+    bgColor: '#534AB7',
+    views: [],
+    expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    sharedPostId: postId,
+    sharedFromName: p.authorName || ''
+  };
+  try {
+    await db.collection('stories').add(storyData);
+    showToast('Post compartilhado como Story!');
+    try { sessionStorage.removeItem('nx_stories_cache'); } catch {}
+    loadStories();
+  } catch(e) { showToast('Erro ao compartilhar como Story.'); }
 }
 
 async function repostPost(postId) {
@@ -2337,6 +2372,19 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
         <div style="flex:1;height:100%;pointer-events:auto;cursor:pointer" onclick="storyNavNext()"></div>
       </div>
       <div class="story-viewer-body">${body}</div>
+      ${s.uid !== currentUser?.uid ? `
+      <div style="position:absolute;bottom:0;left:0;right:0;z-index:10;padding:.75rem .75rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,.6))">
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <input id="story-reply-input" placeholder="Responder a ${sanitize(s.displayName?.split(' ')[0]||'Usuário')}…"
+            style="flex:1;background:rgba(255,255,255,.15);border:none;border-radius:var(--radius-full);color:#fff;padding:.45rem .875rem;font-size:13px;font-family:var(--font-sans);outline:none;backdrop-filter:blur(4px);::placeholder{color:rgba(255,255,255,.6)}"
+            onclick="event.stopPropagation()"
+            onkeydown="if(event.key==='Enter')sendStoryReply('${storyId}','${s.uid}',${JSON.stringify(s.text||'').replace(/"/g,'&quot;')})">
+          <button onclick="event.stopPropagation();sendStoryReply('${storyId}','${s.uid}',${JSON.stringify(s.text||'').replace(/"/g,'&quot;')})"
+            style="background:rgba(255,255,255,.2);border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:16px;flex-shrink:0">
+            <i class="ti ti-send"></i>
+          </button>
+        </div>
+      </div>` : ''}
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) { clearTimeout(_storyTimer); overlay.remove(); } });
@@ -2393,6 +2441,46 @@ async function deleteOwnStory(storyId) {
     // Remove from cache so it doesn't re-appear
     try { sessionStorage.removeItem('nx_stories_cache'); } catch {}
   } catch(e) { showToast('Erro ao excluir story.'); }
+}
+
+// ── Story reply via DM ────────────────────────────────────────
+async function sendStoryReply(storyId, authorUid, storyText) {
+  const input = document.getElementById('story-reply-input');
+  const text = input?.value?.trim();
+  if (!text) { input?.focus(); return; }
+  input.value = '';
+  clearTimeout(_storyTimer);
+  document.getElementById('story-view-overlay')?.remove();
+  try {
+    // Find or create conversation
+    const convId = [currentUser.uid, authorUid].sort().join('_');
+    const convRef = db.collection('conversations').doc(convId);
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) {
+      await convRef.set({
+        participants: [currentUser.uid, authorUid],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastMessage: '', lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+        unread: { [authorUid]: 0 }
+      });
+    }
+    const context = storyText ? `↩️ Respondeu ao seu story: "${storyText.slice(0,40)}${storyText.length>40?'…':''}"` : '↩️ Respondeu ao seu story';
+    await convRef.collection('messages').add({
+      senderId: currentUser.uid,
+      text: `${context}\n\n${text}`,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await convRef.update({
+      lastMessage: text, lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+      [`unread.${authorUid}`]: firebase.firestore.FieldValue.increment(1)
+    });
+    showToast('Resposta enviada!');
+    createNotification(authorUid, 'scrap', {
+      message: `${currentUser.displayName} respondeu ao seu story.`,
+      link: `${PAGES}mensagens.html?with=${currentUser.uid}`,
+      fromUid: currentUser.uid, fromName: currentUser.displayName
+    });
+  } catch(e) { showToast('Erro ao enviar resposta.'); }
 }
 
 // ── Story creation ─────────────────────────────────────────────

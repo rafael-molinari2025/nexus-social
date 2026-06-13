@@ -231,6 +231,32 @@
         <input class="form-input" type="url" id="edit-website" placeholder="https://seusite.com">
       </div>
 
+      <div class="section-divider">Sobre mim</div>
+
+      <div class="form-group">
+        <label class="form-label">Trabalha em</label>
+        <input class="form-input" type="text" id="edit-work" placeholder="Ex: Google, Freelancer, Estudante…" maxlength="80">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estudou em</label>
+        <input class="form-input" type="text" id="edit-education" placeholder="Ex: USP, IFSP, Autodidato…" maxlength="80">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cidade natal</label>
+        <input class="form-input" type="text" id="edit-hometown" placeholder="Ex: Rio de Janeiro, RJ" maxlength="80">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado civil</label>
+        <select class="form-input" id="edit-relationship">
+          <option value="">Prefiro não informar</option>
+          <option value="single">Solteiro(a)</option>
+          <option value="relationship">Em um relacionamento</option>
+          <option value="married">Casado(a)</option>
+          <option value="complicated">É complicado</option>
+          <option value="prefer_not">Prefiro não dizer</option>
+        </select>
+      </div>
+
       <div class="section-divider">Status</div>
 
       <div class="form-group">
@@ -457,6 +483,7 @@ async function renderProfile(uid) {
         <button class="profile-tab" onclick="switchTab('fotos')"><i class="ti ti-photo" aria-hidden="true"></i> Fotos</button>
         <button class="profile-tab" onclick="switchTab('friends')"><i class="ti ti-users" aria-hidden="true"></i> Amigos</button>
         <button class="profile-tab" onclick="switchTab('communities')"><i class="ti ti-building-community" aria-hidden="true"></i> Comunidades</button>
+        <button class="profile-tab" onclick="switchTab('sobre')"><i class="ti ti-info-circle" aria-hidden="true"></i> Sobre</button>
         <button class="profile-tab" onclick="switchTab('scraps')"><i class="ti ti-message" aria-hidden="true"></i> Recados</button>
         <button class="profile-tab" onclick="switchTab('depoimentos')"><i class="ti ti-quote" aria-hidden="true"></i> Depoimentos</button>
         <button class="profile-tab" onclick="location.href='perguntas.html?uid=${uid}'"><i class="ti ti-message-question" aria-hidden="true"></i> Perguntas</button>
@@ -466,6 +493,7 @@ async function renderProfile(uid) {
         <div class="tab-content" id="tab-fotos"></div>
         <div class="tab-content" id="tab-friends"></div>
         <div class="tab-content" id="tab-communities"></div>
+        <div class="tab-content" id="tab-sobre"></div>
         <div class="tab-content" id="tab-scraps"></div>
         <div class="tab-content" id="tab-depoimentos"></div>
       </div>
@@ -486,7 +514,12 @@ async function renderProfile(uid) {
     document.getElementById('edit-bio').value       = d.bio       || '';
     document.getElementById('edit-birthdate').value = d.birthdate || '';
     document.getElementById('edit-city').value      = d.city      || '';
-    document.getElementById('edit-website').value      = d.website        || '';
+    document.getElementById('edit-website').value      = d.website          || '';
+    document.getElementById('edit-work').value         = d.work             || '';
+    document.getElementById('edit-education').value    = d.education        || '';
+    document.getElementById('edit-hometown').value     = d.hometown         || '';
+    const relSel = document.getElementById('edit-relationship');
+    if (relSel) relSel.value = d.relationshipStatus || '';
     document.getElementById('edit-status-text').value  = d.status?.text   || '';
     const rawEmoji = d.status?.emoji || '😊';
     // Valida: aceita só se tiver caractere emoji real (descarta texto como "Me S")
@@ -498,7 +531,7 @@ async function renderProfile(uid) {
   }
 }
 
-const _tabs = ['posts','fotos','friends','communities','scraps','depoimentos'];
+const _tabs = ['posts','fotos','friends','communities','sobre','scraps','depoimentos'];
 function switchTab(tab) {
   document.querySelectorAll('.profile-tab').forEach((b,i) => {
     b.classList.toggle('active', _tabs[i] === tab);
@@ -510,8 +543,57 @@ function switchTab(tab) {
   if (tab === 'fotos')        loadGallery(uid);
   if (tab === 'friends')      loadProfileFriends(uid);
   if (tab === 'communities')  loadProfileCommunities(uid);
+  if (tab === 'sobre')        loadAboutTab(uid);
   if (tab === 'scraps')       loadScraps(uid);
   if (tab === 'depoimentos')  loadDepoimentos(uid);
+}
+
+async function loadAboutTab(uid) {
+  const el    = document.getElementById('tab-sobre');
+  const isOwn = currentUser && currentUser.uid === uid;
+  el.innerHTML = '<div class="loading-screen" style="min-height:80px"><div class="spinner"></div></div>';
+  try {
+    const snap = await db.collection('users').doc(uid).get();
+    const d    = snap.data() || {};
+    const RSTATUS = { single:'Solteiro(a)', relationship:'Em um relacionamento', married:'Casado(a)', complicated:'É complicado', prefer_not:'Prefiro não dizer' };
+    const fields = [
+      { icon:'ti-briefcase',    key:'work',               label:'Trabalha em' },
+      { icon:'ti-school',       key:'education',          label:'Estudou em' },
+      { icon:'ti-map-pin',      key:'hometown',           label:'Cidade natal' },
+      { icon:'ti-map',          key:'city',               label:'Mora em' },
+      { icon:'ti-world',        key:'website',            label:'Website', link: true },
+      { icon:'ti-heart',        key:'relationshipStatus', label:'Estado civil', transform: v => RSTATUS[v]||v },
+      { icon:'ti-cake',         key:'birthdate',          label:'Nasceu em', transform: v => { try { return new Date(v+'T12:00').toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'}); } catch{return v;} } },
+    ];
+    const rows = fields.map(f => {
+      const val = d[f.key];
+      if (!val) return '';
+      const display = f.transform ? f.transform(val) : val;
+      const content = f.link
+        ? `<a href="${sanitize(val)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none">${sanitize(display)}</a>`
+        : sanitize(display);
+      return `<div style="display:flex;align-items:center;gap:.75rem;padding:.55rem 0;border-bottom:0.5px solid var(--border)">
+        <i class="ti ${f.icon}" style="font-size:18px;color:var(--purple-400);flex-shrink:0;width:22px;text-align:center"></i>
+        <div>
+          <div style="font-size:12px;color:var(--text-muted)">${f.label}</div>
+          <div style="font-size:14px;font-weight:500">${content}</div>
+        </div>
+      </div>`;
+    }).filter(Boolean).join('');
+
+    if (!rows && !isOwn) {
+      el.innerHTML = '<div class="empty-state"><i class="ti ti-info-circle"></i><p>Nenhuma informação disponível.</p></div>';
+      return;
+    }
+
+    el.innerHTML = `
+      ${rows || '<p style="font-size:13px;color:var(--text-muted);margin:.5rem 0">Nenhuma informação preenchida ainda.</p>'}
+      ${isOwn ? `<button class="btn btn-sm" style="margin-top:.75rem;width:100%;justify-content:center" onclick="location.href='configuracoes.html'">
+        <i class="ti ti-pencil"></i> Editar informações
+      </button>` : ''}`;
+  } catch(e) {
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Erro ao carregar.</p></div>';
+  }
 }
 
 async function loadGallery(uid) {
@@ -1072,9 +1154,19 @@ async function saveProfile() {
         return showToast('Nome de usuário já em uso.');
       }
     }
-    const statusEmoji = document.getElementById('edit-status-emoji').value.trim();
-    const statusText  = document.getElementById('edit-status-text').value.trim();
-    const updates = { displayName, displayName_lower: displayName.toLowerCase(), bio, city, website, status: { emoji: statusEmoji, text: statusText } };
+    const statusEmoji    = document.getElementById('edit-status-emoji').value.trim();
+    const statusText     = document.getElementById('edit-status-text').value.trim();
+    const work           = document.getElementById('edit-work').value.trim();
+    const education      = document.getElementById('edit-education').value.trim();
+    const hometown       = document.getElementById('edit-hometown').value.trim();
+    const relStatus      = document.getElementById('edit-relationship').value;
+    const updates = {
+      displayName, displayName_lower: displayName.toLowerCase(),
+      bio, city, website,
+      work, education, hometown,
+      relationshipStatus: relStatus || null,
+      status: { emoji: statusEmoji, text: statusText }
+    };
     if (username) updates.username = username;
     if (birth) updates.birthdate = birth;
     if (editGender) updates.gender = editGender;

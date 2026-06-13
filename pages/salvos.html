@@ -10,6 +10,72 @@
   <style>
     .salvos-page { max-width: 640px; margin: 0 auto; padding: 1.5rem .75rem; }
     @media (max-width: 768px) { .salvos-page { padding: 1rem .5rem calc(80px + 1rem); } }
+
+    /* Collections bar */
+    .coll-bar {
+      display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none;
+      padding-bottom: .75rem; margin-bottom: .25rem; align-items: center;
+    }
+    .coll-bar::-webkit-scrollbar { display: none; }
+    .coll-chip {
+      display: inline-flex; align-items: center; gap: .35rem; flex-shrink: 0;
+      padding: .35rem .85rem; border-radius: var(--radius-full);
+      border: 0.5px solid var(--border); background: var(--surface);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); transition: all var(--transition);
+      white-space: nowrap;
+    }
+    .coll-chip:hover { border-color: var(--purple-400); color: var(--purple-600); }
+    .coll-chip.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+    .coll-chip .coll-count { font-size: 11px; opacity: .7; }
+    .coll-add-btn {
+      display: inline-flex; align-items: center; gap: .35rem; flex-shrink: 0;
+      padding: .35rem .85rem; border-radius: var(--radius-full);
+      border: 0.5px dashed var(--border); background: none;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      color: var(--text-muted); font-family: var(--font-sans);
+      transition: all var(--transition); white-space: nowrap;
+    }
+    .coll-add-btn:hover { border-color: var(--purple-400); color: var(--purple-600); }
+
+    /* Collection modal */
+    .coll-modal-bd {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 800; display: flex; align-items: center; justify-content: center;
+    }
+    .coll-modal {
+      background: var(--surface); border-radius: var(--radius-lg);
+      width: min(360px, 94vw); padding: 1.25rem; box-shadow: var(--shadow-lg);
+    }
+    .coll-emoji-row { display: flex; gap: .4rem; flex-wrap: wrap; margin: .75rem 0; }
+    .coll-emoji-btn {
+      font-size: 22px; cursor: pointer; padding: .2rem; border-radius: 6px;
+      transition: background .15s; background: none; border: 2px solid transparent;
+      line-height: 1;
+    }
+    .coll-emoji-btn.sel { border-color: var(--purple-600); background: var(--indigo-50); }
+
+    /* Add-to-collection sheet */
+    .coll-sheet-bd {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 800; display: flex; align-items: flex-end; justify-content: center;
+    }
+    .coll-sheet {
+      background: var(--surface); border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      width: min(480px, 100vw); padding: 1.25rem 1.25rem 2rem; box-shadow: var(--shadow-lg);
+      max-height: 60vh; overflow-y: auto;
+    }
+    .coll-list-item {
+      display: flex; align-items: center; gap: .75rem; padding: .65rem 0;
+      border-bottom: 0.5px solid var(--border); cursor: pointer;
+      transition: background var(--transition);
+    }
+    .coll-list-item:last-child { border-bottom: none; }
+    .coll-list-item:hover { color: var(--purple-600); }
+    .coll-list-emoji { font-size: 22px; width: 28px; text-align: center; }
+    .coll-list-name { flex: 1; font-size: 14px; font-weight: 500; }
+    .coll-list-count { font-size: 12px; color: var(--text-muted); }
+    .coll-check { color: var(--purple-600); }
   </style>
 </head>
 <body>
@@ -18,10 +84,26 @@
 
 <div style="padding-top: var(--topbar-h)">
   <div class="salvos-page">
-    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem">
-      <h1 style="font-size:20px;font-weight:600;margin:0">Posts salvos</h1>
-      <span id="saved-count" style="font-size:13px;color:var(--text-muted)"></span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;gap:.75rem">
+      <div style="display:flex;align-items:center;gap:.75rem">
+        <h1 style="font-size:20px;font-weight:600;margin:0">Posts salvos</h1>
+        <span id="saved-count" style="font-size:13px;color:var(--text-muted)"></span>
+      </div>
+      <button class="btn btn-sm" id="manage-coll-btn" onclick="openManageCollections()" title="Gerenciar coleções" style="display:none">
+        <i class="ti ti-layout-list"></i>
+      </button>
     </div>
+
+    <!-- Collections bar -->
+    <div class="coll-bar" id="coll-bar">
+      <button class="coll-chip active" id="chip-all" onclick="filterCollection(null)">
+        <i class="ti ti-bookmarks" style="font-size:13px"></i> Todos
+      </button>
+      <button class="coll-add-btn" onclick="openCreateCollectionModal()">
+        <i class="ti ti-plus" style="font-size:13px"></i> Nova coleção
+      </button>
+    </div>
+
     <div id="salvos-list">
       <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
     </div>
@@ -35,34 +117,252 @@
 <script src="../js/firebase-config.js"></script>
 <script src="../js/utils.js"></script>
 <script>
-let currentUser = null;
-let _lastSavedDoc = null;
-let _loading = false;
-let _totalSaved = 0;
-const PAGE_SIZE = 20;
+let currentUser     = null;
+let _lastSavedDoc   = null;
+let _loading        = false;
+let _totalSaved     = 0;
+let _activeCollId   = null; // null = all
+let _collections    = [];   // [{id, name, emoji, postIds[]}]
+const PAGE_SIZE     = 20;
+const COLLS_REF     = () => db.collection('bookmark_collections').doc(currentUser.uid).collection('colls');
+const POSTS_REF     = () => db.collection('bookmark_collections').doc(currentUser.uid).collection('posts');
 
 requireAuth(async user => {
   currentUser = user;
   const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
   renderTopbar(userData, '');
+  await loadCollections();
   loadSaved();
+  document.getElementById('manage-coll-btn').style.display = _collections.length ? 'inline-flex' : 'none';
 });
 
+// ── Collections ────────────────────────────────────────────────
+async function loadCollections() {
+  try {
+    const snap = await COLLS_REF().orderBy('createdAt', 'asc').get();
+    _collections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCollBar();
+  } catch(e) { _collections = []; }
+}
+
+function renderCollBar() {
+  const bar = document.getElementById('coll-bar');
+  let html = `<button class="coll-chip${_activeCollId === null ? ' active' : ''}" id="chip-all" onclick="filterCollection(null)">
+    <i class="ti ti-bookmarks" style="font-size:13px"></i> Todos
+  </button>`;
+  _collections.forEach(c => {
+    html += `<button class="coll-chip${_activeCollId === c.id ? ' active' : ''}" onclick="filterCollection('${c.id}')">
+      ${c.emoji || '📁'} ${sanitize(c.name)}<span class="coll-count">${(c.postIds||[]).length}</span>
+    </button>`;
+  });
+  html += `<button class="coll-add-btn" onclick="openCreateCollectionModal()">
+    <i class="ti ti-plus" style="font-size:13px"></i> Nova coleção
+  </button>`;
+  bar.innerHTML = html;
+  document.getElementById('manage-coll-btn').style.display = _collections.length ? 'inline-flex' : 'none';
+}
+
+function filterCollection(collId) {
+  _activeCollId = collId;
+  renderCollBar();
+  loadSaved(true);
+}
+
+const COLL_EMOJIS = ['📁','⭐','🔖','❤️','🎯','💡','🎨','📚','🎵','🎬','🍕','✈️','🏆','💼','🌟'];
+
+function openCreateCollectionModal(existing = null) {
+  const bd = document.createElement('div');
+  bd.className = 'coll-modal-bd';
+  bd.onclick = e => { if (e.target === bd) bd.remove(); };
+  let selEmoji = existing?.emoji || COLL_EMOJIS[0];
+  bd.innerHTML = `<div class="coll-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
+      <h3 style="font-size:15px;font-weight:600">${existing ? 'Editar coleção' : 'Nova coleção'}</h3>
+      <button onclick="this.closest('.coll-modal-bd').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">&times;</button>
+    </div>
+    <label style="font-size:13px;font-weight:500;display:block;margin-bottom:.4rem">Emoji</label>
+    <div class="coll-emoji-row" id="emoji-row">
+      ${COLL_EMOJIS.map(e => `<button class="coll-emoji-btn${e===selEmoji?' sel':''}" onclick="selectCollEmoji(this,'${e}')">${e}</button>`).join('')}
+    </div>
+    <label style="font-size:13px;font-weight:500;display:block;margin-bottom:.4rem">Nome</label>
+    <input id="coll-name-input" class="form-input" placeholder="Ex: Para ler, Receitas, Viagens…" maxlength="40" value="${existing ? sanitize(existing.name) : ''}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.875rem;gap:.5rem">
+      ${existing ? `<button onclick="deleteCollection('${existing.id}',this.closest('.coll-modal-bd'))" style="background:none;border:none;cursor:pointer;color:var(--coral-400);font-size:13px"><i class="ti ti-trash"></i> Apagar</button>` : '<div></div>'}
+      <div style="display:flex;gap:.5rem">
+        <button onclick="this.closest('.coll-modal-bd').remove()" style="background:none;border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.4rem .75rem;font-size:13px;cursor:pointer;color:var(--text-secondary)">Cancelar</button>
+        <button onclick="saveCollection('${existing?.id||''}',this.closest('.coll-modal-bd'))" class="btn btn-sm">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(bd);
+  document.getElementById('coll-name-input')?.focus();
+  // Attach emoji sel state
+  bd._selEmoji = selEmoji;
+}
+
+function selectCollEmoji(btn, emoji) {
+  btn.closest('.coll-modal-bd')._selEmoji = emoji;
+  btn.closest('.coll-emoji-row').querySelectorAll('.coll-emoji-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+
+async function saveCollection(existingId, bd) {
+  const name = document.getElementById('coll-name-input')?.value?.trim();
+  if (!name) { showToast('Digite um nome para a coleção.'); return; }
+  const emoji = bd._selEmoji || COLL_EMOJIS[0];
+  try {
+    if (existingId) {
+      await COLLS_REF().doc(existingId).update({ name, emoji });
+      const idx = _collections.findIndex(c => c.id === existingId);
+      if (idx >= 0) { _collections[idx].name = name; _collections[idx].emoji = emoji; }
+    } else {
+      const ref = await COLLS_REF().add({ name, emoji, postIds: [], createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      _collections.push({ id: ref.id, name, emoji, postIds: [] });
+    }
+    bd.remove();
+    renderCollBar();
+    showToast(existingId ? 'Coleção atualizada!' : 'Coleção criada!');
+  } catch(e) { showToast('Erro ao salvar coleção.'); }
+}
+
+async function deleteCollection(collId, bd) {
+  if (!confirm('Apagar esta coleção? Os posts salvos não serão removidos dos Salvos.')) return;
+  try {
+    await COLLS_REF().doc(collId).delete();
+    _collections = _collections.filter(c => c.id !== collId);
+    if (_activeCollId === collId) _activeCollId = null;
+    bd?.remove();
+    renderCollBar();
+    loadSaved(true);
+    showToast('Coleção apagada.');
+  } catch(e) { showToast('Erro ao apagar.'); }
+}
+
+function openManageCollections() {
+  if (!_collections.length) { openCreateCollectionModal(); return; }
+  const bd = document.createElement('div');
+  bd.className = 'coll-modal-bd';
+  bd.onclick = e => { if (e.target === bd) bd.remove(); };
+  const rows = _collections.map(c =>
+    `<div class="coll-list-item" onclick="this.closest('.coll-modal-bd').remove();openCreateCollectionModal(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+      <span class="coll-list-emoji">${c.emoji||'📁'}</span>
+      <span class="coll-list-name">${sanitize(c.name)}</span>
+      <span class="coll-list-count">${(c.postIds||[]).length} posts</span>
+      <i class="ti ti-pencil" style="font-size:14px;color:var(--text-muted)"></i>
+    </div>`).join('');
+  bd.innerHTML = `<div class="coll-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
+      <h3 style="font-size:15px;font-weight:600">Minhas coleções</h3>
+      <button onclick="this.closest('.coll-modal-bd').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">&times;</button>
+    </div>
+    ${rows}
+    <button onclick="this.closest('.coll-modal-bd').remove();openCreateCollectionModal()" class="btn btn-sm" style="width:100%;justify-content:center;margin-top:.75rem">
+      <i class="ti ti-plus"></i> Nova coleção
+    </button>
+  </div>`;
+  document.body.appendChild(bd);
+}
+
+// Open sheet to add post to a collection
+function openAddToCollectionSheet(postId) {
+  if (!_collections.length) {
+    openCreateCollectionModal();
+    return;
+  }
+  const bd = document.createElement('div');
+  bd.className = 'coll-sheet-bd';
+  bd.onclick = e => { if (e.target === bd) bd.remove(); };
+  const rows = _collections.map(c => {
+    const inColl = (c.postIds||[]).includes(postId);
+    return `<div class="coll-list-item" onclick="togglePostInCollection('${postId}','${c.id}',this)">
+      <span class="coll-list-emoji">${c.emoji||'📁'}</span>
+      <span class="coll-list-name">${sanitize(c.name)}</span>
+      <span class="coll-list-count">${(c.postIds||[]).length}</span>
+      ${inColl ? '<i class="ti ti-check coll-check" style="font-size:16px"></i>' : '<i class="ti ti-plus" style="font-size:16px;color:var(--text-muted)"></i>'}
+    </div>`;
+  }).join('');
+  bd.innerHTML = `<div class="coll-sheet">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
+      <h3 style="font-size:15px;font-weight:600"><i class="ti ti-folders"></i> Adicionar à coleção</h3>
+      <button onclick="this.closest('.coll-sheet-bd').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">&times;</button>
+    </div>
+    ${rows}
+    <button onclick="this.closest('.coll-sheet-bd').remove();openCreateCollectionModal()" class="btn btn-sm" style="width:100%;justify-content:center;margin-top:.75rem">
+      <i class="ti ti-plus"></i> Nova coleção
+    </button>
+  </div>`;
+  document.body.appendChild(bd);
+}
+
+async function togglePostInCollection(postId, collId, row) {
+  const coll = _collections.find(c => c.id === collId);
+  if (!coll) return;
+  const inColl = (coll.postIds||[]).includes(postId);
+  try {
+    await COLLS_REF().doc(collId).update({
+      postIds: inColl
+        ? firebase.firestore.FieldValue.arrayRemove(postId)
+        : firebase.firestore.FieldValue.arrayUnion(postId)
+    });
+    if (inColl) {
+      coll.postIds = (coll.postIds||[]).filter(id => id !== postId);
+      row.querySelector(':last-child').className = 'ti ti-plus';
+      row.querySelector(':last-child').style.color = 'var(--text-muted)';
+    } else {
+      (coll.postIds = coll.postIds||[]).push(postId);
+      row.querySelector(':last-child').className = 'ti ti-check coll-check';
+      row.querySelector(':last-child').style.color = '';
+    }
+    row.querySelector('.coll-list-count').textContent = coll.postIds.length;
+    renderCollBar();
+    showToast(inColl ? 'Removido da coleção.' : 'Adicionado à coleção!');
+  } catch(e) { showToast('Erro ao atualizar coleção.'); }
+}
+
+// ── Load saved posts ────────────────────────────────────────────
 async function loadSaved(reset = true) {
   if (_loading) return;
   _loading = true;
   const el  = document.getElementById('salvos-list');
   const lm  = document.getElementById('salvos-load-more');
   if (reset) { _lastSavedDoc = null; el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>'; }
-  try {
-    let query = db.collection('posts')
-      .where('bookmarks', 'array-contains', currentUser.uid)
-      .orderBy('createdAt', 'desc')
-      .limit(PAGE_SIZE);
-    if (_lastSavedDoc) query = query.startAfter(_lastSavedDoc);
-    const snap = await query.get();
 
-    if (snap.docs.length) _lastSavedDoc = snap.docs[snap.docs.length - 1];
+  try {
+    let postIds = null;
+    // If a collection is active, filter by its postIds
+    if (_activeCollId) {
+      const coll = _collections.find(c => c.id === _activeCollId);
+      postIds = coll?.postIds || [];
+      if (!postIds.length) {
+        el.innerHTML = `<div class="empty-state card">
+          <i class="ti ti-folder-open" style="font-size:2.5rem;color:var(--text-muted)"></i>
+          <p>Esta coleção está vazia.<br>Adicione posts salvos clicando em <i class="ti ti-folders"></i>.</p>
+        </div>`;
+        document.getElementById('saved-count').textContent = '0 salvos';
+        _loading = false; return;
+      }
+    }
+
+    let snap;
+    if (postIds) {
+      // Fetch specific post IDs (max 30 per in() query)
+      const chunks = [];
+      for (let i = 0; i < Math.min(postIds.length, 30); i += 10)
+        chunks.push(postIds.slice(i, i+10));
+      const snaps = await Promise.all(
+        chunks.map(c => db.collection('posts').where(firebase.firestore.FieldPath.documentId(), 'in', c).get())
+      );
+      const docs = snaps.flatMap(s => s.docs);
+      snap = { docs, empty: !docs.length };
+    } else {
+      let query = db.collection('posts')
+        .where('bookmarks', 'array-contains', currentUser.uid)
+        .orderBy('createdAt', 'desc')
+        .limit(PAGE_SIZE);
+      if (_lastSavedDoc) query = query.startAfter(_lastSavedDoc);
+      snap = await query.get();
+      if (snap.docs.length) _lastSavedDoc = snap.docs[snap.docs.length - 1];
+    }
 
     if (snap.empty && reset) {
       _totalSaved = 0;
@@ -85,7 +385,7 @@ async function loadSaved(reset = true) {
       el.querySelector('.card')?.insertAdjacentHTML('beforeend', html);
     }
 
-    lm.innerHTML = snap.docs.length === PAGE_SIZE
+    lm.innerHTML = !postIds && snap.docs.length === PAGE_SIZE
       ? `<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:.5rem" onclick="loadSaved(false)">
            <i class="ti ti-refresh"></i> Ver mais
          </button>` : '';
@@ -97,8 +397,8 @@ async function loadSaved(reset = true) {
 }
 
 function postHTML(id, p) {
-  const cl  = getAvatarColor(p.authorId);
-  const av  = p.authorPhoto
+  const cl   = getAvatarColor(p.authorId);
+  const av   = p.authorPhoto
     ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(p.authorName)}</span>`;
   const liked = (p.likes||[]).includes(currentUser.uid);
@@ -110,12 +410,19 @@ function postHTML(id, p) {
         <div class="post-author" style="cursor:pointer" onclick="location.href='perfil.html?uid=${p.authorId}'">${sanitize(p.authorName||'Usuário')}</div>
         <div class="post-time">${timeAgo(p.createdAt)}</div>
       </div>
-      <button class="btn btn-icon" onclick="unsavePost('${id}', this)" title="Remover dos salvos" style="margin-left:auto;color:var(--purple-600)">
-        <i class="ti ti-bookmark-filled"></i>
-      </button>
+      <div style="margin-left:auto;display:flex;gap:.25rem">
+        <button class="btn btn-icon" onclick="openAddToCollectionSheet('${id}')" title="Adicionar à coleção" style="color:var(--text-muted)">
+          <i class="ti ti-folders"></i>
+        </button>
+        <button class="btn btn-icon" onclick="unsavePost('${id}', this)" title="Remover dos salvos" style="color:var(--purple-600)">
+          <i class="ti ti-bookmark-filled"></i>
+        </button>
+      </div>
     </div>
     ${p.text ? `<div class="post-body" style="padding:.5rem 0">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<span style="color:var(--purple-600)">#$1</span>')}</div>` : ''}
-    ${p.videoURL ? `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:360px;border-radius:var(--radius-md);background:#000;display:block;margin-bottom:.5rem" onclick="event.stopPropagation()"></video>` : p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" style="cursor:zoom-in;border-radius:var(--radius-md);margin-bottom:.5rem" onclick="openLightbox([this.src])">` : ''}
+    ${p.videoURL ? `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:360px;border-radius:var(--radius-md);background:#000;display:block;margin-bottom:.5rem" onclick="event.stopPropagation()"></video>`
+      : p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" style="cursor:zoom-in;border-radius:var(--radius-md);margin-bottom:.5rem" onclick="openLightbox([this.src])">`
+      : ''}
     <div class="post-actions" style="padding:.35rem 0">
       <button class="post-action-btn${liked?' liked':''}" id="like-${id}" onclick="toggleLike('${id}')">
         <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
@@ -132,7 +439,7 @@ async function toggleLike(postId) {
   const ref  = db.collection('posts').doc(postId);
   const snap = await ref.get();
   if (!snap.exists) return;
-  const likes  = snap.data().likes || [];
+  const likes   = snap.data().likes || [];
   const isLiked = likes.includes(currentUser.uid);
   await ref.update({ likes: isLiked
     ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
@@ -149,7 +456,15 @@ async function unsavePost(postId, btn) {
     await db.collection('posts').doc(postId).update({
       bookmarks: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
     });
+    // Also remove from all collections
+    await Promise.all(_collections.map(c =>
+      (c.postIds||[]).includes(postId)
+        ? COLLS_REF().doc(c.id).update({ postIds: firebase.firestore.FieldValue.arrayRemove(postId) })
+        : Promise.resolve()
+    ));
+    _collections.forEach(c => { c.postIds = (c.postIds||[]).filter(id => id !== postId); });
     document.getElementById(`post-${postId}`)?.remove();
+    renderCollBar();
     showToast('Post removido dos salvos.');
   } catch(e) { btn.disabled = false; showToast('Erro ao remover.'); }
 }
