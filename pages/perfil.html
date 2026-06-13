@@ -295,7 +295,18 @@ let profileData = null;
 requireAuth(async user => {
   currentUser = user;
   const uid = profileUid || user.uid;
-  profileData = await getUserData(uid) || { uid, displayName: user.displayName, email: user.email };
+  let firestoreData = await getUserData(uid);
+  if (!firestoreData && uid === user.uid) {
+    const rescue = {
+      displayName: user.displayName || 'Usuário',
+      displayName_lower: (user.displayName || 'usuário').toLowerCase(),
+      email: user.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    updateUserData(uid, rescue).catch(e => console.error('rescue write failed:', e));
+    firestoreData = { uid, ...rescue };
+  }
+  profileData = firestoreData || { uid, displayName: user.displayName, email: user.email };
   renderTopbar(await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName }, 'profile');
   renderProfile(uid);
 });
@@ -440,12 +451,12 @@ async function renderProfile(uid) {
 
     <div class="card" style="padding:.25rem 0">
       <div class="profile-tabs" style="overflow-x:auto;scrollbar-width:none">
-        <button class="profile-tab active" onclick="switchTab('posts')">Posts</button>
+        <button class="profile-tab active" onclick="switchTab('posts')"><i class="ti ti-layout-list" aria-hidden="true"></i> Posts</button>
         <button class="profile-tab" onclick="switchTab('fotos')"><i class="ti ti-photo" aria-hidden="true"></i> Fotos</button>
-        <button class="profile-tab" onclick="switchTab('friends')">Amigos</button>
-        <button class="profile-tab" onclick="switchTab('communities')">Comunidades</button>
-        <button class="profile-tab" onclick="switchTab('scraps')">Recados</button>
-        <button class="profile-tab" onclick="switchTab('depoimentos')">Depoimentos</button>
+        <button class="profile-tab" onclick="switchTab('friends')"><i class="ti ti-users" aria-hidden="true"></i> Amigos</button>
+        <button class="profile-tab" onclick="switchTab('communities')"><i class="ti ti-building-community" aria-hidden="true"></i> Comunidades</button>
+        <button class="profile-tab" onclick="switchTab('scraps')"><i class="ti ti-message" aria-hidden="true"></i> Recados</button>
+        <button class="profile-tab" onclick="switchTab('depoimentos')"><i class="ti ti-quote" aria-hidden="true"></i> Depoimentos</button>
       </div>
       <div class="card-body">
         <div class="tab-content active" id="tab-posts"><div class="loading-screen" style="min-height:120px"><div class="spinner"></div></div></div>
