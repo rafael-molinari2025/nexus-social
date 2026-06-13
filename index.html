@@ -2159,11 +2159,19 @@ async function loadOnlineFriends() {
 async function loadFriendSuggestions() {
   const el = document.getElementById('friend-suggestions');
   try {
-    const fSnap = await db.collection('friendships').where('users', 'array-contains', currentUser.uid).get();
-    const excl  = new Set(fSnap.docs.flatMap(d => d.data().users));
+    // Exclui: amigos já confirmados + solicitações pendentes enviadas + o próprio usuário
+    const [fSnap, reqSnap] = await Promise.all([
+      db.collection('friendships').where('users', 'array-contains', currentUser.uid).get(),
+      db.collection('friend_requests').where('from', '==', currentUser.uid).where('status', '==', 'pending').get()
+    ]);
+    const excl = new Set(fSnap.docs.flatMap(d => d.data().users));
+    reqSnap.docs.forEach(d => excl.add(d.data().to));
     excl.add(currentUser.uid);
-    const snap  = await db.collection('users').limit(20).get();
-    const sugg  = snap.docs.filter(d => !excl.has(d.id)).slice(0, 5);
+
+    // Busca usuários ordenados por displayName_lower para variar os resultados
+    const snap = await db.collection('users').orderBy('displayName_lower').limit(50).get();
+    const sugg = snap.docs.filter(d => !excl.has(d.id) && d.data().displayName).slice(0, 5);
+
     if (!sugg.length) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões.</p>`; return; }
     el.innerHTML = sugg.map(doc => {
       const u  = { uid: doc.id, ...doc.data() };
@@ -2183,7 +2191,10 @@ async function loadFriendSuggestions() {
         </button>
       </div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) {
+    console.error('loadFriendSuggestions:', e);
+    el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões.</p>`;
+  }
 }
 
 async function sendFriendReq(toUid, btn) {
