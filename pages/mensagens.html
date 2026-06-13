@@ -282,6 +282,10 @@
     }
     .chat-send-btn:hover { background: var(--purple-700, #4338ca); transform: scale(1.05); }
     .chat-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .chat-send-btn.recording { background: var(--coral-400, #f87171) !important; animation: pulse-rec .9s infinite; }
+    @keyframes pulse-rec { 0%,100%{opacity:1} 50%{opacity:.55} }
+    .voice-msg-player { display:flex; align-items:center; gap:.5rem; min-width:160px; }
+    .voice-msg-player audio { flex:1; height:32px; min-width:0; border-radius:20px; }
 
     /* New conversation modal */
     .new-conv-btn {
@@ -655,6 +659,10 @@ async function openConversation(cid, otherUid) {
               onclick="openPollModal('${cid}','dm')" title="Criar enquete">
         <i class="ti ti-chart-bar" style="font-size:16px"></i>
       </button>
+      <button class="chat-send-btn" id="mic-btn" style="background:var(--gray-100);color:var(--text-secondary);flex-shrink:0"
+              onclick="toggleVoiceRecording('${cid}','${other.uid}')" title="Mensagem de voz">
+        <i class="ti ti-microphone" style="font-size:16px"></i>
+      </button>
       <div class="chat-input-wrap">
         <textarea class="chat-input" id="chat-input" rows="1"
           placeholder="Digite uma mensagem…"
@@ -831,8 +839,10 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
             ${replyBlock}
             ${m.type === 'poll' && m.poll
               ? chatPollHTML(doc.id, activeConvId, m.poll, isMine)
-              : (m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
-                + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
+              : m.audioURL
+                ? `<div class="voice-msg-player"><i class="ti ti-microphone" style="font-size:14px;flex-shrink:0"></i><audio src="${m.audioURL}" controls preload="metadata"></audio></div>`
+                : (m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
+                  + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
           </div>
           ${reactionsHtml}
           <div class="msg-time">
@@ -1099,6 +1109,66 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
+// ── Voice messages ───────────────────────────────────────────
+let _mediaRecorder = null;
+let _voiceChunks   = [];
+let _isRecording   = false;
+
+async function toggleVoiceRecording(cid, otherUid) {
+  if (_isRecording) {
+    _mediaRecorder?.stop();
+  } else {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      _voiceChunks = [];
+      _mediaRecorder = new MediaRecorder(stream);
+      _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _voiceChunks.push(e.data); };
+      _mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        _isRecording = false;
+        const btn = document.getElementById('mic-btn');
+        if (btn) { btn.classList.remove('recording'); btn.innerHTML = '<i class="ti ti-microphone" style="font-size:16px"></i>'; }
+        if (!_voiceChunks.length) return;
+        const blob = new Blob(_voiceChunks, { type: 'audio/webm' });
+        if (blob.size < 1000) { showToast('Gravação muito curta.'); return; }
+        showToast('Enviando áudio…');
+        try {
+          const audioFile = new File([blob], 'voice.webm', { type: 'audio/webm' });
+          const audioURL  = await uploadVideoToCloudinary(audioFile);
+          const isGroup   = otherUid === null || otherUid === 'null';
+          const batch = db.batch();
+          const msgRef = db.collection('conversations').doc(cid).collection('messages').doc();
+          batch.set(msgRef, {
+            senderId: currentUser.uid,
+            ...(isGroup ? { senderName: currentUser.displayName } : {}),
+            text: '',
+            audioURL,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            read: false
+          });
+          const convRef = db.collection('conversations').doc(cid);
+          const unreadUpdate = isGroup ? {} : { [`unread.${otherUid}`]: firebase.firestore.FieldValue.increment(1) };
+          batch.update(convRef, {
+            lastMessage: '🎙 Áudio',
+            lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+            ...unreadUpdate
+          });
+          await batch.commit();
+        } catch(err) {
+          console.error('Voice send error:', err);
+          showToast('Erro ao enviar áudio.');
+        }
+      };
+      _mediaRecorder.start();
+      _isRecording = true;
+      const btn = document.getElementById('mic-btn');
+      if (btn) { btn.classList.add('recording'); btn.innerHTML = '<i class="ti ti-player-stop" style="font-size:16px"></i>'; }
+    } catch(err) {
+      showToast('Microfone não disponível.');
+    }
+  }
+}
+
 // ── Send image message ───────────────────────────────────────
 async function sendImageMessage(cid, otherUid, input) {
   const file = input.files[0];
@@ -1284,6 +1354,10 @@ async function openGroupConversation(cid) {
               onclick="openPollModal('${cid}','group')" title="Criar enquete">
         <i class="ti ti-chart-bar" style="font-size:16px"></i>
       </button>
+      <button class="chat-send-btn" id="mic-btn" style="background:var(--gray-100);color:var(--text-secondary);flex-shrink:0"
+              onclick="toggleVoiceRecording('${cid}',null)" title="Mensagem de voz">
+        <i class="ti ti-microphone" style="font-size:16px"></i>
+      </button>
       <div class="chat-input-wrap">
         <textarea class="chat-input" id="chat-input" rows="1"
           placeholder="Mensagem para o grupo…"
@@ -1364,8 +1438,10 @@ function renderGroupMessages(docs, participantData, showLoadOlder) {
           ${replyBlockG}
           ${m.type === 'poll' && m.poll
             ? chatPollHTML(doc.id, activeConvId, m.poll, isMine)
-            : (m.imageURL ? `<img src="${m.imageURL}" alt="" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
-              + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
+            : m.audioURL
+              ? `<div class="voice-msg-player"><i class="ti ti-microphone" style="font-size:14px;flex-shrink:0"></i><audio src="${m.audioURL}" controls preload="metadata"></audio></div>`
+              : (m.imageURL ? `<img src="${m.imageURL}" alt="" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
+                + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
         </div>
         ${reactionsHtml}
         <div class="msg-time">

@@ -349,37 +349,76 @@ async function removeFriend(friendshipDocId, name) {
 async function loadSuggestions() {
   const el = document.getElementById('suggestions-grid');
   try {
-    const [fSnap, rSnap, usersSnap] = await Promise.all([
+    const [fSnap, rSnap] = await Promise.all([
       db.collection('friendships').where('users', 'array-contains', currentUser.uid).get(),
-      db.collection('friend_requests').where('from', '==', currentUser.uid).get(),
-      db.collection('users').limit(30).get()
+      db.collection('friend_requests').where('from', '==', currentUser.uid).get()
     ]);
-    const friendIds = new Set(fSnap.docs.flatMap(d => d.data().users));
-    friendIds.add(currentUser.uid);
-    const pendingIds = new Set(
+    const myFriendIds = new Set(fSnap.docs.flatMap(d => d.data().users).filter(u => u !== currentUser.uid));
+    const pendingIds  = new Set(
       rSnap.docs.filter(d => d.data().status === 'pending').map(d => d.data().to)
     );
-    const suggestions = usersSnap.docs
-      .filter(d => !friendIds.has(d.id) && d.id !== currentUser.uid)
-      .slice(0, 8);
-    if (!suggestions.length) {
+
+    // Friends-of-friends mutual count
+    const mutualCount = new Map();
+    const fofSnaps = await Promise.all(
+      [...myFriendIds].slice(0, 20).map(fid =>
+        db.collection('friendships').where('users', 'array-contains', fid).get()
+      )
+    );
+    for (const snap of fofSnaps) {
+      for (const doc of snap.docs) {
+        for (const uid of doc.data().users) {
+          if (uid !== currentUser.uid && !myFriendIds.has(uid)) {
+            mutualCount.set(uid, (mutualCount.get(uid) || 0) + 1);
+          }
+        }
+      }
+    }
+
+    const fofCandidates = [...mutualCount.entries()]
+      .sort((a, b) => b[1] - a[1]).slice(0, 20).map(([uid]) => uid);
+
+    let userDocs = [];
+    if (fofCandidates.length >= 8) {
+      const docs = await Promise.all(fofCandidates.slice(0, 8).map(uid =>
+        db.collection('users').doc(uid).get()
+      ));
+      userDocs = docs.filter(d => d.exists);
+    } else {
+      const [fofDocs, randomSnap] = await Promise.all([
+        Promise.all(fofCandidates.map(uid => db.collection('users').doc(uid).get())),
+        db.collection('users').limit(30).get()
+      ]);
+      const fofSet = new Set(fofCandidates);
+      const randomFill = randomSnap.docs.filter(d =>
+        d.id !== currentUser.uid && !myFriendIds.has(d.id) && !fofSet.has(d.id)
+      );
+      userDocs = [...fofDocs.filter(d => d.exists), ...randomFill].slice(0, 8);
+    }
+
+    if (!userDocs.length) {
       el.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
         <i class="ti ti-users" aria-hidden="true"></i><p>Sem sugestões no momento.</p>
       </div>`;
       return;
     }
-    el.innerHTML = suggestions.map(d => {
+    el.innerHTML = userDocs.map(d => {
       const u = { uid: d.id, ...d.data() };
       const cl = getAvatarColor(u.uid);
       const av = u.photoURL
-        ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        ? `<img src="${u.photoURL}" alt="${sanitize(u.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
       const isPending = pendingIds.has(u.uid);
+      const mutual = mutualCount.get(u.uid) || 0;
+      const mutualBadge = mutual > 0
+        ? `<div style="font-size:11px;color:var(--purple-600);margin:.1rem 0"><i class="ti ti-users" style="font-size:10px;vertical-align:middle"></i> ${mutual} amigo${mutual > 1 ? 's' : ''} em comum</div>`
+        : '';
       return `<div class="friend-big-card">
         <div class="avatar avatar-48" style="background:${cl.bg};cursor:pointer"
              onclick="location.href='perfil.html?uid=${u.uid}'">${av}</div>
         <div class="friend-big-card-name">${sanitize(u.displayName||'Usuário')}</div>
         ${u.bio ? `<div class="friend-big-card-sub">${sanitize(u.bio)}</div>` : ''}
+        ${mutualBadge}
         <button class="btn btn-sm" id="sugg-${u.uid}" style="margin-top:.25rem"
                 ${isPending ? 'disabled' : ''}
                 onclick="sendRequest('${u.uid}', this)">
