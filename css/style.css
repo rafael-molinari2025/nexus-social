@@ -412,10 +412,12 @@ ul, ol { list-style: none; }
 }
 
 .profile-avatar-wrap {
-  margin-top: -28px;
+  margin-top: -36px;
   border: 3px solid var(--surface);
   border-radius: 50%;
   box-shadow: 0 0 0 2px var(--indigo-500);
+  position: relative;
+  z-index: 1;
 }
 
 .profile-name {
