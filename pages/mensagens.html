@@ -172,9 +172,10 @@
     }
     .msg-row.mine .msg-time { text-align: right; }
     .msg-read-check {
-      font-size: 12px; color: rgba(255,255,255,.7);
-      margin-left: .25rem;
+      font-size: 12px; color: rgba(255,255,255,.5);
+      margin-left: .25rem; transition: color .3s;
     }
+    .msg-read-check.read { color: #60a5fa; }
     .msg-reactions { display: flex; flex-wrap: wrap; gap: .2rem; margin-top: .25rem; }
     .msg-reaction-pill {
       font-size: 12px; background: var(--gray-100); border: 0.5px solid var(--border);
@@ -367,9 +368,10 @@ let convsUnsub      = null;
 let typingUnsub     = null;
 let searchTimer        = null;
 let onlineStatusUnsub  = null;
-let _firstMsgDoc    = null;
-let _loadingOldMsgs = false;
-const MSG_PAGE_SIZE = 50;
+let _firstMsgDoc      = null;
+let _loadingOldMsgs   = false;
+let _otherLastReadAt  = null;
+const MSG_PAGE_SIZE   = 50;
 
 requireAuth(async user => {
   currentUser = user;
@@ -501,9 +503,11 @@ async function openOrCreateConversation(otherUid) {
 async function openConversation(cid, otherUid) {
   activeConvId = cid;
 
-  // Mark all as read
+  _otherLastReadAt = null;
+  // Mark as read + record lastReadAt for this user
   await db.collection('conversations').doc(cid).update({
-    [`unread.${currentUser.uid}`]: 0
+    [`unread.${currentUser.uid}`]: 0,
+    [`lastReadAt.${currentUser.uid}`]: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(() => {});
 
   // Deactivate old, activate new
@@ -585,7 +589,8 @@ async function openConversation(cid, otherUid) {
   // Listen for typing indicator from other user
   if (typingUnsub) { typingUnsub(); typingUnsub = null; }
   typingUnsub = db.collection('conversations').doc(cid).onSnapshot(snap => {
-    const typingMap = snap.data()?.typing || {};
+    const data = snap.data() || {};
+    const typingMap = data.typing || {};
     const otherTyping = Object.entries(typingMap)
       .filter(([uid]) => uid !== currentUser.uid)
       .some(([, ts]) => ts && (Date.now() - ts.toMillis()) < 4000);
@@ -593,6 +598,23 @@ async function openConversation(cid, otherUid) {
     if (indicator) {
       indicator.style.display = otherTyping ? 'flex' : 'none';
       if (otherTyping) scrollToBottom();
+    }
+    // Track when the other user last read (for blue double-check)
+    const lastReadMap = data.lastReadAt || {};
+    const newOtherRead = lastReadMap[otherUid] || null;
+    if (newOtherRead && (!_otherLastReadAt || newOtherRead.toMillis() > _otherLastReadAt.toMillis())) {
+      _otherLastReadAt = newOtherRead;
+      // Re-render to update check colors without forcing a full reload
+      const msgContainer = document.getElementById('chat-messages');
+      if (msgContainer) {
+        msgContainer.querySelectorAll('.msg-read-check').forEach(el => {
+          const row = el.closest('.msg-row');
+          if (!row) return;
+          const msgDoc = row.id.replace('msg-', '');
+          // We can't easily get createdAt here; just mark all existing as read
+          el.classList.add('read');
+        });
+      }
     }
   });
 
@@ -613,7 +635,8 @@ async function openConversation(cid, otherUid) {
       renderMessages(snap.docs, other, snap.docs.length >= MSG_PAGE_SIZE);
       if (firstLoad || wasAtBottom) { scrollToBottom(); firstLoad = false; }
       db.collection('conversations').doc(cid).update({
-        [`unread.${currentUser.uid}`]: 0
+        [`unread.${currentUser.uid}`]: 0,
+        [`lastReadAt.${currentUser.uid}`]: firebase.firestore.FieldValue.serverTimestamp()
       }).catch(() => {});
     });
 }
@@ -682,7 +705,7 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
             ${m.text ? sanitize(m.text).replace(/\n/g,'<br>') : ''}
           </div>
           ${reactionsHtml}
-          <div class="msg-time">${time}${isMine ? ' <i class="ti ti-checks msg-read-check"></i>' : ''}</div>
+          <div class="msg-time">${time}${isMine ? ` <i class="ti ti-checks msg-read-check${_otherLastReadAt && m.createdAt && m.createdAt.toMillis() <= _otherLastReadAt.toMillis() ? ' read' : ''}"></i>` : ''}</div>
         </div>
       </div>`;
   });

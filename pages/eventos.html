@@ -66,6 +66,32 @@
     .ev-empty { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
     .ev-empty i { font-size: 48px; opacity: .3; display: block; margin-bottom: .75rem; }
 
+    /* Calendar view */
+    .ev-cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+    .ev-cal-nav { background: none; border: 0.5px solid var(--border); border-radius: var(--radius-md); width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 16px; }
+    .ev-cal-nav:hover { background: var(--surface-2, var(--gray-100)); }
+    .ev-cal-month { font-size: 15px; font-weight: 700; }
+    .ev-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .ev-cal-dow { text-align: center; font-size: 11px; font-weight: 600; color: var(--text-muted); padding: .3rem 0; text-transform: uppercase; letter-spacing: .04em; }
+    .ev-cal-day {
+      aspect-ratio: 1; border-radius: var(--radius-sm); cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      padding: .2rem .15rem; font-size: 12px; font-weight: 500; gap: 2px;
+      transition: background var(--transition); min-height: 0;
+    }
+    .ev-cal-day:hover { background: var(--indigo-50); }
+    .ev-cal-day.today { background: var(--indigo-100); color: var(--indigo-700); font-weight: 700; }
+    .ev-cal-day.other-month { color: var(--text-muted); opacity: .45; }
+    .ev-cal-day.has-events { position: relative; }
+    .ev-cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--purple-600); flex-shrink: 0; }
+    .ev-cal-dot.going { background: #22c55e; }
+    .ev-cal-day-detail { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; margin-top: 1rem; }
+    .ev-cal-day-detail h4 { font-size: 13px; font-weight: 600; margin-bottom: .75rem; color: var(--text-secondary); }
+    .ev-day-item { display: flex; align-items: center; gap: .6rem; padding: .5rem 0; border-bottom: 0.5px solid var(--border); cursor: pointer; }
+    .ev-day-item:last-child { border-bottom: none; }
+    .ev-day-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .ev-day-title { font-size: 13px; font-weight: 500; flex: 1; }
+
     /* Create modal */
     .ev-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
     @media (max-width: 500px) { .ev-form-grid { grid-template-columns: 1fr; } }
@@ -140,6 +166,7 @@
       <button class="ev-tab active" id="tab-upcoming" onclick="switchTab('upcoming')">Próximos</button>
       <button class="ev-tab" id="tab-mine" onclick="switchTab('mine')">Meus eventos</button>
       <button class="ev-tab" id="tab-past" onclick="switchTab('past')">Passados</button>
+      <button class="ev-tab" id="tab-cal" onclick="switchTab('cal')"><i class="ti ti-calendar" style="font-size:13px;vertical-align:-1px"></i> Calendário</button>
     </div>
 
     <div id="ev-list">
@@ -243,7 +270,132 @@ function switchTab(tab) {
   _currentTab = tab;
   document.querySelectorAll('.ev-tab').forEach(b => b.classList.remove('active'));
   document.getElementById(`tab-${tab}`)?.classList.add('active');
-  loadEvents();
+  if (tab === 'cal') { showCalendar(); } else { loadEvents(); }
+}
+
+// ── Calendar view ─────────────────────────────────────────────
+let _calYear  = new Date().getFullYear();
+let _calMonth = new Date().getMonth();
+let _calEvents = [];
+let _calSelectedDay = null;
+
+async function showCalendar() {
+  const el = document.getElementById('ev-list');
+  el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
+  try {
+    // Load events for this month and next (to allow browsing)
+    const start = new Date(_calYear, _calMonth - 1, 1).toISOString().slice(0, 10);
+    const end   = new Date(_calYear, _calMonth + 2, 0).toISOString().slice(0, 10);
+    const snap  = await db.collection('events')
+      .where('privacy', '==', 'public')
+      .orderBy('date', 'asc')
+      .startAt(start).endAt(end)
+      .limit(200).get();
+    const mine  = await db.collection('events').where('createdBy', '==', currentUser.uid)
+      .orderBy('date', 'asc').startAt(start).endAt(end).limit(50).get();
+    const all = {};
+    snap.docs.forEach(d => { all[d.id] = { id: d.id, ...d.data() }; });
+    mine.docs.forEach(d => { all[d.id] = { id: d.id, ...d.data() }; });
+    _calEvents = Object.values(all);
+  } catch(e) {
+    _calEvents = [];
+  }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const el = document.getElementById('ev-list');
+  const today = new Date().toISOString().slice(0, 10);
+  const firstDay = new Date(_calYear, _calMonth, 1);
+  const lastDay  = new Date(_calYear, _calMonth + 1, 0);
+  const startPad = (firstDay.getDay() + 6) % 7; // Monday-first
+  const monthName = firstDay.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  // Map date string → events array
+  const evByDate = {};
+  _calEvents.forEach(ev => {
+    if (!ev.date) return;
+    if (!evByDate[ev.date]) evByDate[ev.date] = [];
+    evByDate[ev.date].push(ev);
+  });
+
+  const dows = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  let gridHTML = dows.map(d => `<div class="ev-cal-dow">${d}</div>`).join('');
+
+  // Padding cells (previous month)
+  for (let i = 0; i < startPad; i++) {
+    const prevDate = new Date(_calYear, _calMonth, -startPad + i + 1);
+    gridHTML += `<div class="ev-cal-day other-month">${prevDate.getDate()}</div>`;
+  }
+
+  // Days of current month
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const dateStr = `${_calYear}-${String(_calMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const evs = evByDate[dateStr] || [];
+    const isToday = dateStr === today;
+    const isSel   = dateStr === _calSelectedDay;
+    const dots = evs.slice(0, 3).map(ev => {
+      const going = (ev.attendees || []).includes(currentUser.uid);
+      return `<div class="ev-cal-dot${going ? ' going' : ''}"></div>`;
+    }).join('');
+    gridHTML += `<div class="ev-cal-day${isToday ? ' today' : ''}${evs.length ? ' has-events' : ''}${isSel ? ' selected' : ''}"
+      style="${isSel ? 'outline:2px solid var(--purple-600);' : ''}"
+      onclick="selectCalDay('${dateStr}')">${d}${dots}</div>`;
+  }
+
+  // Trailing cells
+  const trailing = (7 - ((startPad + lastDay.getDate()) % 7)) % 7;
+  for (let i = 1; i <= trailing; i++) {
+    gridHTML += `<div class="ev-cal-day other-month">${i}</div>`;
+  }
+
+  el.innerHTML = `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem">
+      <div class="ev-cal-header">
+        <button class="ev-cal-nav" onclick="calNav(-1)"><i class="ti ti-chevron-left"></i></button>
+        <div class="ev-cal-month">${monthName.charAt(0).toUpperCase() + monthName.slice(1)}</div>
+        <button class="ev-cal-nav" onclick="calNav(1)"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="ev-cal-grid" id="cal-grid">${gridHTML}</div>
+      <div id="cal-day-detail"></div>
+    </div>`;
+
+  if (_calSelectedDay) renderCalDayDetail(_calSelectedDay);
+}
+
+function calNav(dir) {
+  _calMonth += dir;
+  if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
+  if (_calMonth > 11) { _calMonth = 0;  _calYear++; }
+  _calSelectedDay = null;
+  showCalendar();
+}
+
+function selectCalDay(dateStr) {
+  _calSelectedDay = dateStr;
+  renderCalendar();
+}
+
+function renderCalDayDetail(dateStr) {
+  const detail = document.getElementById('cal-day-detail');
+  if (!detail) return;
+  const evs = _calEvents.filter(ev => ev.date === dateStr);
+  if (!evs.length) { detail.innerHTML = ''; return; }
+  const label = new Date(dateStr + 'T12:00').toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
+  detail.innerHTML = `<div class="ev-cal-day-detail">
+    <h4>${label.charAt(0).toUpperCase() + label.slice(1)}</h4>
+    ${evs.map(ev => {
+      const going = (ev.attendees || []).includes(currentUser.uid);
+      return `<div class="ev-day-item" onclick="location.href='eventos.html?id=${ev.id}'">
+        <div style="width:4px;height:36px;border-radius:2px;background:${going ? '#22c55e' : 'var(--purple-600)'};flex-shrink:0"></div>
+        <div style="flex:1">
+          <div class="ev-day-title">${sanitize(ev.title || '')}</div>
+          <div class="ev-day-time">${ev.time ? sanitize(ev.time) : ''}${ev.location ? ' · ' + sanitize(ev.location) : ''}</div>
+        </div>
+        ${going ? '<span style="font-size:11px;color:#22c55e;font-weight:600">Confirmado</span>' : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 // ── Load events ───────────────────────────────────────────────

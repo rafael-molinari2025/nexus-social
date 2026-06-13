@@ -123,6 +123,8 @@ O diretório `api/` contém serverless functions deployadas no **Vercel** (`nexu
 | `events/{id}` | `title`, `description`, `date`, `time`, `location`, `coverURL`, `privacy`, `createdBy`, `createdByName`, `attendees[]`, `interested[]`, `createdAt` |
 | `lives/{id}` | `hostUid`, `hostName`, `hostPhoto`, `title`, `status` (`live`/`ended`), `viewerCount`, `createdAt` |
 | `reports/{id}` | `postId`, `reason`, `reportedBy`, `createdAt` |
+| `notes/{uid}` | `text` (max 60), `uid`, `displayName`, `photoURL`, `expiresAt` (24h), `createdAt` — um doc por usuário; Notas/Status breve estilo Instagram Notes |
+| `conversations/{id}` | também: `lastReadAt: { [uid]: Timestamp }` — rastreia quando cada participante leu; usado para double-check azul em mensagens |
 
 ### Tipos de notificação válidos
 

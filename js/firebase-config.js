@@ -26,6 +26,9 @@ try { storage = firebase.storage(); } catch(e) { /* SDK não carregado nesta pá
 // Provedor Google para login social
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
+// Tenor API (GIF search) — get a free key at https://developers.google.com/tenor/guides/quickstart
+const TENOR_API_KEY = 'AIzaSyC3j9BnJXxHTiNrQS9BPKhwFlPd1ld_ICA';
+
 // Firebase Messaging (push notifications)
 // VAPID key: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair
 const FCM_VAPID_KEY = 'BNo-TiznoJwvMsgJ2S9sOUYD_UO9XNu1T0s3JvDysh3crQBlLyMO355Utl0DxWYOcwV_pRGhUCic81dRuuHQoS4';

@@ -79,6 +79,54 @@
       color: #fff; text-align: center; word-break: break-word; line-height: 1.4;
     }
 
+    /* ── Notes bar ────────────────────────────────────────────────── */
+    .notes-bar {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: .75rem 1rem;
+      margin-bottom: .75rem; display: flex; gap: .75rem;
+      overflow-x: auto; scrollbar-width: none; align-items: flex-start;
+    }
+    .notes-bar::-webkit-scrollbar { display: none; }
+    .note-item {
+      display: flex; flex-direction: column; align-items: center;
+      gap: .35rem; flex-shrink: 0; cursor: pointer; width: 64px;
+    }
+    .note-bubble {
+      position: relative;
+      background: var(--surface-2, var(--gray-100));
+      border: 0.5px solid var(--border);
+      border-radius: 12px 12px 12px 2px;
+      padding: .3rem .45rem; font-size: 11px; line-height: 1.3;
+      color: var(--text-primary); width: 64px; min-height: 28px;
+      word-break: break-word; text-align: center;
+      transition: background .2s;
+    }
+    .note-bubble.empty { color: var(--text-muted); font-style: italic; }
+    .note-item:hover .note-bubble { background: var(--indigo-50); }
+    .note-avatar-ring {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2.5px solid var(--purple-600);
+      padding: 2px; flex-shrink: 0;
+    }
+    .note-avatar-ring.no-note { border-color: var(--border); border-style: dashed; }
+    .note-avatar-inner {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: var(--gray-100); overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+    .note-author { font-size: 10px; color: var(--text-muted); text-align: center;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 64px; }
+    /* Note modal */
+    .note-modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 800; display: flex; align-items: center; justify-content: center;
+    }
+    .note-modal {
+      background: var(--surface); border-radius: var(--radius-lg);
+      width: min(360px, 94vw); padding: 1.25rem; box-shadow: var(--shadow-lg);
+    }
+
     /* ── Story creator ────────────────────────────────────────────── */
     .story-creator-modal {
       background: var(--surface); border-radius: 16px;
@@ -137,6 +185,30 @@
       display: inline-flex; align-items: center; gap: 2px; margin-left: .3rem;
     }
 
+    /* ── GIF picker ───────────────────────────────────────────────── */
+    .gif-picker-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 900; display: flex; align-items: center; justify-content: center;
+    }
+    .gif-picker {
+      background: var(--surface); border-radius: var(--radius-lg);
+      width: min(520px, 96vw); max-height: 80vh; display: flex; flex-direction: column;
+      box-shadow: var(--shadow-lg); overflow: hidden;
+    }
+    .gif-picker-header { padding: .875rem 1rem; border-bottom: 0.5px solid var(--border); display: flex; gap: .6rem; align-items: center; }
+    .gif-search-input { flex: 1; border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: .4rem .75rem; font-size: 13px; background: var(--surface); color: var(--text-primary); outline: none; font-family: var(--font-sans); }
+    .gif-grid { overflow-y: auto; padding: .5rem; columns: 2; gap: .4rem; scrollbar-width: thin; }
+    .gif-item { break-inside: avoid; margin-bottom: .4rem; cursor: pointer; border-radius: var(--radius-sm); overflow: hidden; }
+    .gif-item img { width: 100%; display: block; transition: opacity .2s; }
+    .gif-item:hover img { opacity: .85; }
+    .gif-empty { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 13px; }
+    /* ── Schedule modal ───────────────────────────────────────────── */
+    .schedule-indicator {
+      display: inline-flex; align-items: center; gap: .35rem;
+      background: var(--indigo-50); color: var(--indigo-700);
+      border: 0.5px solid var(--indigo-200); border-radius: var(--radius-full);
+      padding: .2rem .65rem; font-size: 12px; font-weight: 500; margin-top: .5rem;
+    }
     /* ── Emoji reactions ──────────────────────────────────────────── */
     .reaction-wrap { position: relative; display: inline-block; }
     .reaction-picker {
@@ -298,6 +370,9 @@
       </div>
     </div>
 
+    <!-- Notes bar -->
+    <div class="notes-bar" id="notes-bar" style="display:none"></div>
+
     <!-- Feed tabs -->
     <div class="feed-tabs">
       <button class="feed-tab active" id="tab-all" onclick="switchFeedTab('all')">
@@ -359,6 +434,10 @@
               </button>
               <button class="composer-action-btn" title="Itálico (_texto_)" onclick="insertItalic()">
                 <i class="ti ti-italic" aria-hidden="true"></i>
+              </button>
+              <button class="composer-action-btn" title="Buscar GIF" onclick="openGifPicker()" style="font-size:11px;font-weight:700;letter-spacing:-.03em">GIF</button>
+              <button class="composer-action-btn" title="Agendar publicação" onclick="openScheduleModal()" id="schedule-btn">
+                <i class="ti ti-clock" aria-hidden="true"></i>
               </button>
               <button class="composer-action-btn" title="Salvar rascunho" id="draft-btn" onclick="saveDraft()" style="display:none">
                 <i class="ti ti-device-floppy" aria-hidden="true"></i>
@@ -588,7 +667,9 @@ requireAuth(async user => {
   loadTrendingHashtags();
   loadBirthdayWidget();
   loadMemoriesWidget();
+  loadNotes();
   checkForDraft();
+  checkScheduledPosts();
 
   document.getElementById('auth-loading')?.remove();
 });
@@ -763,6 +844,193 @@ function removePostImage() {
   document.getElementById('post-image-input').value = '';
 }
 
+// ── GIF Picker ─────────────────────────────────────────────────
+const TENOR_KEY = typeof TENOR_API_KEY !== 'undefined' ? TENOR_API_KEY : 'LIVDSRZULELA';
+let _gifSearchTimer = null;
+let _gifSelectedUrl = null;
+
+function openGifPicker() {
+  const existing = document.querySelector('.gif-picker-backdrop');
+  if (existing) { existing.remove(); return; }
+  const bd = document.createElement('div');
+  bd.className = 'gif-picker-backdrop';
+  bd.onclick = e => { if (e.target === bd) bd.remove(); };
+  bd.innerHTML = `<div class="gif-picker">
+    <div class="gif-picker-header">
+      <input class="gif-search-input" id="gif-search" placeholder="Buscar GIFs…" oninput="onGifSearch(this.value)" autofocus>
+      <button onclick="this.closest('.gif-picker-backdrop').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;padding:0 .4rem">&times;</button>
+    </div>
+    <div class="gif-grid" id="gif-grid"><div class="gif-empty">Digite algo para buscar GIFs</div></div>
+  </div>`;
+  document.body.appendChild(bd);
+  setTimeout(() => document.getElementById('gif-search')?.focus(), 60);
+}
+
+function onGifSearch(q) {
+  clearTimeout(_gifSearchTimer);
+  if (!q.trim()) {
+    document.getElementById('gif-grid').innerHTML = '<div class="gif-empty">Digite algo para buscar GIFs</div>';
+    return;
+  }
+  _gifSearchTimer = setTimeout(() => fetchGifs(q.trim()), 400);
+}
+
+async function fetchGifs(q) {
+  const grid = document.getElementById('gif-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="gif-empty"><i class="ti ti-loader-2 ti-spin" style="font-size:24px"></i></div>';
+  try {
+    const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&limit=20&media_filter=gif,tinygif`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Tenor error');
+    const data = await res.json();
+    if (!data.results?.length) { grid.innerHTML = '<div class="gif-empty">Nenhum GIF encontrado</div>'; return; }
+    grid.innerHTML = data.results.map(r => {
+      const gif = r.media_formats?.tinygif || r.media_formats?.gif;
+      if (!gif) return '';
+      const full = r.media_formats?.gif?.url || gif.url;
+      return `<div class="gif-item" onclick="selectGif('${full}', '${gif.url}')">
+        <img src="${gif.url}" alt="${r.title||'GIF'}" loading="lazy">
+      </div>`;
+    }).join('');
+  } catch(e) {
+    grid.innerHTML = '<div class="gif-empty">Erro ao buscar GIFs. Verifique sua chave Tenor.</div>';
+  }
+}
+
+function selectGif(fullUrl, previewUrl) {
+  _gifSelectedUrl = fullUrl;
+  document.querySelector('.gif-picker-backdrop')?.remove();
+  // Show GIF preview in composer
+  const wrap = document.getElementById('image-preview-wrap');
+  wrap.style.display = 'block';
+  wrap.innerHTML = `<div style="position:relative;display:inline-block;max-width:280px">
+    <img src="${previewUrl}" alt="GIF" style="max-width:100%;border-radius:var(--radius-sm);display:block">
+    <button class="composer-image-remove" onclick="removeGif()" title="Remover" style="position:absolute;top:4px;right:4px"><i class="ti ti-x"></i></button>
+    <span style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700">GIF</span>
+  </div>`;
+  _postImageFiles = [];
+  _postVideoFile  = null;
+  showToast('GIF selecionado!');
+}
+
+function removeGif() {
+  _gifSelectedUrl = null;
+  const w = document.getElementById('image-preview-wrap');
+  w.style.display = 'none'; w.innerHTML = '';
+}
+
+// ── Posts agendados ────────────────────────────────────────────
+const SCHED_KEY = 'nexus_scheduled_posts';
+let _scheduleTime = null;
+
+function openScheduleModal() {
+  const existing = document.querySelector('.schedule-modal-backdrop');
+  if (existing) { existing.remove(); _scheduleTime = null; updateScheduleBtn(); return; }
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + 30);
+  const defVal = now.toISOString().slice(0, 16);
+  const bd = document.createElement('div');
+  bd.className = 'schedule-modal-backdrop';
+  bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;display:flex;align-items:center;justify-content:center';
+  bd.onclick = e => { if (e.target === bd) bd.remove(); };
+  bd.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius-lg);width:min(340px,94vw);padding:1.25rem;box-shadow:var(--shadow-lg)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 style="font-size:15px;font-weight:600"><i class="ti ti-clock"></i> Agendar post</h3>
+      <button onclick="this.closest('.schedule-modal-backdrop').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">&times;</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:.75rem">O post será publicado automaticamente na data e hora escolhidas (quando você abrir o Nexus).</p>
+    <input type="datetime-local" id="schedule-input" value="${defVal}"
+      style="width:100%;border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.5rem .75rem;font-size:13px;background:var(--surface);color:var(--text-primary);outline:none;font-family:var(--font-sans);box-sizing:border-box">
+    <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:.875rem">
+      <button onclick="this.closest('.schedule-modal-backdrop').remove()" style="background:none;border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.4rem .75rem;font-size:13px;cursor:pointer;color:var(--text-secondary)">Cancelar</button>
+      <button onclick="confirmSchedule()" class="btn btn-sm">Confirmar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bd);
+}
+
+function confirmSchedule() {
+  const val = document.getElementById('schedule-input')?.value;
+  if (!val) return;
+  const dt = new Date(val);
+  if (dt <= new Date()) { showToast('Escolha uma data/hora futura.'); return; }
+  _scheduleTime = dt;
+  document.querySelector('.schedule-modal-backdrop')?.remove();
+  updateScheduleBtn();
+  showToast('Post será agendado para ' + dt.toLocaleString('pt-BR'));
+}
+
+function updateScheduleBtn() {
+  const btn = document.getElementById('schedule-btn');
+  if (!btn) return;
+  if (_scheduleTime) {
+    btn.style.color = 'var(--indigo-600)';
+    btn.title = `Agendado para ${_scheduleTime.toLocaleString('pt-BR')}`;
+  } else {
+    btn.style.color = '';
+    btn.title = 'Agendar publicação';
+  }
+}
+
+function checkScheduledPosts() {
+  const raw = localStorage.getItem(SCHED_KEY);
+  if (!raw) return;
+  try {
+    const posts = JSON.parse(raw);
+    const now = Date.now();
+    const due = posts.filter(p => p.scheduledAt <= now);
+    if (!due.length) return;
+    due.forEach(p => {
+      showToast(`Post agendado pronto para publicar: "${(p.text||'').slice(0,40)}…" — clique aqui para publicar`, 8000);
+      // Mark as notified (remove from list and add to "ready" queue)
+    });
+    const remaining = posts.filter(p => p.scheduledAt > now);
+    localStorage.setItem(SCHED_KEY, JSON.stringify(remaining));
+    // Show publish banner for due posts
+    if (due.length) renderScheduledBanner(due);
+  } catch(e) { localStorage.removeItem(SCHED_KEY); }
+}
+
+function renderScheduledBanner(due) {
+  due.forEach(p => {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:.75rem 1rem;box-shadow:var(--shadow-lg);z-index:500;display:flex;align-items:center;gap:.75rem;max-width:420px;width:92vw';
+    banner.innerHTML = `<i class="ti ti-clock" style="color:var(--indigo-500);font-size:20px;flex-shrink:0"></i>
+      <div style="flex:1;font-size:13px">
+        <strong>Post agendado pronto</strong><br>
+        <span style="color:var(--text-muted)">${sanitize((p.text||'').slice(0,60))}${p.text?.length > 60 ? '…' : ''}</span>
+      </div>
+      <button onclick="publishScheduled(${JSON.stringify(p).replace(/"/g,'&quot;')},this.closest('div'))" class="btn btn-sm">Publicar</button>
+      <button onclick="this.closest('div').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">&times;</button>`;
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 30000);
+  });
+}
+
+function extractHashtags(text) {
+  return [...new Set((text.match(/#(\w+)/g)||[]).map(t => t.slice(1).toLowerCase()))];
+}
+
+async function publishScheduled(post, el) {
+  el?.remove();
+  try {
+    const userData = await getUserData(currentUser.uid) || { uid: currentUser.uid, displayName: currentUser.displayName };
+    await db.collection('posts').add({
+      text: post.text || '',
+      authorId: currentUser.uid,
+      authorName: userData.displayName || currentUser.displayName || '',
+      authorPhoto: userData.photoURL || currentUser.photoURL || null,
+      authorVerified: userData.isVerified || false,
+      likes: [], bookmarks: [], commentsCount: 0,
+      privacy: post.privacy || 'public',
+      hashtags: extractHashtags(post.text || ''),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Post publicado!');
+  } catch(e) { showToast('Erro ao publicar post agendado.'); }
+}
+
 // ── Rascunhos ──────────────────────────────────────────────────
 const DRAFT_KEY = 'nexus_post_draft';
 
@@ -886,8 +1154,20 @@ function dismissLinkPreview() {
 // ── Create post ────────────────────────────────────────────────
 async function createPost() {
   const text = document.getElementById('post-text').value.trim();
-  if (!text && !_postImageFiles.length && !_postVideoFile && !_pollActive) return showToast('Escreva algo, adicione uma imagem, vídeo ou crie uma enquete.');
+  if (!text && !_postImageFiles.length && !_postVideoFile && !_gifSelectedUrl && !_pollActive) return showToast('Escreva algo, adicione uma imagem, GIF, vídeo ou crie uma enquete.');
   if (text.length > 2000) return showToast('Post muito longo. Máximo 2000 caracteres.');
+  // Scheduled post: save to localStorage
+  if (_scheduleTime && _scheduleTime > new Date()) {
+    const raw = localStorage.getItem(SCHED_KEY);
+    const posts = raw ? JSON.parse(raw) : [];
+    posts.push({ text, privacy: PRIVACY[_privacyIdx].v, scheduledAt: _scheduleTime.getTime() });
+    localStorage.setItem(SCHED_KEY, JSON.stringify(posts));
+    _scheduleTime = null; updateScheduleBtn();
+    document.getElementById('post-text').value = '';
+    updateCharCount();
+    showToast('Post agendado com sucesso!');
+    return;
+  }
   if (!checkRateLimit('post_' + currentUser.uid, 3, 60000))
     return showToast('Muitos posts seguidos. Aguarde um momento.');
   const btn = document.getElementById('post-btn');
@@ -903,11 +1183,13 @@ async function createPost() {
         btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Enviando vídeo…';
         videoURL = await uploadVideoToCloudinary(_postVideoFile);
       } catch(e) { showToast('Erro ao enviar vídeo. Tente novamente.'); reset(); return; }
+    } else if (_gifSelectedUrl) {
+      images = [_gifSelectedUrl];
     } else if (_postImageFiles.length) {
       try { images = await Promise.all(_postImageFiles.map(f => uploadToCloudinary(f))); }
       catch(e) { showToast(e.name === 'AbortError' ? 'Upload demorou demais.' : 'Erro ao enviar imagem.'); reset(); return; }
     }
-    const hashtags = [...new Set((text.match(/#(\w+)/g)||[]).map(t => t.slice(1).toLowerCase()))];
+    const hashtags = extractHashtags(text);
     const postData = {
       text: text || '',
       images,
@@ -983,6 +1265,8 @@ async function createPost() {
     }
     document.getElementById('post-text').value = '';
     _postVideoFile = null;
+    _gifSelectedUrl = null;
+    _scheduleTime = null; updateScheduleBtn();
     removePostImage();
     hideLinkPreview();
     // Reset poll
@@ -1015,6 +1299,16 @@ function parsePostText(text) {
 }
 
 // ── Load posts (realtime, first 20) ───────────────────────────
+function _scorePost(p) {
+  const likes     = (p.likes || []).length;
+  const comments  = p.commentsCount || 0;
+  const reactions = Object.values(p.reactions || {}).reduce((s, arr) => s + (arr || []).length, 0);
+  const ageHours  = p.createdAt ? (Date.now() - p.createdAt.toMillis()) / 3600000 : 9999;
+  // Exponential decay: halves every 48h; floor at 0.05
+  const timeFactor = Math.max(0.05, Math.exp(-ageHours / 48));
+  return (likes * 1 + comments * 2.5 + reactions * 1.5 + 0.1) * timeFactor;
+}
+
 function filterPostDocs(docs) {
   if (_feedTab === 'friends') {
     docs = docs.filter(d => {
@@ -1022,7 +1316,7 @@ function filterPostDocs(docs) {
       return a === currentUser.uid || _friendIds.has(a);
     });
   }
-  return docs.filter(d => {
+  docs = docs.filter(d => {
     const p = d.data();
     if (_mutedUsers.includes(p.authorId)) return false;
     // Esconder posts removidos pela moderação para todos
@@ -1034,6 +1328,11 @@ function filterPostDocs(docs) {
     if (prv === 'friends') return p.authorId === currentUser.uid || _friendIds.has(p.authorId);
     return true;
   });
+  // Algorithmic sort for "Para você" tab
+  if (_feedTab === 'all' && !_hashtagFilter) {
+    docs.sort((a, b) => _scorePost(b.data()) - _scorePost(a.data()));
+  }
+  return docs;
 }
 
 function loadPosts() {
@@ -1050,7 +1349,10 @@ function loadPosts() {
       .orderBy('createdAt', 'desc');
   }
 
-  _postsUnsub = baseQuery.limit(20).onSnapshot(snap => {
+  // "Para você" loads more posts so the algorithmic sort has a bigger pool
+  const pageSize = (_feedTab === 'all' && !_hashtagFilter) ? 40 : 20;
+
+  _postsUnsub = baseQuery.limit(pageSize).onSnapshot(snap => {
       _lastPostDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
       const docs = filterPostDocs(snap.docs);
 
@@ -2250,6 +2552,173 @@ async function loadFriendSuggestions() {
     console.error('loadFriendSuggestions:', e);
     el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões.</p>`;
   }
+}
+
+// ── Notas / Status breve ──────────────────────────────────────
+let _notesUnsub = null;
+
+async function loadNotes() {
+  const bar = document.getElementById('notes-bar');
+  if (!bar) return;
+
+  // Render own note first
+  const ownSnap = await db.collection('notes').doc(currentUser.uid).get();
+  const ownNote = ownSnap.exists ? ownSnap.data() : null;
+  const now = Date.now();
+
+  // Fetch friends' notes (only unexpired)
+  const [fSnap] = await Promise.all([
+    db.collection('friendships').where('users', 'array-contains', currentUser.uid).get()
+  ]);
+  const friendIds = fSnap.docs.flatMap(d => d.data().users).filter(u => u !== currentUser.uid);
+
+  let friendNotes = [];
+  if (friendIds.length) {
+    // Firestore in() limit = 30
+    const chunks = [];
+    for (let i = 0; i < Math.min(friendIds.length, 30); i += 10)
+      chunks.push(friendIds.slice(i, i + 10));
+    const noteSnaps = await Promise.all(
+      chunks.map(c => db.collection('notes').where(firebase.firestore.FieldPath.documentId(), 'in', c).get())
+    );
+    noteSnaps.forEach(s => s.docs.forEach(d => {
+      const n = d.data();
+      if (n.expiresAt && n.expiresAt.toMillis() > now && n.text) friendNotes.push({ uid: d.id, ...n });
+    }));
+  }
+
+  const hasOwnActiveNote = ownNote && ownNote.expiresAt && ownNote.expiresAt.toMillis() > now && ownNote.text;
+  const hasFriendNotes = friendNotes.length > 0;
+
+  if (!hasOwnActiveNote && !hasFriendNotes) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'flex';
+
+  const renderAvatar = (u) => {
+    const cl = getAvatarColor(u.uid);
+    return u.photoURL
+      ? `<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<span style="font-size:14px;font-weight:600;color:${cl.color}">${getInitials(u.displayName || 'U')}</span>`;
+  };
+
+  const ownCl = getAvatarColor(currentUser.uid);
+  const ownAv = currentUser.photoURL
+    ? `<img src="${currentUser.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="font-size:14px;font-weight:600;color:${ownCl.color}">${getInitials(currentUser.displayName || 'U')}</span>`;
+
+  const bubbleText = hasOwnActiveNote
+    ? sanitize(ownNote.text).slice(0, 60)
+    : '<span style="color:var(--text-muted);font-style:italic">Sua nota…</span>';
+
+  let html = `<div class="note-item" onclick="openNoteModal()">
+    <div class="note-bubble${hasOwnActiveNote ? '' : ' empty'}">${bubbleText}</div>
+    <div class="note-avatar-ring${hasOwnActiveNote ? '' : ' no-note'}">
+      <div class="note-avatar-inner" style="background:${ownCl.bg}">${ownAv}</div>
+    </div>
+    <div class="note-author">Você</div>
+  </div>`;
+
+  friendNotes.forEach(n => {
+    const cl = getAvatarColor(n.uid);
+    html += `<div class="note-item" onclick="openViewNoteModal(${JSON.stringify({uid:n.uid, displayName:n.displayName, photoURL:n.photoURL||null, text:n.text}).replace(/"/g,'&quot;')})">
+      <div class="note-bubble">${sanitize(n.text).slice(0, 60)}</div>
+      <div class="note-avatar-ring">
+        <div class="note-avatar-inner" style="background:${cl.bg}">${renderAvatar(n)}</div>
+      </div>
+      <div class="note-author">${sanitize((n.displayName||'').split(' ')[0])}</div>
+    </div>`;
+  });
+
+  bar.innerHTML = html;
+}
+
+function openNoteModal() {
+  const existing = document.querySelector('.note-modal-backdrop');
+  if (existing) existing.remove();
+  const cur = null; // will be loaded async
+  const backdrop = document.createElement('div');
+  backdrop.className = 'note-modal-backdrop';
+  backdrop.onclick = e => { if (e.target === backdrop) backdrop.remove(); };
+  backdrop.innerHTML = `<div class="note-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 style="font-size:15px;font-weight:600">Sua nota</h3>
+      <button onclick="this.closest('.note-modal-backdrop').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">&times;</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:.75rem">Notas aparecem para seus amigos por 24 horas.</p>
+    <textarea id="note-input" placeholder="O que está passando pela sua cabeça?" maxlength="60"
+      style="width:100%;min-height:80px;resize:none;border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.6rem .75rem;font-size:14px;font-family:var(--font-sans);background:var(--surface);color:var(--text-primary);outline:none;box-sizing:border-box"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem">
+      <span id="note-char" style="font-size:11px;color:var(--text-muted)">0/60</span>
+      <div style="display:flex;gap:.5rem">
+        <button onclick="deleteNote()" style="background:none;border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.4rem .75rem;font-size:13px;cursor:pointer;color:var(--text-secondary)">Apagar</button>
+        <button onclick="saveNote()" class="btn btn-sm" style="padding:.4rem .875rem">Compartilhar</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(backdrop);
+  const ta = document.getElementById('note-input');
+  const ch = document.getElementById('note-char');
+  ta.addEventListener('input', () => { ch.textContent = `${ta.value.length}/60`; });
+  // Load existing note
+  db.collection('notes').doc(currentUser.uid).get().then(snap => {
+    if (snap.exists) {
+      const n = snap.data();
+      const alive = n.expiresAt && n.expiresAt.toMillis() > Date.now() && n.text;
+      if (alive) { ta.value = n.text; ch.textContent = `${n.text.length}/60`; }
+    }
+  });
+}
+
+function openViewNoteModal(note) {
+  const existing = document.querySelector('.note-modal-backdrop');
+  if (existing) existing.remove();
+  const cl = getAvatarColor(note.uid);
+  const av = note.photoURL
+    ? `<img src="${note.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="font-size:16px;font-weight:600;color:${cl.color}">${getInitials(note.displayName||'U')}</span>`;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'note-modal-backdrop';
+  backdrop.onclick = e => { if (e.target === backdrop) backdrop.remove(); };
+  backdrop.innerHTML = `<div class="note-modal" style="text-align:center">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:.5rem">
+      <button onclick="this.closest('.note-modal-backdrop').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">&times;</button>
+    </div>
+    <div class="note-bubble" style="max-width:240px;margin:0 auto .75rem;font-size:14px;padding:.5rem .75rem">${sanitize(note.text)}</div>
+    <div class="avatar avatar-56" style="background:${cl.bg};margin:0 auto .5rem">${av}</div>
+    <div style="font-size:14px;font-weight:600">${sanitize(note.displayName||'Usuário')}</div>
+  </div>`;
+  document.body.appendChild(backdrop);
+}
+
+async function saveNote() {
+  const text = document.getElementById('note-input')?.value?.trim();
+  if (!text) { showToast('Escreva algo primeiro.'); return; }
+  try {
+    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
+    await db.collection('notes').doc(currentUser.uid).set({
+      text, uid: currentUser.uid,
+      displayName: currentUser.displayName || '',
+      photoURL: currentUser.photoURL || null,
+      expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.querySelector('.note-modal-backdrop')?.remove();
+    showToast('Nota compartilhada!');
+    loadNotes();
+  } catch(e) { showToast('Erro ao salvar nota.'); }
+}
+
+async function deleteNote() {
+  try {
+    await db.collection('notes').doc(currentUser.uid).delete();
+    document.querySelector('.note-modal-backdrop')?.remove();
+    document.getElementById('notes-bar').style.display = 'none';
+    showToast('Nota apagada.');
+    loadNotes();
+  } catch(e) { showToast('Erro ao apagar nota.'); }
 }
 
 async function sendFriendReq(toUid, btn) {
