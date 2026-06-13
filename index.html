@@ -625,7 +625,7 @@ function renderProfileWidget(user) {
     ? `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(user.displayName)}</span>`;
   const cover = user.coverURL
-    ? `background-image:url('${user.coverURL}');background-size:cover;background-position:center top`
+    ? `background-image:url('${user.coverURL}');background-size:cover;background-position:center center`
     : '';
   document.getElementById('profile-card-widget').innerHTML = `
     <div class="profile-banner" style="${cover}"></div>
