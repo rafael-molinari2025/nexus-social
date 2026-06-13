@@ -547,6 +547,9 @@
       <button class="story-type-tab" id="sttab-image" onclick="setStoryType('image')">
         <i class="ti ti-photo" style="font-size:14px" aria-hidden="true"></i> Foto
       </button>
+      <button class="story-type-tab" id="sttab-poll" onclick="setStoryType('poll')">
+        <i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> Enquete
+      </button>
     </div>
 
     <!-- Text story -->
@@ -568,6 +571,18 @@
       </div>
       <input type="file" id="st-img-input" accept="image/*" style="display:none"
              onchange="previewStoryImage(this)">
+    </div>
+
+    <!-- Poll story -->
+    <div id="st-poll-section" style="display:none">
+      <div style="display:flex;flex-direction:column;gap:.6rem">
+        <input type="text" id="st-poll-question" class="form-input" placeholder="Sua pergunta..." maxlength="80">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+          <input type="text" id="st-poll-a" class="form-input" placeholder="Opção A" maxlength="30" style="background:#ef4444;color:#fff;border-color:#ef4444;font-weight:600;text-align:center" onfocus="this.style.opacity='.8'" onblur="this.style.opacity='1'">
+          <input type="text" id="st-poll-b" class="form-input" placeholder="Opção B" maxlength="30" style="background:#3b82f6;color:#fff;border-color:#3b82f6;font-weight:600;text-align:center">
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);text-align:center">Os votantes escolhem entre as duas opções. O resultado aparece após 24h.</p>
+      </div>
     </div>
 
     <!-- Close Friends toggle -->
@@ -1439,6 +1454,7 @@ function loadPosts() {
       list.innerHTML = `<div class="card" id="posts-container">${mainHTML}${_extraPostsHTML}</div>
         <div id="infinite-sentinel" style="height:1px;margin-top:.5rem"></div>`;
       if (snap.docs.length === 20) _observeSentinel();
+      _observePostViews();
     }, err => {
       console.error('loadPosts:', err);
       list.innerHTML = `<div class="empty-state card"><i class="ti ti-wifi-off"></i><p>Erro ao carregar posts.</p></div>`;
@@ -1447,6 +1463,32 @@ function loadPosts() {
 
 let _infiniteObserver = null;
 let _loadingMore = false;
+let _viewedPosts = new Set();
+let _viewObserver = null;
+
+function _observePostViews() {
+  if (_viewObserver) _viewObserver.disconnect();
+  _viewObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const postEl = entry.target;
+      const postId = postEl.id?.replace('post-', '');
+      if (!postId || _viewedPosts.has(postId)) return;
+      const authorId = postEl.querySelector('[onclick*="perfil.html"]')
+        ?.getAttribute('onclick')?.match(/uid=([^']+)/)?.[1];
+      if (authorId === currentUser?.uid) return;
+      _viewedPosts.add(postId);
+      _viewObserver.unobserve(postEl);
+      db.collection('posts').doc(postId).update({
+        views: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+      }).catch(() => {});
+    });
+  }, { threshold: 0.6 });
+  document.querySelectorAll('.post[id^="post-"]').forEach(el => {
+    const pid = el.id.replace('post-', '');
+    if (!_viewedPosts.has(pid)) _viewObserver.observe(el);
+  });
+}
 
 function _observeSentinel() {
   if (_infiniteObserver) _infiniteObserver.disconnect();
@@ -1476,6 +1518,7 @@ async function loadMorePosts() {
       const newHTML = docs.map(d => postHTML(d.id, d.data())).join('');
       _extraPostsHTML += newHTML;
       document.getElementById('posts-container')?.insertAdjacentHTML('beforeend', newHTML);
+      _observePostViews();
     }
 
     if (sentinel) sentinel.innerHTML = '';
@@ -2499,9 +2542,34 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
     : `<div style="width:32px;height:32px;border-radius:50%;background:${cl.bg};display:flex;align-items:center;justify-content:center"><span style="color:${cl.color};font-size:12px;font-weight:700">${getInitials(s.displayName)}</span></div>`;
 
   const bgStyle = s.imageURL ? 'background:#000' : `background:${s.bgColor||'#6366f1'}`;
-  const body    = s.imageURL
-    ? `<img src="${s.imageURL}" style="max-width:100%;max-height:100%;object-fit:contain">`
-    : `<div class="story-viewer-text">${sanitize(s.text||'')}</div>`;
+  let body;
+  if (s.imageURL) {
+    body = `<img src="${s.imageURL}" style="max-width:100%;max-height:100%;object-fit:contain">`;
+  } else if (s.type === 'poll' && s.poll) {
+    const poll = s.poll;
+    const totalVotes = poll.options.reduce((t, o) => t + (o.votes||[]).length, 0);
+    const myVote = poll.options.findIndex(o => (o.votes||[]).includes(currentUser?.uid));
+    const isOwn = s.uid === currentUser?.uid;
+    const optHTML = poll.options.map((o, i) => {
+      const pct = totalVotes ? Math.round((o.votes||[]).length / totalVotes * 100) : 0;
+      const voted = myVote === i;
+      const colors = ['#ef4444','#3b82f6'];
+      return `<div style="margin:.3rem 0">
+        <button onclick="event.stopPropagation();voteStoryPoll('${storyId}',${i})"
+          style="width:100%;padding:.65rem 1rem;background:${voted?colors[i]:'rgba(255,255,255,.2)'};border:2px solid ${colors[i]};border-radius:var(--radius-full);color:#fff;font-weight:700;font-size:14px;cursor:pointer;backdrop-filter:blur(4px);transition:all .2s;display:flex;justify-content:space-between;align-items:center">
+          <span>${sanitize(o.label)}</span>
+          ${(myVote >= 0 || isOwn) ? `<span style="font-size:12px;opacity:.9">${pct}%</span>` : ''}
+        </button>
+      </div>`;
+    }).join('');
+    body = `<div style="padding:2rem 1.5rem;width:100%">
+      <div class="story-viewer-text" style="margin-bottom:1rem;font-size:20px">${sanitize(poll.question)}</div>
+      ${optHTML}
+      ${(myVote >= 0 || isOwn) ? `<div style="text-align:center;font-size:12px;color:rgba(255,255,255,.7);margin-top:.5rem">${totalVotes} voto${totalVotes!==1?'s':''}</div>` : ''}
+    </div>`;
+  } else {
+    body = `<div class="story-viewer-text">${sanitize(s.text||'')}</div>`;
+  }
 
   // Progress segments (one per story in the set)
   const segs = allIds.length > 1
@@ -2664,6 +2732,30 @@ async function sendStoryReply(storyId, authorUid, storyText) {
   } catch(e) { showToast('Erro ao enviar resposta.'); }
 }
 
+// ── Story poll voting ──────────────────────────────────────────
+async function voteStoryPoll(storyId, optIndex) {
+  const uid = currentUser.uid;
+  const snap = await db.collection('stories').doc(storyId).get();
+  if (!snap.exists) return;
+  const poll = snap.data().poll;
+  if (!poll) return;
+  const alreadyVoted = poll.options.findIndex(o => (o.votes||[]).includes(uid));
+  if (alreadyVoted === optIndex) return; // already voted this option
+  const newOptions = poll.options.map((o, i) => ({
+    ...o,
+    votes: i === optIndex
+      ? [...(o.votes||[]).filter(v => v !== uid), uid]
+      : (o.votes||[]).filter(v => v !== uid)
+  }));
+  await db.collection('stories').doc(storyId).update({ 'poll.options': newOptions });
+  // Re-render story in place
+  const ctx = window._storyCtx;
+  if (ctx) {
+    document.getElementById('story-view-overlay')?.remove();
+    viewStory(storyId, ctx.allIds, ctx.currentIdx);
+  }
+}
+
 // ── Story reactions ────────────────────────────────────────────
 async function reactToStory(storyId, authorUid, emoji) {
   const overlay = document.getElementById('story-view-overlay');
@@ -2759,8 +2851,10 @@ function setStoryType(type) {
   _storyType = type;
   document.getElementById('st-text-section').style.display  = type==='text'  ? '' : 'none';
   document.getElementById('st-image-section').style.display = type==='image' ? '' : 'none';
+  document.getElementById('st-poll-section').style.display  = type==='poll'  ? '' : 'none';
   document.getElementById('sttab-text').classList.toggle('active', type==='text');
   document.getElementById('sttab-image').classList.toggle('active', type==='image');
+  document.getElementById('sttab-poll').classList.toggle('active', type==='poll');
 }
 
 function openStoryModal() {
@@ -2824,6 +2918,13 @@ async function publishStory() {
       if (!text) { showToast('Escreva algo no story.'); reset(); return; }
       if (text.length > 300) { showToast('Story muito longo. Máximo 300 caracteres.'); reset(); return; }
       base.text = text;
+    } else if (_storyType === 'poll') {
+      const question = document.getElementById('st-poll-question').value.trim();
+      const optA = document.getElementById('st-poll-a').value.trim() || 'Sim';
+      const optB = document.getElementById('st-poll-b').value.trim() || 'Não';
+      if (!question) { showToast('Digite uma pergunta para a enquete.'); reset(); return; }
+      base.text = question;
+      base.poll = { question, options: [{ label: optA, votes: [] }, { label: optB, votes: [] }] };
     } else {
       if (!_storyImgFile) { showToast('Selecione uma imagem.'); reset(); return; }
       base.imageURL = await uploadToCloudinary(_storyImgFile);
@@ -2871,32 +2972,61 @@ async function loadOnlineFriends() {
 async function loadFriendSuggestions() {
   const el = document.getElementById('friend-suggestions');
   try {
-    // Exclui: amigos já confirmados + solicitações pendentes enviadas + o próprio usuário
     const [fSnap, reqSnap] = await Promise.all([
       db.collection('friendships').where('users', 'array-contains', currentUser.uid).get(),
       db.collection('friend_requests').where('from', '==', currentUser.uid).where('status', '==', 'pending').get()
     ]);
-    const excl = new Set(fSnap.docs.flatMap(d => d.data().users));
+
+    const myFriendIds = new Set(fSnap.docs.flatMap(d => d.data().users).filter(u => u !== currentUser.uid));
+    const excl = new Set([...myFriendIds, currentUser.uid]);
     reqSnap.docs.forEach(d => excl.add(d.data().to));
-    excl.add(currentUser.uid);
 
-    // Busca usuários ordenados por displayName_lower para variar os resultados
-    const snap = await db.collection('users').orderBy('displayName_lower').limit(50).get();
-    const sugg = snap.docs.filter(d => !excl.has(d.id) && d.data().displayName).slice(0, 5);
+    // Count mutual friends: for each friend, get their friends — intersect with myFriendIds
+    const mutualCount = new Map();
+    const fofChecks = [...myFriendIds].slice(0, 10).map(async fid => {
+      const snap = await db.collection('friendships').where('users', 'array-contains', fid).get();
+      snap.docs.forEach(d => {
+        d.data().users.forEach(uid => {
+          if (excl.has(uid)) return;
+          mutualCount.set(uid, (mutualCount.get(uid) || 0) + 1);
+        });
+      });
+    });
+    await Promise.all(fofChecks);
 
-    if (!sugg.length) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões.</p>`; return; }
-    el.innerHTML = sugg.map(doc => {
+    // Prioritize friends-of-friends, then fall back to random users
+    let candidates = [];
+    if (mutualCount.size) {
+      const sorted = [...mutualCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const docs = await Promise.all(sorted.map(([uid]) => db.collection('users').doc(uid).get()));
+      candidates = docs.filter(d => d.exists && d.data().displayName)
+        .map(d => ({ doc: d, mutual: mutualCount.get(d.id) || 0 }));
+    }
+
+    if (candidates.length < 5) {
+      const snap = await db.collection('users').orderBy('displayName_lower').limit(50).get();
+      const extra = snap.docs.filter(d => !excl.has(d.id) && d.data().displayName && !mutualCount.has(d.id));
+      extra.slice(0, 5 - candidates.length).forEach(d => candidates.push({ doc: d, mutual: 0 }));
+    }
+
+    candidates = candidates.slice(0, 5);
+    if (!candidates.length) { el.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">Sem sugestões.</p>`; return; }
+
+    el.innerHTML = candidates.map(({ doc, mutual }) => {
       const u  = { uid: doc.id, ...doc.data() };
       const cl = getAvatarColor(u.uid);
       const av = u.photoURL
         ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
+      const sub = mutual > 0
+        ? `<span style="color:var(--purple-600)">${mutual} amigo${mutual>1?'s':''} em comum</span>`
+        : sanitize(u.bio || u.city || '');
       return `<div class="suggest-item">
         <div class="avatar avatar-40" style="background:${cl.bg};cursor:pointer"
              onclick="location.href='pages/perfil.html?uid=${u.uid}'">${av}</div>
         <div class="suggest-info">
           <div class="suggest-name">${sanitize(u.displayName||'Usuário')}</div>
-          <div class="suggest-sub">${sanitize(u.bio||u.city||'')}</div>
+          <div class="suggest-sub">${sub}</div>
         </div>
         <button class="btn btn-sm" id="sug-${u.uid}" onclick="sendFriendReq('${u.uid}',this)">
           <i class="ti ti-user-plus" aria-hidden="true"></i>

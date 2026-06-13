@@ -203,6 +203,24 @@
       </button>
     </div>
 
+    <!-- Solicitar verificação -->
+    <div class="config-section" id="verify-section">
+      <div class="config-section-title"><i class="ti ti-rosette-discount-check"></i> Verificação de conta</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:.875rem">Contas verificadas recebem um badge ✓ que comprova autenticidade. Descreva por que sua conta merece verificação.</p>
+      <div id="verify-status-bar" style="display:none;padding:.6rem .875rem;border-radius:var(--radius-md);font-size:13px;margin-bottom:.875rem"></div>
+      <div id="verify-form">
+        <div class="form-group" style="margin-bottom:.75rem">
+          <label class="form-label">Motivo da solicitação</label>
+          <textarea id="verify-reason" class="form-control" rows="3" maxlength="500"
+            placeholder="Ex: Sou criador de conteúdo com audiência significativa, marca, personalidade pública…"
+            style="resize:vertical;min-height:80px"></textarea>
+        </div>
+        <button class="btn btn-primary" id="verify-btn" onclick="submitVerificationRequest()">
+          <i class="ti ti-send"></i> Enviar solicitação
+        </button>
+      </div>
+    </div>
+
     <!-- Sessão -->
     <div class="config-section">
       <div class="config-section-title"><i class="ti ti-login"></i> Sessão</div>
@@ -281,6 +299,7 @@ requireAuth(async user => {
   loadPrivacySettings(userData);
   loadCloseFriends();
   initThemePicker();
+  loadVerificationStatus(userData);
 });
 
 function initThemePicker() {
@@ -592,6 +611,59 @@ async function confirmDeleteAccount() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeDeleteModal();
 });
+
+// ── Verificação de conta ───────────────────────────────────────
+function loadVerificationStatus(userData) {
+  const bar = document.getElementById('verify-status-bar');
+  const form = document.getElementById('verify-form');
+  const btn = document.getElementById('verify-btn');
+  if (!bar) return;
+  const status = userData.verificationStatus;
+  if (userData.isVerified) {
+    bar.style.display = 'block';
+    bar.style.background = 'rgba(34,197,94,.12)';
+    bar.style.color = '#16a34a';
+    bar.innerHTML = '<i class="ti ti-rosette-discount-check"></i> Sua conta já está verificada.';
+    if (form) form.style.display = 'none';
+  } else if (status === 'pending') {
+    bar.style.display = 'block';
+    bar.style.background = 'rgba(234,179,8,.12)';
+    bar.style.color = '#ca8a04';
+    bar.innerHTML = '<i class="ti ti-clock"></i> Solicitação em análise. Você será notificado em breve.';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-clock"></i> Aguardando análise'; }
+  } else if (status === 'rejected') {
+    bar.style.display = 'block';
+    bar.style.background = 'rgba(239,68,68,.1)';
+    bar.style.color = '#dc2626';
+    bar.innerHTML = '<i class="ti ti-x"></i> Solicitação anterior não aprovada. Você pode tentar novamente.';
+  }
+}
+
+async function submitVerificationRequest() {
+  const reason = document.getElementById('verify-reason')?.value.trim();
+  const btn = document.getElementById('verify-btn');
+  if (!reason) { showToast('Descreva o motivo da solicitação.'); return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Enviando…'; }
+  try {
+    await db.collection('users').doc(currentUser.uid).update({
+      verificationStatus: 'pending',
+      verificationReason: reason,
+      verificationRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Solicitação enviada! Aguarde análise.');
+    const bar = document.getElementById('verify-status-bar');
+    if (bar) {
+      bar.style.display = 'block';
+      bar.style.background = 'rgba(234,179,8,.12)';
+      bar.style.color = '#ca8a04';
+      bar.innerHTML = '<i class="ti ti-clock"></i> Solicitação em análise. Você será notificado em breve.';
+    }
+    if (btn) btn.innerHTML = '<i class="ti ti-clock"></i> Aguardando análise';
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Enviar solicitação'; }
+    showToast('Erro ao enviar solicitação.');
+  }
+}
 
 // ── Amigos próximos ───────────────────────────────────────────
 let _cfList = [];

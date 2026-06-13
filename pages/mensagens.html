@@ -590,6 +590,9 @@ async function openConversation(cid, otherUid) {
       <button class="btn btn-sm" onclick="openThemePicker('${cid}')" title="Tema da conversa">
         <i class="ti ti-palette"></i>
       </button>
+      <button class="btn btn-sm" onclick="toggleDisappearing('${cid}')" title="Mensagens temporárias" id="disappearing-btn">
+        <i class="ti ti-clock-off"></i>
+      </button>
       <button class="btn btn-sm" onclick="deleteConversation('${cid}')" title="Excluir conversa" style="color:var(--coral-400)">
         <i class="ti ti-trash"></i>
       </button>
@@ -600,6 +603,10 @@ async function openConversation(cid, otherUid) {
         oninput="filterChatMessages(this.value)">
       <span id="chat-search-count" style="font-size:12px;color:var(--text-muted)"></span>
       <button onclick="toggleChatSearch()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:0"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="disappearing-banner" style="display:none;padding:.3rem 1rem;background:rgba(83,74,183,.12);align-items:center;gap:.4rem;font-size:12px;color:var(--purple-600);border-bottom:0.5px solid var(--border)">
+      <i class="ti ti-clock-off" style="font-size:13px"></i>
+      Modo temporário ativo — mensagens desaparecem após 24h
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="typing-indicator" id="typing-indicator" style="display:none;padding:.25rem 1.25rem;align-items:center;gap:.5rem">
@@ -684,6 +691,15 @@ async function openConversation(cid, otherUid) {
     }
   });
 
+  // Load disappearing mode state
+  db.collection('conversations').doc(cid).get().then(convSnap => {
+    const isDisappearing = convSnap.data()?.disappearing || false;
+    const banner = document.getElementById('disappearing-banner');
+    const btn = document.getElementById('disappearing-btn');
+    if (banner) banner.style.display = isDisappearing ? 'flex' : 'none';
+    if (btn) btn.style.color = isDisappearing ? 'var(--purple-600)' : '';
+  }).catch(() => {});
+
   // Subscribe to messages (limited, most recent first)
   if (messagesUnsub) messagesUnsub();
   _firstMsgDoc = null; _loadingOldMsgs = false;
@@ -698,7 +714,14 @@ async function openConversation(cid, otherUid) {
       const wasAtBottom = msgContainer
         ? msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight < 60
         : true;
-      renderMessages(snap.docs, other, snap.docs.length >= MSG_PAGE_SIZE);
+      // Filter expired disappearing messages (older than 24h)
+      const now = Date.now();
+      const visibleDocs = snap.docs.filter(d => {
+        const m = d.data();
+        if (!m.vanishAt) return true;
+        return (m.vanishAt.toMillis ? m.vanishAt.toMillis() : m.vanishAt) > now;
+      });
+      renderMessages(visibleDocs, other, snap.docs.length >= MSG_PAGE_SIZE);
       if (firstLoad || wasAtBottom) { scrollToBottom(); firstLoad = false; }
       db.collection('conversations').doc(cid).update({
         [`unread.${currentUser.uid}`]: 0,
@@ -869,6 +892,12 @@ async function sendMessage(cid, otherUid) {
   if (btn) btn.disabled = true;
 
   try {
+    const convSnap = await db.collection('conversations').doc(cid).get();
+    const isDisappearing = convSnap.data()?.disappearing || false;
+    const vanishAt = isDisappearing
+      ? firebase.firestore.Timestamp.fromMillis(Date.now() + 24 * 3600 * 1000)
+      : null;
+
     const batch = db.batch();
 
     // Add message
@@ -877,7 +906,8 @@ async function sendMessage(cid, otherUid) {
       senderId: currentUser.uid,
       text,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      read: false
+      read: false,
+      ...(vanishAt ? { vanishAt } : {})
     });
 
     // Update conversation metadata
@@ -1192,14 +1222,20 @@ async function sendGroupMessage(cid) {
   if (btn) btn.disabled = true;
   try {
     const convSnap = await db.collection('conversations').doc(cid).get();
-    const participants = convSnap.data()?.participants || [];
+    const convData = convSnap.data() || {};
+    const participants = convData.participants || [];
+    const isDisappearing = convData.disappearing || false;
+    const vanishAt = isDisappearing
+      ? firebase.firestore.Timestamp.fromMillis(Date.now() + 24 * 3600 * 1000)
+      : null;
     const batch  = db.batch();
     const msgRef = db.collection('conversations').doc(cid).collection('messages').doc();
     batch.set(msgRef, {
       senderId:  currentUser.uid,
       senderName: currentUser.displayName,
       text,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...(vanishAt ? { vanishAt } : {})
     });
     const unreadUpdate = {};
     participants.forEach(uid => {
@@ -1524,6 +1560,24 @@ document.addEventListener('keydown', e => {
   const open = document.querySelector('.modal-overlay.open');
   if (open) open.remove();
 });
+
+// ── Mensagens que desaparecem ───────────────────────────────────
+async function toggleDisappearing(cid) {
+  try {
+    const convSnap = await db.collection('conversations').doc(cid).get();
+    const current = convSnap.data()?.disappearing || false;
+    const next = !current;
+    await db.collection('conversations').doc(cid).update({ disappearing: next });
+    const banner = document.getElementById('disappearing-banner');
+    const btn = document.querySelector(`[onclick="toggleDisappearing('${cid}')"]`);
+    if (banner) banner.style.display = next ? 'flex' : 'none';
+    if (btn) {
+      btn.style.color = next ? 'var(--purple-600)' : '';
+      btn.title = next ? 'Desativar modo efêmero' : 'Ativar modo efêmero';
+    }
+    showToast(next ? 'Modo efêmero ativado (24h)' : 'Modo efêmero desativado');
+  } catch(e) { showToast('Erro ao alterar modo efêmero.'); }
+}
 
 // ── Chat search ────────────────────────────────────────────────
 function toggleChatSearch() {
