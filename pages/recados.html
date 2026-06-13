@@ -41,6 +41,14 @@
       cursor: pointer; transition: background var(--transition);
     }
     .friend-result-item:hover { background: var(--gray-50); }
+    .scrap-reply-btn {
+      background: none; border: none; cursor: pointer;
+      display: flex; align-items: center; gap: .25rem;
+      font-size: 12px; padding: .15rem .3rem;
+      border-radius: var(--radius-sm); color: var(--text-muted);
+      font-family: var(--font-sans); transition: color var(--transition);
+    }
+    .scrap-reply-btn:hover { color: var(--purple-600); }
     @media (max-width: 768px) {
       .recados-page { padding: 1rem .5rem calc(80px + 1rem); }
     }
@@ -164,6 +172,9 @@ async function loadScraps(type) {
               <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" style="font-size:14px"></i>
               <span>${likes.length || ''}</span>
             </button>
+            ${type === 'received' && s.fromUid ? `<button class="scrap-reply-btn" data-uid="${s.fromUid}" data-name="${sanitize(s.fromName||'Usuário')}" onclick="replyToScrap(this)">
+              <i class="ti ti-corner-up-left" style="font-size:13px"></i> Responder
+            </button>` : ''}
           </div>
         </div>
         ${canDelete ? `<button onclick="deleteScrap('${doc.id}')" title="Excluir recado"
@@ -296,6 +307,14 @@ async function toggleScrapLike(id, btn) {
     btn.style.color = 'var(--coral-400)';
   }
   countEl.textContent = newCount > 0 ? newCount : '';
+}
+
+function replyToScrap(btn) {
+  const uid  = btn.dataset.uid;
+  const name = btn.dataset.name;
+  selectFriend(uid, name);
+  document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+  setTimeout(() => document.getElementById('scrap-write-text').focus(), 350);
 }
 
 // Fechar resultados ao clicar fora

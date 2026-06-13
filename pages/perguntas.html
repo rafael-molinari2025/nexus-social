@@ -230,6 +230,18 @@ function questionCardHTML(id, q) {
       </div>`
     : '';
 
+  const editSection = isOwner && q.status === 'answered'
+    ? `<div id="edit-box-${id}" class="qa-reply-box" style="display:none">
+        <textarea id="edit-text-${id}" maxlength="500">${sanitize(q.answer||'')}</textarea>
+        <div class="qa-reply-actions">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('edit-box-${id}').style.display='none'">Cancelar</button>
+          <button class="btn btn-primary btn-sm" onclick="saveEditAnswer('${id}')">
+            <i class="ti ti-check"></i> Salvar
+          </button>
+        </div>
+      </div>`
+    : '';
+
   const replyBox = isOwner && q.status === 'pending'
     ? `<div class="qa-reply-box">
         <textarea id="reply-${id}" placeholder="Escreva sua resposta..." maxlength="500"></textarea>
@@ -255,7 +267,9 @@ function questionCardHTML(id, q) {
       <button class="qa-like-btn${isLiked?' liked':''}" id="qalike-${id}" onclick="likeQuestion('${id}')">
         <i class="ti ti-heart${isLiked?'-filled':''}"></i> ${likeCount||''}
       </button>
+      ${isOwner && q.status === 'answered' ? `<button class="qa-like-btn" onclick="startEditAnswer('${id}')"><i class="ti ti-edit"></i> Editar</button>` : ''}
     </div>
+    ${editSection}
     ${replyBox}
   </div>`;
 }
@@ -312,6 +326,26 @@ async function deleteQuestion(qId) {
     document.getElementById('qa-' + qId)?.remove();
     showToast('Pergunta ignorada.');
   } catch(e) { showToast('Erro.'); }
+}
+
+function startEditAnswer(qId) {
+  const box = document.getElementById('edit-box-' + qId);
+  if (!box) return;
+  box.style.display = 'block';
+  document.getElementById('edit-text-' + qId)?.focus();
+}
+
+async function saveEditAnswer(qId) {
+  const text = document.getElementById('edit-text-' + qId)?.value.trim();
+  if (!text) return showToast('A resposta não pode estar vazia.');
+  try {
+    await db.collection('questions').doc(profileUid).collection('items').doc(qId).update({
+      answer: text,
+      editedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Resposta atualizada!');
+    loadQuestions(currentTab);
+  } catch(e) { showToast('Erro ao salvar.'); }
 }
 
 async function likeQuestion(qId) {

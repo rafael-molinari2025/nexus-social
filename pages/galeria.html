@@ -99,6 +99,46 @@
     .gallery-caption:empty::before { content: 'Adicionar legenda…'; color: var(--text-muted); opacity: .6; }
     .gallery-caption:focus { outline: none; color: var(--text-primary); background: var(--gray-50); }
 
+    /* Album chips */
+    .album-row-wrap { margin-bottom: .75rem; }
+    .album-row { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .album-chip {
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .25rem .75rem; border: 0.5px solid var(--border);
+      border-radius: var(--radius-full); background: var(--surface);
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      color: var(--text-secondary); font-family: var(--font-sans);
+      transition: all var(--transition);
+    }
+    .album-chip.active { background: var(--purple-600); color: #fff; border-color: var(--purple-600); }
+    .album-chip-del {
+      font-size: 15px; line-height: 1; margin-left: .1rem;
+      opacity: .65; cursor: pointer; transition: opacity var(--transition);
+    }
+    .album-chip:hover .album-chip-del { opacity: 1; }
+    /* Album assign button on gallery item */
+    .gallery-item-album {
+      position: absolute; top: .4rem; right: 2.1rem;
+      background: rgba(0,0,0,.55); border: none; color: #fff;
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; opacity: 0; transition: opacity .18s;
+      font-size: 13px; z-index: 2;
+    }
+    .gallery-item:hover .gallery-item-album { opacity: 1; }
+    /* Album picker dropdown (appended to body, fixed) */
+    .album-picker-dropdown {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+      z-index: 2000; min-width: 150px; overflow: hidden; position: fixed;
+    }
+    .album-pick-item {
+      padding: .5rem .875rem; font-size: 13px;
+      cursor: pointer; transition: background var(--transition);
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .album-pick-item:hover { background: var(--gray-50); }
+
     /* Upload progress overlay */
     .upload-progress {
       background: var(--surface); border: 0.5px solid var(--border);
@@ -129,9 +169,14 @@
 
     <div class="gallery-header">
       <h1 class="gallery-title">Galeria de Fotos</h1>
-      <button class="btn btn-primary btn-sm" onclick="document.getElementById('file-input').click()">
-        <i class="ti ti-plus" aria-hidden="true"></i> Adicionar fotos
-      </button>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <button class="btn btn-sm" onclick="createAlbum()" title="Criar álbum">
+          <i class="ti ti-folder-plus" aria-hidden="true"></i>
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('file-input').click()">
+          <i class="ti ti-plus" aria-hidden="true"></i> Adicionar fotos
+        </button>
+      </div>
       <input type="file" id="file-input" accept="image/*" multiple style="display:none" onchange="handleUpload(this)">
     </div>
 
@@ -148,6 +193,11 @@
       <div class="upload-progress-bar">
         <div class="upload-progress-fill" id="upload-progress-fill" style="width:0%"></div>
       </div>
+    </div>
+
+    <!-- Album filter row (only for own gallery tab) -->
+    <div class="album-row-wrap" id="album-row-wrap" style="display:none">
+      <div class="album-row" id="album-row"></div>
     </div>
 
     <!-- Tabs -->
@@ -174,17 +224,106 @@
 <script src="../js/firebase-config.js"></script>
 <script src="../js/utils.js"></script>
 <script>
-let currentUser = null;
-let _activeTab  = 'galeria';
+let currentUser  = null;
+let _activeTab   = 'galeria';
 let _gallerySrcs = [];
+let _activeAlbum = null;
+let _albums      = [];
 
 requireAuth(async user => {
   currentUser = user;
   const ud = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
   renderTopbar(ud, 'gallery');
+  loadAlbums();
   loadContent();
   setupDragDrop();
 });
+
+// ── Albums ────────────────────────────────────────────────────
+async function loadAlbums() {
+  try {
+    const snap = await db.collection('users').doc(currentUser.uid)
+      .collection('albums').orderBy('createdAt', 'asc').get();
+    _albums = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(_) { _albums = []; }
+  renderAlbumRow();
+}
+
+function renderAlbumRow() {
+  const el = document.getElementById('album-row');
+  if (!el) return;
+  const chips = [
+    `<button class="album-chip${!_activeAlbum ? ' active' : ''}" onclick="filterByAlbum(null)">
+       <i class="ti ti-photos" aria-hidden="true"></i> Todas
+     </button>`,
+    ..._albums.map(a => `<button class="album-chip${_activeAlbum === a.id ? ' active' : ''}" onclick="filterByAlbum('${a.id}')">
+       <i class="ti ti-folder" aria-hidden="true"></i> ${sanitize(a.name)}
+       <span class="album-chip-del" onclick="event.stopPropagation();deleteAlbum('${a.id}','${sanitize(a.name).replace(/'/g, "\\'")}')" title="Excluir álbum">×</span>
+     </button>`)
+  ].join('');
+  el.innerHTML = chips;
+  document.getElementById('album-row-wrap').style.display = _albums.length || _activeAlbum ? '' : 'none';
+}
+
+function filterByAlbum(albumId) {
+  _activeAlbum = albumId;
+  renderAlbumRow();
+  loadContent();
+}
+
+async function createAlbum() {
+  const name = prompt('Nome do álbum:');
+  if (!name?.trim()) return;
+  try {
+    await db.collection('users').doc(currentUser.uid).collection('albums').add({
+      name: name.trim(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await loadAlbums();
+    showToast(`Álbum "${name.trim()}" criado!`);
+  } catch(e) { showToast('Erro ao criar álbum.'); }
+}
+
+async function deleteAlbum(id, name) {
+  if (!confirm(`Excluir o álbum "${name}"? As fotos não serão excluídas.`)) return;
+  try {
+    await db.collection('users').doc(currentUser.uid).collection('albums').doc(id).delete();
+    if (_activeAlbum === id) _activeAlbum = null;
+    await loadAlbums();
+    loadContent();
+  } catch(e) { showToast('Erro ao excluir álbum.'); }
+}
+
+async function assignPhotoToAlbum(photoId, btn) {
+  document.querySelectorAll('.album-picker-dropdown').forEach(el => el.remove());
+  if (!_albums.length) { showToast('Crie um álbum primeiro.'); return; }
+  const rect   = btn.getBoundingClientRect();
+  const picker = document.createElement('div');
+  picker.className = 'album-picker-dropdown';
+  picker.style.top   = `${rect.bottom + 4}px`;
+  picker.style.right = `${window.innerWidth - rect.right}px`;
+  picker.innerHTML = [
+    `<div class="album-pick-item" onclick="doAssign('${photoId}',null,null)"><i class="ti ti-x" style="font-size:11px"></i> Remover do álbum</div>`,
+    ..._albums.map(a => `<div class="album-pick-item" onclick="doAssign('${photoId}','${a.id}','${sanitize(a.name).replace(/'/g, "\\'")}')">${sanitize(a.name)}</div>`)
+  ].join('');
+  document.body.appendChild(picker);
+  setTimeout(() => {
+    document.addEventListener('click', function h() {
+      picker.remove();
+      document.removeEventListener('click', h);
+    }, { once: true });
+  }, 0);
+}
+
+async function doAssign(photoId, albumId, albumName) {
+  document.querySelectorAll('.album-picker-dropdown').forEach(el => el.remove());
+  try {
+    await db.collection('photos').doc(photoId).update({
+      albumId: albumId || firebase.firestore.FieldValue.delete()
+    });
+    showToast(albumId ? `Adicionada ao álbum "${albumName}".` : 'Foto removida do álbum.');
+  } catch(e) { showToast('Erro ao atribuir álbum.'); }
+}
 
 // ── Tabs ──────────────────────────────────────────────────────
 function switchTab(tab) {
@@ -193,6 +332,8 @@ function switchTab(tab) {
     document.getElementById(`tab-btn-${t}`).classList.toggle('active', t === tab);
   });
   document.getElementById('upload-zone').style.display = tab === 'galeria' ? '' : 'none';
+  document.getElementById('album-row-wrap').style.display = tab === 'galeria' && _albums.length ? '' : 'none';
+  if (tab !== 'galeria') _activeAlbum = null;
   loadContent();
 }
 
@@ -214,7 +355,8 @@ async function loadContent() {
       } catch(_) {
         snap = await db.collection('photos').where('uid','==', currentUser.uid).get();
       }
-      items = snap.docs.map(d => ({ id: d.id, url: d.data().imageURL, caption: d.data().caption || '', deletable: true }));
+      items = snap.docs.map(d => ({ id: d.id, url: d.data().imageURL, caption: d.data().caption || '', albumId: d.data().albumId || null, deletable: true }));
+      if (_activeAlbum) items = items.filter(p => p.albumId === _activeAlbum);
     } else {
       let snap;
       try {
@@ -252,6 +394,9 @@ async function loadContent() {
             ${p.deletable
               ? `<button class="gallery-item-del" data-id="${p.id}" title="Excluir foto" aria-label="Excluir foto">
                    <i class="ti ti-trash" aria-hidden="true"></i>
+                 </button>
+                 <button class="gallery-item-album" onclick="event.stopPropagation();assignPhotoToAlbum('${p.id}',this)" title="Atribuir a álbum" aria-label="Álbum">
+                   <i class="ti ti-folder-plus" aria-hidden="true"></i>
                  </button>`
               : ''}
           </div>
@@ -318,9 +463,10 @@ async function handleUpload(input) {
     try {
       const imageURL = await uploadToCloudinary(file);
       await db.collection('photos').add({
-        uid:       currentUser.uid,
+        uid:      currentUser.uid,
         imageURL,
-        caption:   '',
+        caption:  '',
+        ...(_activeAlbum ? { albumId: _activeAlbum } : {}),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       done++;
