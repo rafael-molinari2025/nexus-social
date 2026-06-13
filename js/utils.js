@@ -90,6 +90,17 @@ function requireAuth(callback) {
       window.location.href = loginPath;
     } else {
       callback(user);
+      // Migração silenciosa: garante displayName_lower no Firestore (uma vez por sessão)
+      if (!sessionStorage.getItem('_dln_ok')) {
+        sessionStorage.setItem('_dln_ok', '1');
+        db.collection('users').doc(user.uid).get().then(snap => {
+          if (snap.exists && snap.data().displayName && !snap.data().displayName_lower) {
+            db.collection('users').doc(user.uid).update({
+              displayName_lower: snap.data().displayName.toLowerCase()
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
     }
   });
 }
