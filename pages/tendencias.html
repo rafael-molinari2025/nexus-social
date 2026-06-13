@@ -149,6 +149,16 @@
             </div>
           </div>
         </div>
+
+        <div class="section-card">
+          <div class="section-header"><i class="ti ti-star"></i> Criadores em alta</div>
+          <div id="creators-list">
+            <div style="padding:1rem 1.125rem">
+              <div class="skel" style="height:14px;width:70%;margin-bottom:.5rem"></div>
+              <div class="skel" style="height:14px;width:55%"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Right column: popular posts -->
@@ -189,6 +199,7 @@ requireAuth(async user => {
   loadHashtags();
   loadCommunities();
   loadPopularPosts();
+  loadTrendingCreators();
 });
 
 // ── Hashtags ────────────────────────────────────────────────────
@@ -328,6 +339,59 @@ function switchTab(tab) {
   document.getElementById('tab-popular').className = `tab-btn${tab === 'popular' ? ' active' : ''}`;
   document.getElementById('tab-recent').className  = `tab-btn${tab === 'recent'  ? ' active' : ''}`;
   loadPopularPosts();
+}
+
+// ── Trending creators ──────────────────────────────────────────
+async function loadTrendingCreators() {
+  const el = document.getElementById('creators-list');
+  try {
+    const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const snap = await db.collection('posts')
+      .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(since))
+      .orderBy('createdAt', 'desc')
+      .limit(200)
+      .get();
+
+    // Aggregate engagement per author
+    const authorMap = new Map();
+    snap.docs.forEach(d => {
+      const p = d.data();
+      if (!p.authorId || !p.authorName) return;
+      const score = (p.likes?.length || 0)
+        + (p.commentsCount || 0) * 2
+        + Object.values(p.reactions || {}).reduce((s, a) => s + (a?.length || 0), 0);
+      const prev = authorMap.get(p.authorId);
+      if (!prev) {
+        authorMap.set(p.authorId, { uid: p.authorId, displayName: p.authorName, photoURL: p.authorPhoto || null, score, posts: 1 });
+      } else {
+        prev.score += score;
+        prev.posts++;
+      }
+    });
+
+    // Exclude self
+    authorMap.delete(currentUser.uid);
+    const top = [...authorMap.values()].sort((a, b) => b.score - a.score).slice(0, 6);
+
+    if (!top.length) { el.innerHTML = `<p style="padding:.75rem 1.125rem;font-size:13px;color:var(--text-muted)">Nenhum criador em alta esta semana.</p>`; return; }
+
+    el.innerHTML = top.map(u => {
+      const cl = getAvatarColor(u.uid);
+      const av = u.photoURL
+        ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span style="color:${cl.color};font-size:13px;font-weight:700">${getInitials(u.displayName)}</span>`;
+      return `<div class="community-item" onclick="location.href='perfil.html?uid=${u.uid}'">
+        <div class="avatar avatar-36" style="background:${cl.bg};flex-shrink:0">${av}</div>
+        <div class="community-info">
+          <div class="community-name">${sanitize(u.displayName)}</div>
+          <div class="community-members">${u.posts} post${u.posts>1?'s':''} esta semana</div>
+        </div>
+        <i class="ti ti-chevron-right" style="color:var(--text-muted);font-size:15px"></i>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<p style="padding:.75rem 1.125rem;font-size:13px;color:var(--text-muted)">Sem dados disponíveis.</p>`;
+  }
 }
 </script>
 </body>

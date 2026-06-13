@@ -227,7 +227,8 @@ const _PUSH_TITLES = {
   scrap:          'Novo recado no seu perfil',
   mention:        'Mencionou você',
   community_join: 'Entrou na sua comunidade',
-  poll_vote:      'Votou na sua enquete'
+  poll_vote:      'Votou na sua enquete',
+  repost:         'Repostou seu post'
 };
 
 async function createNotification(toUid, type, data) {
@@ -272,6 +273,7 @@ function notifIcon(type) {
     community_join: { icon: 'ti-users-group',    bg: '#E1F5EE', color: '#0F6E56' },
     mention:        { icon: 'ti-at',             bg: '#E0F2FE', color: '#0369A1' },
     poll_vote:      { icon: 'ti-chart-bar',      bg: '#F5F3FF', color: '#7C3AED' },
+    repost:         { icon: 'ti-repeat',         bg: '#F5F3FF', color: '#534AB7' },
   };
   return map[type] || { icon: 'ti-bell', bg: '#F1EFE8', color: '#5F5E5A' };
 }

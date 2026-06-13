@@ -130,6 +130,10 @@
         <button class="ctrl-btn leave-btn" title="Sair da sala" onclick="leaveRoom()">
           <i class="ti ti-phone-off"></i>
         </button>
+        <button class="ctrl-btn" id="lock-btn" title="Trancar sala" onclick="toggleLockRoom()"
+          style="display:none;background:rgba(255,255,255,.15);color:#fff">
+          <i class="ti ti-lock-open" id="lock-icon"></i>
+        </button>
       </div>
     </div>
 
@@ -178,6 +182,8 @@ let handRaised    = false;
 let participantsMap = {}; // uid → { displayName, photoURL, muted, handRaised }
 let roomListener   = null;
 let participantsListener = null;
+let _currentRoomHostUid = null;
+let _roomLocked = false;
 
 requireAuth(async user => {
   currentUser = user;
@@ -261,13 +267,27 @@ async function joinRoom(roomId) {
     return;
   }
   const room = roomDoc.data();
+  // Bloquear entrada se sala trancada e não é host
+  if (room.locked && room.hostUid !== currentUser.uid) {
+    showToast('Esta sala está trancada pelo host.');
+    return;
+  }
   currentRoomId = roomId;
+  _currentRoomHostUid = room.hostUid;
+  _roomLocked = room.locked || false;
   sessionStorage.setItem('nexus_audio_room', roomId);
 
   // Mostra UI da sala
   document.getElementById('room-title-display').textContent = room.title;
   document.getElementById('active-room').style.display = '';
   document.getElementById('room-meta-display').textContent = `Criada por ${room.hostName}`;
+
+  // Mostrar botão de trancar apenas para o host
+  const lockBtn = document.getElementById('lock-btn');
+  if (lockBtn && room.hostUid === currentUser.uid) {
+    lockBtn.style.display = 'flex';
+    _updateLockBtn();
+  }
 
   // Adiciona participante ao Firestore
   await db.collection('audio_rooms').doc(roomId).collection('participants').doc(currentUser.uid).set({
@@ -344,8 +364,12 @@ async function leaveRoom() {
 
   if (participantsListener) { participantsListener(); participantsListener = null; }
   document.getElementById('active-room').style.display = 'none';
+  const lockBtn = document.getElementById('lock-btn');
+  if (lockBtn) lockBtn.style.display = 'none';
   sessionStorage.removeItem('nexus_audio_room');
   currentRoomId = null;
+  _currentRoomHostUid = null;
+  _roomLocked = false;
   isMuted = false;
   handRaised = false;
   loadRooms();
@@ -380,6 +404,7 @@ async function toggleRaiseHand() {
 // ── Renderizar participantes ──────────────────────────────────
 function renderParticipants() {
   const grid = document.getElementById('participants-grid');
+  const amHost = _currentRoomHostUid === currentUser.uid;
   const parts = Object.values(participantsMap);
   grid.innerHTML = parts.map(p => {
     const cl = getAvatarColor(p.uid);
@@ -388,11 +413,53 @@ function renderParticipants() {
       : `<span style="color:${cl.color}">${getInitials(p.displayName||'?')}</span>`;
     const muteIcon = p.muted ? `<div class="mute-icon"><i class="ti ti-microphone-off"></i></div>` : '';
     const handIcon = p.handRaised ? ' ✋' : '';
+    const isMe = p.uid === currentUser.uid;
+    const hostBadge = p.uid === _currentRoomHostUid
+      ? `<div class="participant-role">Host</div>` : '';
+    const kickBtn = amHost && !isMe
+      ? `<button onclick="kickParticipant('${p.uid}','${sanitize(p.displayName||'Usuário').replace(/'/g,"\\'")}',this)"
+           style="margin-top:.2rem;background:none;border:none;color:rgba(255,80,80,.7);cursor:pointer;font-size:11px;padding:0">
+           Remover
+         </button>` : '';
     return `<div class="participant${p.muted?' muted':''}">
       <div class="participant-av" style="background:${cl.bg}">${av}${muteIcon}</div>
       <div class="participant-name">${sanitize((p.displayName||'?').split(' ')[0])}${handIcon}</div>
+      ${hostBadge}${kickBtn}
     </div>`;
   }).join('') || '<p style="color:rgba(255,255,255,.5);font-size:13px">Nenhum participante</p>';
+}
+
+// ── Controles do host ─────────────────────────────────────────
+async function kickParticipant(uid, name, btn) {
+  if (!currentRoomId || _currentRoomHostUid !== currentUser.uid) return;
+  if (!confirm(`Remover ${name} da sala?`)) return;
+  btn.disabled = true;
+  try {
+    await db.collection('audio_rooms').doc(currentRoomId).collection('participants').doc(uid).delete();
+    // Flag no doc do participante para que o cliente detecte e saia
+    await db.collection('audio_rooms').doc(currentRoomId).update({
+      [`kicked.${uid}`]: true,
+      participantCount: firebase.firestore.FieldValue.increment(-1)
+    });
+    showToast(`${name} foi removido da sala.`);
+  } catch(e) { showToast('Erro ao remover participante.'); btn.disabled = false; }
+}
+
+async function toggleLockRoom() {
+  if (!currentRoomId || _currentRoomHostUid !== currentUser.uid) return;
+  _roomLocked = !_roomLocked;
+  await db.collection('audio_rooms').doc(currentRoomId).update({ locked: _roomLocked });
+  _updateLockBtn();
+  showToast(_roomLocked ? 'Sala trancada — novos participantes não podem entrar.' : 'Sala destrancada.');
+}
+
+function _updateLockBtn() {
+  const icon = document.getElementById('lock-icon');
+  const btn = document.getElementById('lock-btn');
+  if (!icon || !btn) return;
+  icon.className = _roomLocked ? 'ti ti-lock' : 'ti ti-lock-open';
+  btn.style.background = _roomLocked ? '#F59E0B' : 'rgba(255,255,255,.15)';
+  btn.title = _roomLocked ? 'Destrancar sala' : 'Trancar sala';
 }
 </script>
 </body>

@@ -1616,7 +1616,7 @@ function postHTML(id, p) {
         <i class="ti ti-bookmark" aria-hidden="true"></i>
       </button>
       <button class="post-action-btn" onclick="sharePost('${id}')">
-        <i class="ti ti-share-3" aria-hidden="true"></i>
+        <i class="ti ti-repeat" aria-hidden="true"></i>${p.repostCount > 0 ? ` ${p.repostCount}` : ''}
       </button>
       <span class="post-action-btn" style="cursor:default;pointer-events:none;opacity:.6;font-size:11.5px;margin-left:auto">
         <i class="ti ti-eye" aria-hidden="true"></i> ${p.views||0}
@@ -1976,6 +1976,18 @@ async function submitRepost(postId, btn) {
       likes: [], bookmarks: [], reactions: {}, commentsCount: 0, privacy: 'public', hashtags: [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // Increment repost counter on original post and notify author
+    db.collection('posts').doc(postId).update({
+      repostCount: firebase.firestore.FieldValue.increment(1)
+    }).catch(() => {});
+    if (p.authorId !== currentUser.uid) {
+      createNotification(p.authorId, 'repost', {
+        fromUid: currentUser.uid,
+        fromName: currentUser.displayName,
+        postId,
+        link: `${PAGES}post.html?id=${postId}`
+      });
+    }
     document.getElementById('repost-modal')?.remove();
     showToast('Post repostado no seu feed!');
   } catch(e) { showToast('Erro ao repostar. Tente novamente.'); btn.disabled = false; btn.innerHTML = '<i class="ti ti-repeat"></i> Repostar no feed'; }
