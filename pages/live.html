@@ -1,10 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nexus — Ao Vivo</title>
   <meta name="description" content="Transmissão ao vivo no Nexus.">
+  <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="../css/tabler-icons.min.css">
@@ -275,20 +276,59 @@
     @media (max-width: 768px) {
       .live-layout {
         flex-direction: column;
-        height: auto;
+        height: calc(100svh - var(--topbar-h) - var(--bottomnav-h));
       }
       .live-video-col {
+        flex: none;
         height: 55vw;
-        min-height: 220px;
+        min-height: 200px;
       }
       .live-chat-col {
+        flex: 1;
         width: 100%;
-        height: 45vh;
+        height: auto;
         border-left: none;
         border-top: 0.5px solid var(--border);
+        overflow: hidden;
       }
       .live-controls { gap: .5rem; }
       .live-ctrl-btn { width: 42px; height: 42px; font-size: 18px; }
+    }
+
+    /* Botão de tela cheia */
+    .live-fullscreen-btn {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 1rem;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0,0,0,.55);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      z-index: 20;
+      transition: background .15s;
+    }
+    .live-fullscreen-btn:hover { background: rgba(0,0,0,.8); }
+
+    /* Coluna de vídeo em fullscreen */
+    .live-video-col:-webkit-full-screen,
+    .live-video-col:fullscreen {
+      background: #000;
+      display: flex !important;
+      flex-direction: column !important;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+    .live-video-col:-webkit-full-screen #agora-video-container,
+    .live-video-col:fullscreen #agora-video-container {
+      flex: 1 !important;
+      height: auto !important;
     }
   </style>
 </head>
@@ -531,6 +571,9 @@ function renderHostScreen(liveId, title) {
             <i class="ti ti-video"></i>
           </button>
         </div>
+        <button class="live-fullscreen-btn" onclick="toggleVideoFullscreen()" title="Tela cheia">
+          <i class="ti ti-maximize"></i>
+        </button>
       </div>
       ${chatPanelHTML(liveId)}
     </div>`;
@@ -670,6 +713,9 @@ async function joinAsViewer(liveId) {
               <i class="ti ti-door-exit"></i>
             </button>
           </div>
+          <button class="live-fullscreen-btn" onclick="toggleVideoFullscreen()" title="Tela cheia">
+            <i class="ti ti-maximize"></i>
+          </button>
         </div>
         ${chatPanelHTML(liveId)}
       </div>`;
@@ -835,6 +881,29 @@ window.addEventListener('pagehide', () => {
   _chatUnsub?.();
   _liveUnsub?.();
 });
+
+// ── Tela cheia do vídeo ────────────────────────────────────────
+function toggleVideoFullscreen() {
+  const col = document.querySelector('.live-video-col');
+  if (!col) return;
+  const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  if (!isFS) {
+    if (col.requestFullscreen) col.requestFullscreen();
+    else if (col.webkitRequestFullscreen) col.webkitRequestFullscreen();
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+}
+
+function _syncFsBtn() {
+  const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  document.querySelectorAll('.live-fullscreen-btn i').forEach(el => {
+    el.className = `ti ${isFS ? 'ti-minimize' : 'ti-maximize'}`;
+  });
+}
+document.addEventListener('fullscreenchange', _syncFsBtn);
+document.addEventListener('webkitfullscreenchange', _syncFsBtn);
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {

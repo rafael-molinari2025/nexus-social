@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nexus — Feed</title>
   <meta name="description" content="Veja o feed de posts e fique conectado com seus amigos no Nexus.">
+  <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="css/style.css">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="css/tabler-icons.min.css">
@@ -211,7 +212,58 @@
     .gif-item { break-inside: avoid; margin-bottom: .4rem; cursor: pointer; border-radius: var(--radius-sm); overflow: hidden; }
     .gif-item img { width: 100%; display: block; transition: opacity .2s; }
     .gif-item:hover img { opacity: .85; }
-    .gif-empty { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 13px; }
+    .gif-empty { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 13px; column-span: all; }
+    /* ── Emoji picker (bottom-sheet) ──────────────────────────────── */
+    .emoji-picker-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 900; display: flex; align-items: flex-end;
+    }
+    @media (min-width: 600px) {
+      .emoji-picker-backdrop { align-items: center; justify-content: center; }
+    }
+    .emoji-picker-box {
+      width: 100%; background: var(--surface);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      overflow: hidden; box-shadow: var(--shadow-lg);
+      max-height: 55vh; display: flex; flex-direction: column;
+    }
+    @media (min-width: 600px) {
+      .emoji-picker-box { max-width: 400px; border-radius: var(--radius-lg); }
+    }
+    .emoji-tabs-bar {
+      display: flex; padding: .3rem .5rem; gap: .1rem;
+      border-bottom: 0.5px solid var(--border); overflow-x: auto; scrollbar-width: none; flex-shrink: 0;
+    }
+    .emoji-tabs-bar::-webkit-scrollbar { display: none; }
+    .emoji-tab-btn {
+      flex-shrink: 0; background: none; border: none; font-size: 20px;
+      width: 42px; height: 42px; border-radius: var(--radius-sm); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: .45; transition: opacity .15s, background .15s;
+    }
+    .emoji-tab-btn.active, .emoji-tab-btn:hover { opacity: 1; background: var(--surface-raised); }
+    .emoji-scroll { flex: 1; overflow-y: auto; padding: .5rem; scrollbar-width: thin; }
+    .emoji-cat-panel { display: flex; flex-wrap: wrap; }
+    .emoji-cat-panel.hidden { display: none; }
+    .emoji-glyph-btn {
+      background: none; border: none; font-size: 24px; width: 46px; height: 46px;
+      cursor: pointer; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      transition: background .1s;
+    }
+    .emoji-glyph-btn:hover, .emoji-glyph-btn:active { background: var(--surface-raised); }
+    /* ── Location suggestions ─────────────────────────────────────── */
+    .loc-suggestions {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); box-shadow: var(--shadow-md); overflow: hidden;
+    }
+    .loc-suggestion {
+      padding: .55rem .75rem; font-size: 13px; cursor: pointer;
+      color: var(--text-primary); display: flex; align-items: center; gap: .45rem;
+      transition: background .1s; border-bottom: 0.5px solid var(--border);
+    }
+    .loc-suggestion:last-child { border-bottom: none; }
+    .loc-suggestion:hover, .loc-suggestion:active { background: var(--surface-raised); }
     /* ── Schedule modal ───────────────────────────────────────────── */
     .schedule-indicator {
       display: inline-flex; align-items: center; gap: .35rem;
@@ -424,11 +476,21 @@
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
           </div>
           <div class="composer-char-count" id="post-char-count"></div>
-          <div id="location-wrap" style="display:none;align-items:center;gap:.4rem;margin-top:.35rem">
-            <i class="ti ti-map-pin" style="color:var(--purple-600);font-size:14px;flex-shrink:0"></i>
-            <input type="text" id="post-location" placeholder="Adicionar localização..." maxlength="80"
-              style="flex:1;font-size:13px;border:none;outline:none;background:none;color:var(--text-primary);font-family:var(--font-sans)">
-            <button onclick="clearLocation()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0;font-size:14px;line-height:1"><i class="ti ti-x"></i></button>
+          <div id="location-wrap" style="display:none;flex-direction:column;gap:.3rem;margin-top:.35rem">
+            <div style="display:flex;align-items:center;gap:.4rem">
+              <i class="ti ti-map-pin" style="color:var(--purple-600);font-size:14px;flex-shrink:0"></i>
+              <input type="text" id="post-location" placeholder="Cidade, bairro ou endereço..." maxlength="100" autocomplete="off"
+                style="flex:1;font-size:13px;border:none;outline:none;background:none;color:var(--text-primary);font-family:var(--font-sans)"
+                oninput="onLocationInput(this.value)">
+              <button onclick="getGPSLocation()" title="Usar minha localização"
+                style="background:none;border:none;cursor:pointer;color:var(--purple-600);padding:0;font-size:16px;line-height:1;flex-shrink:0">
+                <i class="ti ti-current-location"></i>
+              </button>
+              <button onclick="clearLocation()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0;font-size:14px;line-height:1">
+                <i class="ti ti-x"></i>
+              </button>
+            </div>
+            <div id="location-suggestions" class="loc-suggestions" style="display:none"></div>
           </div>
           <div id="image-preview-wrap" style="display:none"></div>
           <div id="link-preview-wrap" style="display:none"></div>
@@ -455,13 +517,13 @@
               <button class="composer-action-btn" title="Enquete" id="poll-btn" onclick="togglePoll()">
                 <i class="ti ti-chart-bar" aria-hidden="true"></i>
               </button>
-              <button class="composer-action-btn" title="Emoji" onclick="insertEmoji()">
+              <button class="composer-action-btn" title="Emoji" onmousedown="event.preventDefault()" onclick="openEmojiPicker()">
                 <i class="ti ti-mood-smile" aria-hidden="true"></i>
               </button>
-              <button class="composer-action-btn" title="Negrito (**texto**)" onclick="insertBold()">
+              <button class="composer-action-btn" title="Negrito" onmousedown="event.preventDefault()" onclick="insertBold()">
                 <i class="ti ti-bold" aria-hidden="true"></i>
               </button>
-              <button class="composer-action-btn" title="Itálico (_texto_)" onclick="insertItalic()">
+              <button class="composer-action-btn" title="Itálico" onmousedown="event.preventDefault()" onclick="insertItalic()">
                 <i class="ti ti-italic" aria-hidden="true"></i>
               </button>
               <button class="composer-action-btn" title="Buscar GIF" onclick="openGifPicker()" style="font-size:11px;font-weight:700;letter-spacing:-.03em">GIF</button>
@@ -705,6 +767,8 @@ let _extraPostsHTML = '';
 let _newestPostMillis = 0;
 let _pendingNewPosts  = 0;
 let _mutedUsers   = JSON.parse(localStorage.getItem('nexus-muted') || '[]');
+let _taSelStart   = null;
+let _taSelEnd     = null;
 
 const PRIVACY = [
   { v:'public',  icon:'ti-world',  label:'Público' },
@@ -713,6 +777,20 @@ const PRIVACY = [
 ];
 const REACTIONS  = ['❤️','😂','😮','😢','😡','👏'];
 const ST_COLORS  = ['#6366f1','#ec4899','#f97316','#22c55e','#3b82f6','#8b5cf6','#0ea5e9','#ef4444','#b45309'];
+
+// Save textarea selection before any button tap steals focus
+(function() {
+  function _saveSel() {
+    const ta = document.getElementById('post-text');
+    if (ta) { _taSelStart = ta.selectionStart; _taSelEnd = ta.selectionEnd; }
+  }
+  document.addEventListener('mousedown', e => {
+    if (e.target.closest('.composer-actions') || e.target.closest('.emoji-picker-box')) _saveSel();
+  });
+  document.addEventListener('touchstart', e => {
+    if (e.target.closest('.composer-actions') || e.target.closest('.emoji-picker-box')) _saveSel();
+  }, { passive: true });
+})();
 
 // ── Char counter ───────────────────────────────────────────────
 function updateCharCount() {
@@ -871,24 +949,145 @@ function cyclePrivacy() {
 
 function insertFormat(before, after) {
   const ta = document.getElementById('post-text');
-  const start = ta.selectionStart, end = ta.selectionEnd;
-  const sel = ta.value.slice(start, end) || 'texto';
-  ta.value = ta.value.slice(0, start) + before + sel + after + ta.value.slice(end);
-  ta.setSelectionRange(start + before.length, start + before.length + sel.length);
+  const start = _taSelStart !== null ? _taSelStart : ta.selectionStart;
+  const end   = _taSelEnd   !== null ? _taSelEnd   : ta.selectionEnd;
+  const sel   = ta.value.slice(start, end);
+  if (sel) {
+    ta.value = ta.value.slice(0, start) + before + sel + after + ta.value.slice(end);
+    _taSelStart = start + before.length;
+    _taSelEnd   = _taSelStart + sel.length;
+  } else {
+    ta.value = ta.value.slice(0, start) + before + after + ta.value.slice(end);
+    _taSelStart = _taSelEnd = start + before.length;
+  }
   ta.focus();
+  ta.setSelectionRange(_taSelStart, _taSelEnd);
   updateCharCount();
 }
-function insertBold() { insertFormat('**', '**'); }
+function insertBold()   { insertFormat('**', '**'); }
 function insertItalic() { insertFormat('_', '_'); }
 
-function insertEmoji() {
-  const emojis = ['😊','🔥','😂','❤️','👍','🎉','😍','🤔','👏','✨','🙌','💯'];
-  const e = emojis[Math.floor(Math.random() * emojis.length)];
-  const ta = document.getElementById('post-text');
-  const pos = ta.selectionStart;
-  ta.value = ta.value.slice(0, pos) + e + ta.value.slice(ta.selectionEnd);
+// ── Emoji picker ───────────────────────────────────────────────
+const _EMOJI_CATS = [
+  { icon: '😊', label: 'Rostos', list: ['😊','😂','🤣','😍','🥰','😘','😗','😋','😛','😜','🤪','😝','🤑','🤗','🤔','🤨','😐','😑','😶','😏','😒','🙄','😬','🥱','😴','😷','🤒','🤕','🤢','🤮','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','😤','😡','😠','🤬','😈','👿'] },
+  { icon: '👍', label: 'Gestos', list: ['👍','👎','👌','🤌','✌️','🤞','🤙','🤟','🤘','🤜','🤛','👊','✊','👋','🤚','✋','👐','🙌','🫶','💪','🙏','💅','🤳','👈','👉','👆','👇','☝️'] },
+  { icon: '❤️', label: 'Amor', list: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💕','💞','💓','💗','💖','💘','💝','💟','💔','❤️‍🔥','❤️‍🩹','😻','💏','👫','👬','👭','🥂','💍'] },
+  { icon: '🔥', label: 'Populares', list: ['🔥','💯','✨','⭐','🌟','💥','❗','❓','‼️','⁉️','🎉','🎊','🎁','🏆','🥇','💎','🎯','🍀','🌈','⚡','🌊','🎵','🎶','📸','💬','🗣️','💡','🔑','🆕','🆗','🆙','🆒','🔝','🔞','⚠️','🚫','✅','❌','💤','♻️'] },
+  { icon: '🍕', label: 'Comida', list: ['🍕','🍔','🌮','🌯','🍣','🍜','🍝','🍲','🥘','🥗','🥪','🍩','🎂','🍰','🧁','🍦','🍧','🍨','🍫','🍬','🍭','🍿','☕','🍵','🧃','🥤','🧋','🍺','🥂','🍷','🍸','🍹','🥃','🫖','🧊'] },
+  { icon: '🌸', label: 'Natureza', list: ['🌸','🌺','🌻','🌹','🌷','🌼','💐','🌿','🍀','🌱','🌲','🌳','🌴','🍃','🍂','🍁','🍄','🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🦋','🐝','🌈','☀️','🌙','⭐','🌊','🏔️','🌋'] }
+];
+let _emojiCatIdx = 0;
+
+function openEmojiPicker() {
+  const existing = document.querySelector('.emoji-picker-backdrop');
+  if (existing) { existing.remove(); return; }
+  const bd = document.createElement('div');
+  bd.className = 'emoji-picker-backdrop';
+  bd.onclick = e => { if (e.target === bd) bd.remove(); };
+  const tabs = _EMOJI_CATS.map((cat, i) =>
+    `<button class="emoji-tab-btn${i === _emojiCatIdx ? ' active' : ''}" onmousedown="event.preventDefault()" onclick="switchEmojiCat(${i})" title="${cat.label}">${cat.icon}</button>`
+  ).join('');
+  const panels = _EMOJI_CATS.map((cat, i) =>
+    `<div class="emoji-cat-panel${i === _emojiCatIdx ? '' : ' hidden'}" id="emjp-${i}">${
+      cat.list.map(e => `<button class="emoji-glyph-btn" data-e="${e}" onmousedown="event.preventDefault()" onclick="pickEmoji(this.dataset.e)">${e}</button>`).join('')
+    }</div>`
+  ).join('');
+  bd.innerHTML = `<div class="emoji-picker-box">
+    <div class="emoji-tabs-bar">${tabs}</div>
+    <div class="emoji-scroll">${panels}</div>
+  </div>`;
+  document.body.appendChild(bd);
+}
+
+function switchEmojiCat(idx) {
+  _emojiCatIdx = idx;
+  document.querySelectorAll('.emoji-cat-panel').forEach((el, i) => el.classList.toggle('hidden', i !== idx));
+  document.querySelectorAll('.emoji-tab-btn').forEach((el, i) => el.classList.toggle('active', i === idx));
+}
+
+function pickEmoji(emoji) {
+  const ta  = document.getElementById('post-text');
+  const pos = _taSelStart !== null ? _taSelStart : (ta.selectionStart || 0);
+  const end = _taSelEnd   !== null ? _taSelEnd   : (ta.selectionEnd || 0);
+  ta.value  = ta.value.slice(0, pos) + emoji + ta.value.slice(end);
+  _taSelStart = _taSelEnd = pos + emoji.length; // emoji.length = UTF-16 units, same as selectionStart
   ta.focus();
-  ta.setSelectionRange(pos + e.length, pos + e.length);
+  ta.setSelectionRange(_taSelStart, _taSelEnd);
+  updateCharCount();
+  document.querySelector('.emoji-picker-backdrop')?.remove();
+}
+
+// ── Location autocomplete ───────────────────────────────────────
+let _locTimer = null;
+let _locResults = [];
+
+function onLocationInput(val) {
+  clearTimeout(_locTimer);
+  const sugg = document.getElementById('location-suggestions');
+  if (!sugg) return;
+  if (!val.trim() || val.length < 2) { sugg.style.display = 'none'; sugg.innerHTML = ''; return; }
+  _locTimer = setTimeout(() => fetchLocations(val.trim()), 500);
+}
+
+async function fetchLocations(q) {
+  const sugg = document.getElementById('location-suggestions');
+  if (!sugg) return;
+  sugg.innerHTML = '<div class="loc-suggestion" style="color:var(--text-muted);cursor:default"><i class="ti ti-loader-2 ti-spin"></i> Buscando...</div>';
+  sugg.style.display = 'block';
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1&accept-language=pt-BR,pt`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' } });
+    const data = await res.json();
+    _locResults = data;
+    if (!data.length) {
+      sugg.innerHTML = '<div class="loc-suggestion" style="color:var(--text-muted);cursor:default"><i class="ti ti-map-off"></i> Nenhum local encontrado</div>';
+      return;
+    }
+    sugg.innerHTML = data.map((r, i) => {
+      const parts = r.display_name.split(',').slice(0, 3).map(s => s.trim()).join(', ');
+      return `<div class="loc-suggestion" onclick="pickLocation(${i})">
+        <i class="ti ti-map-pin" style="color:var(--purple-600);font-size:13px;flex-shrink:0"></i>
+        <span>${sanitize(parts)}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    sugg.style.display = 'none';
+  }
+}
+
+function pickLocation(idx) {
+  const r = _locResults[idx];
+  if (!r) return;
+  const name = r.display_name.split(',').slice(0, 3).map(s => s.trim()).join(', ');
+  document.getElementById('post-location').value = name;
+  const sugg = document.getElementById('location-suggestions');
+  if (sugg) sugg.style.display = 'none';
+}
+
+function getGPSLocation() {
+  if (!navigator.geolocation) { showToast('Geolocalização não suportada neste dispositivo.'); return; }
+  showToast('Obtendo sua localização...');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=pt-BR`;
+      const res = await fetch(url);
+      const data = await res.json();
+      let name = '';
+      if (data.address) {
+        const a = data.address;
+        name = [a.neighbourhood || a.suburb, a.city || a.town || a.village || a.municipality, a.state].filter(Boolean).join(', ');
+      }
+      if (!name) name = data.display_name.split(',').slice(0, 2).join(', ');
+      document.getElementById('post-location').value = name;
+      const sugg = document.getElementById('location-suggestions');
+      if (sugg) sugg.style.display = 'none';
+    } catch(e) {
+      showToast('Não foi possível obter o endereço. Tente digitar.');
+    }
+  }, () => {
+    showToast('Permissão de localização negada.');
+  }, { timeout: 8000 });
 }
 
 let _postVideoFile = null;
@@ -976,21 +1175,25 @@ async function fetchGifs(q) {
   if (!grid) return;
   grid.innerHTML = '<div class="gif-empty"><i class="ti ti-loader-2 ti-spin" style="font-size:24px"></i></div>';
   try {
-    const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&limit=20&media_filter=gif,tinygif`;
+    const GIPHY_KEY = 'dc6zaTOxFJmzC';
+    const url = `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q)}&api_key=${GIPHY_KEY}&limit=20&lang=pt&rating=pg`;
     const res = await fetch(url);
-    if (!res.ok) throw new Error('Tenor error');
+    if (!res.ok) throw new Error('GIPHY ' + res.status);
     const data = await res.json();
-    if (!data.results?.length) { grid.innerHTML = '<div class="gif-empty">Nenhum GIF encontrado</div>'; return; }
-    grid.innerHTML = data.results.map(r => {
-      const gif = r.media_formats?.tinygif || r.media_formats?.gif;
-      if (!gif) return '';
-      const full = r.media_formats?.gif?.url || gif.url;
-      return `<div class="gif-item" onclick="selectGif('${full}', '${gif.url}')">
-        <img src="${gif.url}" alt="${r.title||'GIF'}" loading="lazy">
+    if (!data.data?.length) { grid.innerHTML = '<div class="gif-empty">Nenhum GIF encontrado</div>'; return; }
+    const items = data.data.map(r => {
+      const preview = r.images?.fixed_height_small || r.images?.fixed_height;
+      const full    = r.images?.original;
+      if (!preview?.url || !full?.url) return '';
+      const pUrl = preview.url.replace(/"/g, '');
+      const fUrl = full.url.replace(/"/g, '');
+      return `<div class="gif-item" onclick="selectGif('${fUrl}','${pUrl}')">
+        <img src="${pUrl}" alt="GIF" loading="lazy">
       </div>`;
-    }).join('');
+    }).filter(Boolean).join('');
+    grid.innerHTML = items || '<div class="gif-empty">Nenhum GIF encontrado</div>';
   } catch(e) {
-    grid.innerHTML = '<div class="gif-empty">Erro ao buscar GIFs. Verifique sua chave Tenor.</div>';
+    grid.innerHTML = '<div class="gif-empty">Erro ao buscar GIFs. Verifique sua conexão.</div>';
   }
 }
 
@@ -1024,11 +1227,18 @@ function toggleLocationInput() {
   const showing = wrap.style.display !== 'none';
   wrap.style.display = showing ? 'none' : 'flex';
   btn.classList.toggle('active', !showing);
-  if (!showing) document.getElementById('post-location').focus();
-  else document.getElementById('post-location').value = '';
+  if (!showing) {
+    document.getElementById('post-location').focus();
+  } else {
+    document.getElementById('post-location').value = '';
+    const sugg = document.getElementById('location-suggestions');
+    if (sugg) { sugg.style.display = 'none'; sugg.innerHTML = ''; }
+  }
 }
 function clearLocation() {
   document.getElementById('post-location').value = '';
+  const sugg = document.getElementById('location-suggestions');
+  if (sugg) { sugg.style.display = 'none'; sugg.innerHTML = ''; }
   document.getElementById('location-wrap').style.display = 'none';
   document.getElementById('location-btn').classList.remove('active');
 }

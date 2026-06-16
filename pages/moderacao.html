@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nexus — Moderação</title>
+  <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="../css/tabler-icons.min.css">
@@ -48,6 +49,14 @@
     .btn-approve:hover { background: #A7F3D0; }
     .btn-remove  { background: #FEE2E2; color: #991B1B; border: none; border-radius: var(--radius-sm); padding: .35rem .85rem; font-size: 13px; cursor: pointer; font-family: var(--font-sans); }
     .btn-remove:hover  { background: #FECACA; }
+    [data-theme="dark"] .badge-flagged  { background: rgba(251,191,36,0.18); color: #FCD34D; }
+    [data-theme="dark"] .badge-removed  { background: rgba(239,68,68,0.15); color: #FCA5A5; }
+    [data-theme="dark"] .badge-approved { background: rgba(34,197,94,0.15); color: #86EFAC; }
+    [data-theme="dark"] .badge-pending  { background: rgba(139,92,246,0.2); color: #C4B5FD; }
+    [data-theme="dark"] .btn-approve { background: rgba(34,197,94,0.15); color: #86EFAC; }
+    [data-theme="dark"] .btn-approve:hover { background: rgba(34,197,94,0.25); }
+    [data-theme="dark"] .btn-remove  { background: rgba(239,68,68,0.15); color: #FCA5A5; }
+    [data-theme="dark"] .btn-remove:hover  { background: rgba(239,68,68,0.25); }
     .scan-bar { display: flex; align-items: center; gap: .75rem; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: .875rem 1.1rem; margin-bottom: 1.25rem; }
     .scan-bar-info { flex: 1; font-size: 13px; color: var(--text-secondary); }
     @media (max-width: 768px) {

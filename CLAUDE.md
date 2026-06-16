@@ -45,9 +45,11 @@ Todo o projeto depende de dois arquivos incluídos em **todas** as páginas, nes
    - `avatarHTML(user, size?)` — gera `<div class="avatar avatar-{size}">` com foto ou iniciais coloridas; `user` precisa ter `uid`, `displayName` e opcionalmente `photoURL`
    - `getAvatarColor(uid)` → `{ bg, color }` — cor determinística baseada no uid
    - `getInitials(name)` — duas iniciais em maiúscula
-   - `createNotification(toUid, type, data)` — cria notificação no Firestore
+   - `getUserData(uid)` / `updateUserData(uid, data)` — leitura e escrita com merge no doc de usuário
+   - `createNotification(toUid, type, data)` — cria notificação no Firestore e envia push via Vercel
    - `notifIcon(type)` → `{ icon, bg, color }` — ícone Tabler para cada tipo de notificação
    - `showToast(msg)`, `timeAgo(ts)`, `openLightbox(srcs, startIdx?)`, `updateOnlineStatus(uid)`, `isOnline(user)`
+   - `initTheme()` / `toggleTheme()` — lê `localStorage['nexus-theme']` (`'light'`/`'dark'`/`'auto'`) e aplica `data-theme` no `<html>`
 
 ### Estrutura de paths
 
@@ -88,11 +90,12 @@ requireAuth(async user => {
 
 A página de login usa `redirectIfLoggedIn()` em vez de `requireAuth`.
 
-### API externa (Vercel)
+### APIs externas (Vercel)
 
-O diretório `api/` contém serverless functions deployadas no **Vercel** (`nexus-social-fawn.vercel.app`), **não** no Firebase Hosting — o `firebase.json` exclui `api/**` do deploy. Atualmente contém apenas:
+O diretório `api/` contém serverless functions deployadas no **Vercel** (`nexus-social-fawn.vercel.app`), **não** no Firebase Hosting — o `firebase.json` exclui `api/**` do deploy. Funções:
 
-- **`api/token.js`** — gera tokens RTC para o Agora.io usando `agora-token`. Requer variável de ambiente `AGORA_CERT` configurada no Vercel. Aceita `?channel=<id>` e retorna `{ token, expireAt }`.
+- **`api/token.js`** — gera tokens RTC para o Agora.io usando `agora-token`. Requer `AGORA_CERT` no ambiente Vercel. Aceita `?channel=<id>` e retorna `{ token, expireAt }`.
+- **`api/notify.js`** — envia push notifications via Firebase Admin SDK. Chamado internamente por `sendPushToUser()` em `utils.js`; requer `Authorization: Bearer <idToken>` e body `{ toUid, title, body, url, tag }`.
 
 ### Live streaming (Agora.io)
 
@@ -107,14 +110,14 @@ O diretório `api/` contém serverless functions deployadas no **Vercel** (`nexu
 
 | Coleção | Campos relevantes |
 |---------|-----------------|
-| `users/{uid}` | `displayName`, `displayName_lower`, `username`, `photoURL`, `coverURL`, `bio`, `city`, `gender`, `birthdate`, `website`, `lastSeen`, `blocked[]` |
-| `posts/{id}` | `text`, `imageURL`, `authorId`, `authorName`, `authorPhoto`, `likes[]`, `bookmarks[]`, `reactions{}`, `commentsCount`, `hashtags[]`, `privacy` (`public`/`friends`/`private`), `createdAt` |
+| `users/{uid}` | `displayName`, `displayName_lower`, `username`, `photoURL`, `coverURL`, `bio`, `city`, `gender`, `birthdate`, `website`, `lastSeen`, `blocked[]`, `isAdmin` (bool), `isVerified` (bool), `fcmToken`, `status: {emoji, text}` |
+| `posts/{id}` | `text`, `imageURL`, `videoURL`, `authorId`, `authorName`, `authorPhoto`, `likes[]`, `bookmarks[]`, `reactions{}`, `commentsCount`, `hashtags[]`, `privacy` (`public`/`friends`/`private`), `poll{}`, `isPinned`, `isArchived`, `modStatus`, `modReason`, `modCategories`, `modAt`, `createdAt` |
 | `posts/{id}/comments/{id}` | `text`, `authorId`, `authorName`, `authorPhoto`, `createdAt` |
 | `friendships/{id}` | `users: [uid1, uid2]` |
 | `friend_requests/{id}` | `from`, `to`, `status: 'pending'/'accepted'/'rejected'` |
 | `communities/{id}` | `name`, `description`, `category`, `createdBy`, `membersCount` |
 | `community_members/{id}` | `uid`, `communityId`, `joinedAt` |
-| `conversations/{id}` | `participants: [uid1, uid2]`, `lastMessage`, `lastMessageAt`, `unread: {uid: count}` — diretas. Grupos adicionam: `type: 'group'`, `name`, `emoji`, `admins[]` |
+| `conversations/{id}` | `participants: [uid1, uid2]`, `lastMessage`, `lastMessageAt`, `unread: {uid: count}`, `lastReadAt: {uid: Timestamp}` — diretas. Grupos: `type: 'group'`, `name`, `emoji`, `admins[]` |
 | `conversations/{id}/messages/{id}` | `senderId`, `text`, `imageURL`, `reactions{}`, `createdAt` |
 | `notifications/{uid}/items/{id}` | `type`, `message`, `link`, `fromUid`, `fromName`, `read`, `createdAt` |
 | `stories/{id}` | `uid`, `type` (`text`/`image`), `text`, `imageURL`, `bgColor`, `displayName`, `photoURL`, `views[]`, `expiresAt`, `createdAt` |
@@ -122,13 +125,20 @@ O diretório `api/` contém serverless functions deployadas no **Vercel** (`nexu
 | `photos/{id}` | `uid`, `imageURL`, `createdAt` |
 | `events/{id}` | `title`, `description`, `date`, `time`, `location`, `coverURL`, `privacy`, `createdBy`, `createdByName`, `attendees[]`, `interested[]`, `createdAt` |
 | `lives/{id}` | `hostUid`, `hostName`, `hostPhoto`, `title`, `status` (`live`/`ended`), `viewerCount`, `createdAt` |
-| `reports/{id}` | `postId`, `reason`, `reportedBy`, `createdAt` |
-| `notes/{uid}` | `text` (max 60), `uid`, `displayName`, `photoURL`, `expiresAt` (24h), `createdAt` — um doc por usuário; Notas/Status breve estilo Instagram Notes |
-| `conversations/{id}` | também: `lastReadAt: { [uid]: Timestamp }` — rastreia quando cada participante leu; usado para double-check azul em mensagens |
+| `lives/{id}/messages/{id}` | `senderUid`, `senderName`, `senderPhoto`, `text`, `createdAt` |
+| `audio_rooms/{roomId}` | `hostUid`, `hostName`, `title`, `emoji`, `status` (`live`/`ended`), `participantCount`, `createdAt` |
+| `audio_rooms/{roomId}/participants/{uid}` | `uid`, `displayName`, `photoURL`, `role` (`host`/`speaker`/`listener`), `muted`, `handRaised` |
+| `reports/{id}` | `postId`, `reason`, `reportedBy`, `status` (`pending`/`resolved`/`dismissed`), `createdAt` |
+| `notes/{uid}` | `text` (max 60), `uid`, `displayName`, `photoURL`, `expiresAt` (24h), `createdAt` — um doc por usuário |
+| `testimonials/{uid}/items/{id}` | `fromUid`, `fromName`, `fromPhoto`, `text`, `status` (`pending`/`approved`), `createdAt` |
+| `highlights/{uid}/items/{id}` | `storyId`, `imageURL`, `text`, `type`, `createdAt` |
+| `profile_views/{uid}/visitors/{visitorUid}` | `displayName`, `photoURL`, `viewedAt` |
+| `questions/{uid}/items/{id}` | `text`, `answer`, `status` (`pending`/`answered`), `anonymous`, `fromUid`, `likes[]`, `createdAt` |
+| `bookmark_collections/{uid}/colls/{collId}` | `name`, `postIds[]`, `createdAt` |
 
 ### Tipos de notificação válidos
 
-Definidos em `notifIcon()` em `utils.js`: `friend_request`, `friend_accept`, `post_like`, `post_comment`, `scrap`, `community_join`, `mention`, `poll_vote`.
+Definidos em `notifIcon()` em `utils.js`: `friend_request`, `friend_accept`, `post_like`, `post_comment`, `scrap`, `community_join`, `mention`, `poll_vote`, `repost`.
 
 ### `displayName_lower` — busca por prefixo
 
@@ -145,15 +155,26 @@ Ao criar ou atualizar usuários, sempre salvar `displayName_lower = displayName.
 
 Gerenciados em `firestore.indexes.json` (fonte de verdade). Deployar com `firebase deploy --only firestore:indexes`.
 
-| Coleção | Campo 1 | Campo 2 |
-|---------|---------|---------|
-| `posts` | `communityId` ASC | `createdAt` DESC |
-| `scraps` | `toUid` ASC | `createdAt` DESC |
-| `friend_requests` | `to` ASC | `status` ASC |
-| `events` | `privacy` ASC | `date` ASC |
-| `events` | `privacy` ASC | `date` DESC |
-| `events` | `createdBy` ASC | `date` DESC |
-| `conversations` | `participants` ARRAY | `lastMessageAt` DESC |
+| Coleção | Campos |
+|---------|--------|
+| `posts` | `authorId` ASC + `createdAt` DESC |
+| `posts` | `communityId` ASC + `createdAt` DESC |
+| `posts` | `privacy` ASC + `createdAt` DESC |
+| `posts` | `modStatus` ASC + `createdAt` DESC |
+| `posts` | `modStatus` ASC + `modAt` ASC |
+| `posts` | `likes` ARRAY_CONTAINS + `createdAt` DESC |
+| `posts` | `authorId` ASC + `isArchived` ASC + `createdAt` DESC *(3 campos)* |
+| `scraps` | `toUid` ASC + `createdAt` DESC |
+| `friend_requests` | `to` ASC + `status` ASC |
+| `friend_requests` | `from` ASC + `status` ASC |
+| `friend_requests` | `from` ASC + `to` ASC + `status` ASC *(3 campos)* |
+| `events` | `privacy` ASC + `date` ASC |
+| `events` | `privacy` ASC + `date` DESC |
+| `events` | `createdBy` ASC + `date` DESC |
+| `conversations` | `participants` ARRAY_CONTAINS + `lastMessageAt` DESC |
+| `community_members` | `communityId` ASC + `joinedAt` ASC |
+| `audio_rooms` | `status` ASC + `createdAt` DESC |
+| `notifications/items` | `status` ASC + `createdAt` DESC |
 
 ---
 
@@ -167,6 +188,25 @@ Tokens CSS definidos em `css/style.css` em `:root` e `[data-theme="dark"]`.
 - **Tipografia:** `--font-sans: 'DM Sans'`, `--font-display: 'Fraunces'`
 - **Tema:** `document.documentElement.setAttribute('data-theme', 'dark'|'light')` — nunca usar `class`
 
+### Regras para dark/light mode
+
+Nunca usar cores de fundo hardcoded como `#FEF9C3`, `#FEE2E2`, `#D1FAE5` (pastéis claros) sem um `[data-theme="dark"]` override correspondente — essas cores são invisíveis no modo escuro. Use `rgba()` semitransparentes nos overrides:
+
+```css
+/* light: pastel claro */
+.badge-approved { background: #D1FAE5; color: #065F46; }
+/* dark: versão semitransparente */
+[data-theme="dark"] .badge-approved { background: rgba(34,197,94,0.15); color: #86EFAC; }
+```
+
+### FOUC prevention (flash de tema)
+
+Toda nova página HTML deve incluir este script em `<head>` **antes do primeiro `<link rel="stylesheet">`**, para que o tema seja aplicado antes de qualquer render:
+
+```html
+<script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
+```
+
 ---
 
 ## Regras de segurança
@@ -176,8 +216,10 @@ Tokens CSS definidos em `css/style.css` em `:root` e `[data-theme="dark"]`.
 - `commentsCount` só pode variar ±1 por operação (regra explícita).
 - Mensagens só podem ser lidas/criadas por participantes da conversa — usa `get()` na regra para verificar `participants`.
 - Stories permitem que qualquer autenticado adicione seu UID ao array `views`.
-- `reports` tem `allow read: if false` — nenhum cliente pode ler denúncias.
-- `users/{uid}` permite `list` (queries sem filtro de uid) para qualquer autenticado — necessário para buscas.
+- `reports` tem `allow read: if false` (clientes) — apenas admin com `isAdmin == true` pode ler/atualizar.
+- `users/{uid}` permite `list` para qualquer autenticado — necessário para buscas.
+- `users/{uid}.isAdmin` e `isVerified` **não podem ser escritos pelo próprio usuário** — bloqueados na regra de self-update. Admin pode conceder/revogar `isVerified` em qualquer conta (somente esse campo).
+- `posts/{id}.modStatus/modReason/modCategories/modAt` só podem ser escritos por admin.
 
 ---
 
@@ -206,9 +248,12 @@ Para elementos de UI críticos (botões de ação, navegação), preferir texto/
 
 - `users/{uid}.status` — objeto `{ emoji: string, text: string }` para status do perfil. Ao exibir `status.emoji`, validar com `/\p{Emoji}/u` (pode conter lixo de versões antigas).
 - `users/{uid}.blocked` — array de UIDs bloqueados pelo usuário; verificar antes de exibir conteúdo sensível.
+- `users/{uid}.isAdmin` / `isVerified` — campos protegidos; nunca escrever diretamente do cliente em contexto de usuário comum.
 - `posts/{id}.privacy` — campo ausente em posts antigos; **sempre** usar `resource.data.get('privacy', 'public')` nas regras Firestore, nunca comparar `resource.data.privacy == 'public'` diretamente (causa falha em queries de lista).
+- `posts/{id}.isArchived` — posts arquivados pelo autor; a query em `arquivo.html` requer o índice de 3 campos `authorId + isArchived + createdAt DESC`.
 - `conversations/{id}.lastMessageAt` — campo de ordenação de conversas (índice composto em `firestore.indexes.json`).
 - `conversations/{id}.type` — `'group'` para grupos; ausente/undefined para conversas diretas. Grupos têm `name`, `emoji` e `admins[]` adicionais.
+- `conversations/{id}.lastReadAt: { [uid]: Timestamp }` — rastreia quando cada participante leu; usado para double-check azul em mensagens.
 
 ---
 

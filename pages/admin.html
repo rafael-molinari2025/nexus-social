@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nexus — Moderação</title>
+  <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="../css/tabler-icons.min.css">
@@ -26,6 +27,8 @@
     .status-badge.pending    { background: #fef3c7; color: #92400e; }
     .status-badge.resolved   { background: #d1fae5; color: #065f46; }
     .status-badge.dismissed  { background: var(--gray-100); color: var(--text-muted); }
+    [data-theme="dark"] .status-badge.pending  { background: rgba(251,191,36,0.18); color: #FCD34D; }
+    [data-theme="dark"] .status-badge.resolved { background: rgba(34,197,94,0.15); color: #86EFAC; }
     @media (max-width: 768px) { .admin-page { padding: 1rem .5rem calc(80px + 1rem); } }
   </style>
 </head>
@@ -58,6 +61,19 @@
 
     <div id="reports-list">
       <div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>
+    </div>
+
+    <!-- User verification section -->
+    <div style="margin-top:2rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem">
+        <i class="ti ti-badge-check" style="font-size:20px;color:var(--purple-600)"></i>
+        <h2 style="font-size:17px;font-weight:700;margin:0">Verificação de contas</h2>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+        <input type="text" id="verify-search" class="form-input" placeholder="Buscar usuário pelo nome…"
+               oninput="searchVerifyUsers(this.value)" autocomplete="off" style="flex:1">
+      </div>
+      <div id="verify-results"></div>
     </div>
   </div>
 </div>
@@ -256,6 +272,63 @@ async function deleteReportedPost(reportId, postId) {
     showToast('Post excluído e denúncia resolvida.');
   } catch(e) {
     showToast('Erro ao excluir post. Verifique as permissões de admin no Firestore.');
+  }
+}
+
+// ── User verification ─────────────────────────────────────────
+let _verifyTimer = null;
+
+function searchVerifyUsers(q) {
+  clearTimeout(_verifyTimer);
+  const el = document.getElementById('verify-results');
+  if (!q.trim()) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="spinner" style="margin:.75rem auto;display:block"></div>';
+  _verifyTimer = setTimeout(async () => {
+    try {
+      const qLower = q.toLowerCase();
+      const snap = await db.collection('users')
+        .where('displayName_lower', '>=', qLower)
+        .where('displayName_lower', '<=', qLower + '')
+        .limit(10).get();
+      if (snap.empty) { el.innerHTML = '<p style="font-size:13px;color:var(--text-muted);padding:.5rem 0">Nenhum usuário encontrado.</p>'; return; }
+      el.innerHTML = snap.docs.map(d => {
+        const u = d.data();
+        const cl = getAvatarColor(d.id);
+        const av = u.photoURL
+          ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+          : `<span style="color:${cl.color}">${getInitials(u.displayName||'?')}</span>`;
+        const isVerified = !!u.isVerified;
+        return `<div style="display:flex;align-items:center;gap:.75rem;padding:.65rem 0;border-bottom:0.5px solid var(--border)">
+          <div class="avatar avatar-40" style="background:${cl.bg};flex-shrink:0">${av}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600">${sanitize(u.displayName||'Usuário')}
+              ${isVerified ? '<span class="verified-badge" title="Verificado"><i class="ti ti-check" style="font-size:8px"></i></span>' : ''}
+            </div>
+            <div style="font-size:12px;color:var(--text-muted)">${sanitize(u.username||d.id)}</div>
+          </div>
+          <button class="btn btn-sm${isVerified ? '' : ' btn-primary'}" onclick="toggleVerified('${d.id}',${!isVerified})"
+                  id="vbtn-${d.id}" style="${isVerified ? 'color:var(--coral-400);border-color:var(--coral-400)' : ''}">
+            ${isVerified ? '<i class="ti ti-badge-off"></i> Revogar' : '<i class="ti ti-badge-check"></i> Verificar'}
+          </button>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      document.getElementById('verify-results').innerHTML = `<p style="font-size:13px;color:var(--coral-400)">${sanitize(e.message)}</p>`;
+    }
+  }, 350);
+}
+
+async function toggleVerified(uid, newState) {
+  const btn = document.getElementById(`vbtn-${uid}`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i>'; }
+  try {
+    await db.collection('users').doc(uid).update({ isVerified: newState });
+    showToast(newState ? 'Conta verificada!' : 'Verificação revogada.');
+    const q = document.getElementById('verify-search')?.value || '';
+    searchVerifyUsers(q);
+  } catch(e) {
+    showToast('Erro: ' + e.message);
+    if (btn) { btn.disabled = false; }
   }
 }
 </script>

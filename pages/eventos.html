@@ -1,10 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nexus — Eventos</title>
   <meta name="description" content="Crie e participe de eventos no Nexus.">
+  <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="../css/tabler-icons.min.css">
@@ -98,6 +99,28 @@
 
     @media (max-width: 768px) {
       .eventos-page { padding: 1rem .5rem calc(80px + 1rem); }
+
+      /* Abas: grade 2×2 para caber tudo sem scroll */
+      .ev-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .35rem;
+        overflow-x: unset;
+        flex-wrap: unset;
+        padding-bottom: 0;
+      }
+      .ev-tab {
+        font-size: 12px;
+        padding: .38rem .4rem;
+        text-align: center;
+        white-space: nowrap;
+        flex-shrink: unset;
+      }
+
+      /* Header: botão à direita menor */
+      .eventos-header { align-items: center; }
+      .eventos-header .btn { font-size: 12px; padding: .4rem .75rem; }
+
       .ev-grid { grid-template-columns: 1fr; gap: .75rem; }
 
       /* Card horizontal: imagem à esquerda, conteúdo à direita */
@@ -404,21 +427,39 @@ async function loadEvents() {
   el.innerHTML = '<div class="loading-screen" style="min-height:200px"><div class="spinner"></div></div>';
   try {
     const today = new Date().toISOString().slice(0,10);
-    let q;
+    let docs;
     if (_currentTab === 'mine') {
-      q = db.collection('events').where('createdBy','==',currentUser.uid).orderBy('date','desc').limit(30);
+      const snap = await db.collection('events').where('createdBy','==',currentUser.uid).orderBy('date','desc').limit(30).get();
+      docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } else if (_currentTab === 'past') {
-      q = db.collection('events').where('privacy','==','public').orderBy('date','desc').limit(30);
+      const snap = await db.collection('events').where('privacy','==','public').orderBy('date','desc').limit(30).get();
+      docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.date < today);
     } else {
-      q = db.collection('events').where('privacy','==','public').orderBy('date','asc').limit(50);
-    }
-    const snap = await q.get();
-    let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    if (_currentTab === 'upcoming') {
-      docs = docs.filter(e => e.date >= today);
-    } else if (_currentTab === 'past') {
-      docs = docs.filter(e => e.date < today);
+      // Próximos: eventos públicos futuros + próprios eventos futuros
+      // Usa índices existentes: (privacy+date ASC) e (createdBy+date DESC)
+      const [pubSnap, mineSnap] = await Promise.all([
+        db.collection('events')
+          .where('privacy','==','public')
+          .where('date','>=',today)
+          .orderBy('date','asc').limit(40).get(),
+        db.collection('events')
+          .where('createdBy','==',currentUser.uid)
+          .orderBy('date','desc').limit(50).get()
+      ]);
+      const seen = new Set();
+      docs = [];
+      for (const d of pubSnap.docs) {
+        seen.add(d.id);
+        docs.push({ id: d.id, ...d.data() });
+      }
+      for (const d of mineSnap.docs) {
+        const ev = { id: d.id, ...d.data() };
+        if (!seen.has(d.id) && ev.date >= today) {
+          seen.add(d.id);
+          docs.push(ev);
+        }
+      }
+      docs.sort((a, b) => a.date < b.date ? -1 : 1);
     }
 
     if (!docs.length) {

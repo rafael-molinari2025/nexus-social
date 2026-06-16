@@ -564,6 +564,13 @@ ul, ol { list-style: none; }
   color: var(--indigo-500);
   transform: scale(1.08);
 }
+.composer-action-btn:active {
+  background: var(--indigo-100);
+  color: var(--indigo-600);
+  transform: scale(0.92);
+}
+[data-theme="dark"] .composer-action-btn:hover { background: rgba(99,102,241,0.15); }
+[data-theme="dark"] .composer-action-btn:active { background: rgba(99,102,241,0.25); }
 
 /* ── Image preview no composer ── */
 .composer-image-preview {
@@ -1486,3 +1493,31 @@ textarea.form-input {
 }
 .back-to-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .back-to-top:hover { filter: brightness(1.08); }
+
+/* ══════════════════════════════════════════════
+   DARK MODE OVERRIDES — hardcoded-color components
+══════════════════════════════════════════════ */
+/* Testimony badges */
+[data-theme="dark"] .testimony-pending {
+  background: rgba(251,191,36,0.15);
+  border-color: rgba(251,191,36,0.35);
+}
+[data-theme="dark"] .testimony-badge.pending {
+  background: rgba(251,191,36,0.18);
+  color: #FCD34D;
+}
+[data-theme="dark"] .testimony-badge.approved {
+  background: rgba(34,197,94,0.15);
+  color: #86EFAC;
+}
+
+/* Auth error banner */
+[data-theme="dark"] .auth-error {
+  background: rgba(244,63,94,0.12);
+  border-color: rgba(244,63,94,0.3);
+}
+
+/* Danger dropdown item hover */
+[data-theme="dark"] .user-dropdown-item.danger:hover {
+  background: rgba(244,63,94,0.12);
+}
