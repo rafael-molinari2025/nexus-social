@@ -541,6 +541,29 @@ ul, ol { list-style: none; }
   min-height: 100px;
 }
 
+.composer-preview {
+  display: none;
+  margin-top: .4rem;
+  padding: .55rem .85rem;
+  background: var(--gray-50);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.composer-preview-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: .3rem;
+}
+[data-theme="dark"] .composer-preview { background: var(--surface); }
+
 .composer-footer {
   display: flex;
   align-items: center;

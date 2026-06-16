@@ -472,10 +472,11 @@
           <div style="position:relative">
             <textarea class="composer-textarea" id="post-text"
               placeholder="O que você está pensando? Use #hashtags e @menções"
-              oninput="updateCharCount();checkMentionInput(this);detectLinkInText(this.value);showDraftBtn(this.value)" maxlength="2000"></textarea>
+              oninput="updateCharCount();checkMentionInput(this);detectLinkInText(this.value);showDraftBtn(this.value);updateComposerPreview()" maxlength="2000"></textarea>
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
           </div>
           <div class="composer-char-count" id="post-char-count"></div>
+          <div id="composer-preview" class="composer-preview"></div>
           <div id="location-wrap" style="display:none;flex-direction:column;gap:.3rem;margin-top:.35rem">
             <div style="display:flex;align-items:center;gap:.4rem">
               <i class="ti ti-map-pin" style="color:var(--purple-600);font-size:14px;flex-shrink:0"></i>
@@ -964,8 +965,24 @@ function insertFormat(before, after) {
   ta.setSelectionRange(_taSelStart, _taSelEnd);
   updateCharCount();
 }
-function insertBold()   { insertFormat('**', '**'); }
-function insertItalic() { insertFormat('_', '_'); }
+function insertBold()   { insertFormat('**', '**'); updateComposerPreview(); }
+function insertItalic() { insertFormat('_', '_');  updateComposerPreview(); }
+
+function updateComposerPreview() {
+  const ta      = document.getElementById('post-text');
+  const preview = document.getElementById('composer-preview');
+  if (!ta || !preview) return;
+  const text = ta.value;
+  // Show only when there is markdown formatting or hashtags/mentions
+  if (!text.trim() || !/\*\*[\s\S]+?\*\*|(?<!\w)_[\s\S]+?_(?!\w)|#\w|@\w/.test(text)) {
+    preview.style.display = 'none';
+    return;
+  }
+  preview.style.display = 'block';
+  preview.innerHTML =
+    '<div class="composer-preview-label">Pré-visualização</div>' +
+    parsePostText(text);
+}
 
 // ── Emoji picker ───────────────────────────────────────────────
 const _EMOJI_CATS = [
@@ -1514,6 +1531,7 @@ async function createPost() {
     _scheduleTime = null; updateScheduleBtn();
     document.getElementById('post-text').value = '';
     updateCharCount();
+    updateComposerPreview();
     showToast('Post agendado com sucesso!');
     return;
   }
@@ -1615,6 +1633,7 @@ async function createPost() {
       }
     }
     document.getElementById('post-text').value = '';
+    updateComposerPreview();
     _postVideoFile = null;
     _gifSelectedUrl = null;
     _scheduleTime = null; updateScheduleBtn();
