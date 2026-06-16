@@ -470,13 +470,13 @@
         <div id="composer-avatar"></div>
         <div class="composer-box">
           <div style="position:relative">
-            <textarea class="composer-textarea" id="post-text"
-              placeholder="O que você está pensando? Use #hashtags e @menções"
-              oninput="updateCharCount();checkMentionInput(this);detectLinkInText(this.value);showDraftBtn(this.value);updateComposerPreview()" maxlength="2000"></textarea>
+            <div class="composer-textarea" id="post-text"
+              contenteditable="true" role="textbox" aria-multiline="true"
+              data-placeholder="O que você está pensando? Use #hashtags e @menções"
+              oninput="onComposerInput()"></div>
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
           </div>
           <div class="composer-char-count" id="post-char-count"></div>
-          <div id="composer-preview" class="composer-preview"></div>
           <div id="location-wrap" style="display:none;flex-direction:column;gap:.3rem;margin-top:.35rem">
             <div style="display:flex;align-items:center;gap:.4rem">
               <i class="ti ti-map-pin" style="color:var(--purple-600);font-size:14px;flex-shrink:0"></i>
@@ -768,8 +768,7 @@ let _extraPostsHTML = '';
 let _newestPostMillis = 0;
 let _pendingNewPosts  = 0;
 let _mutedUsers   = JSON.parse(localStorage.getItem('nexus-muted') || '[]');
-let _taSelStart   = null;
-let _taSelEnd     = null;
+let _savedRange = null; // preserved caret for emoji picker
 
 const PRIVACY = [
   { v:'public',  icon:'ti-world',  label:'Público' },
@@ -779,26 +778,69 @@ const PRIVACY = [
 const REACTIONS  = ['❤️','😂','😮','😢','😡','👏'];
 const ST_COLORS  = ['#6366f1','#ec4899','#f97316','#22c55e','#3b82f6','#8b5cf6','#0ea5e9','#ef4444','#b45309'];
 
-// Save textarea selection before any button tap steals focus
+// Preserve caret before emoji picker steals focus
 (function() {
-  function _saveSel() {
-    const ta = document.getElementById('post-text');
-    if (ta) { _taSelStart = ta.selectionStart; _taSelEnd = ta.selectionEnd; }
+  function _saveRange() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const el = document.getElementById('post-text');
+    if (el && el.contains(sel.getRangeAt(0).startContainer))
+      _savedRange = sel.getRangeAt(0).cloneRange();
   }
   document.addEventListener('mousedown', e => {
-    if (e.target.closest('.composer-actions') || e.target.closest('.emoji-picker-box')) _saveSel();
+    if (e.target.closest('.emoji-picker-box')) _saveRange();
   });
   document.addEventListener('touchstart', e => {
-    if (e.target.closest('.composer-actions') || e.target.closest('.emoji-picker-box')) _saveSel();
+    if (e.target.closest('.emoji-picker-box')) _saveRange();
   }, { passive: true });
 })();
 
+// ── Composer helpers ────────────────────────────────────────────
+function getTextBeforeCaret(el) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !el.contains(sel.getRangeAt(0).startContainer)) return '';
+  const r = sel.getRangeAt(0).cloneRange();
+  r.selectNodeContents(el);
+  r.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+  return r.toString();
+}
+
+function composerGetText() {
+  const el = document.getElementById('post-text');
+  if (!el) return '';
+  let html = el.innerHTML;
+  html = html.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi,      '**$1**');
+  html = html.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
+  html = html.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi,      '_$1_');
+  html = html.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi,    '_$1_');
+  html = html.replace(/<br\s*\/?>/gi, '\n');
+  html = html.replace(/<\/div>/gi, '\n');
+  html = html.replace(/<div[^>]*>/gi, '');
+  html = html.replace(/<[^>]+>/g, '');
+  html = html.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  return html.replace(/^\n+|\n+$/g, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function composerLen() {
+  const el = document.getElementById('post-text');
+  if (!el) return 0;
+  return (el.innerText || el.textContent || '').replace(/\n$/, '').length;
+}
+
+function onComposerInput() {
+  const el   = document.getElementById('post-text');
+  const text = el.innerText || el.textContent || '';
+  updateCharCount();
+  checkMentionInput(el);
+  detectLinkInText(text);
+  showDraftBtn(text);
+}
+
 // ── Char counter ───────────────────────────────────────────────
 function updateCharCount() {
-  const ta  = document.getElementById('post-text');
   const el  = document.getElementById('post-char-count');
-  if (!ta || !el) return;
-  const len = ta.value.length;
+  if (!el) return;
+  const len = composerLen();
   el.textContent = `${len}/2000`;
   el.className = 'composer-char-count' + (len > 1900 ? ' danger' : len > 1500 ? ' warn' : '');
 }
@@ -948,40 +990,15 @@ function cyclePrivacy() {
   document.getElementById('privacy-label').textContent = p.label;
 }
 
-function insertFormat(before, after) {
-  const ta = document.getElementById('post-text');
-  const start = _taSelStart !== null ? _taSelStart : ta.selectionStart;
-  const end   = _taSelEnd   !== null ? _taSelEnd   : ta.selectionEnd;
-  const sel   = ta.value.slice(start, end);
-  if (sel) {
-    ta.value = ta.value.slice(0, start) + before + sel + after + ta.value.slice(end);
-    _taSelStart = start + before.length;
-    _taSelEnd   = _taSelStart + sel.length;
-  } else {
-    ta.value = ta.value.slice(0, start) + before + after + ta.value.slice(end);
-    _taSelStart = _taSelEnd = start + before.length;
-  }
-  ta.focus();
-  ta.setSelectionRange(_taSelStart, _taSelEnd);
+function insertBold() {
+  document.getElementById('post-text').focus();
+  document.execCommand('bold', false, null);
   updateCharCount();
 }
-function insertBold()   { insertFormat('**', '**'); updateComposerPreview(); }
-function insertItalic() { insertFormat('_', '_');  updateComposerPreview(); }
-
-function updateComposerPreview() {
-  const ta      = document.getElementById('post-text');
-  const preview = document.getElementById('composer-preview');
-  if (!ta || !preview) return;
-  const text = ta.value;
-  // Show only when there is markdown formatting or hashtags/mentions
-  if (!text.trim() || !/\*\*[\s\S]+?\*\*|(?<!\w)_[\s\S]+?_(?!\w)|#\w|@\w/.test(text)) {
-    preview.style.display = 'none';
-    return;
-  }
-  preview.style.display = 'block';
-  preview.innerHTML =
-    '<div class="composer-preview-label">Pré-visualização</div>' +
-    parsePostText(text);
+function insertItalic() {
+  document.getElementById('post-text').focus();
+  document.execCommand('italic', false, null);
+  updateCharCount();
 }
 
 // ── Emoji picker ───────────────────────────────────────────────
@@ -1023,13 +1040,15 @@ function switchEmojiCat(idx) {
 }
 
 function pickEmoji(emoji) {
-  const ta  = document.getElementById('post-text');
-  const pos = _taSelStart !== null ? _taSelStart : (ta.selectionStart || 0);
-  const end = _taSelEnd   !== null ? _taSelEnd   : (ta.selectionEnd || 0);
-  ta.value  = ta.value.slice(0, pos) + emoji + ta.value.slice(end);
-  _taSelStart = _taSelEnd = pos + emoji.length; // emoji.length = UTF-16 units, same as selectionStart
-  ta.focus();
-  ta.setSelectionRange(_taSelStart, _taSelEnd);
+  const el  = document.getElementById('post-text');
+  el.focus();
+  const sel = window.getSelection();
+  if (_savedRange) {
+    sel.removeAllRanges();
+    sel.addRange(_savedRange);
+    _savedRange = null;
+  }
+  document.execCommand('insertText', false, emoji);
   updateCharCount();
   document.querySelector('.emoji-picker-backdrop')?.remove();
 }
@@ -1406,9 +1425,11 @@ function showDraftBtn(val) {
 }
 
 function saveDraft() {
-  const text = document.getElementById('post-text')?.value || '';
-  if (!text.trim()) return;
-  localStorage.setItem(DRAFT_KEY, JSON.stringify({ text, savedAt: Date.now() }));
+  const el   = document.getElementById('post-text');
+  const text = (el?.innerText || '').trim();
+  const html = el?.innerHTML || '';
+  if (!text) return;
+  localStorage.setItem(DRAFT_KEY, JSON.stringify({ text, html, savedAt: Date.now() }));
   showToast('Rascunho salvo!');
 }
 
@@ -1416,9 +1437,14 @@ function loadDraft() {
   const raw = localStorage.getItem(DRAFT_KEY);
   if (!raw) return;
   try {
-    const { text } = JSON.parse(raw);
-    const ta = document.getElementById('post-text');
-    if (ta) { ta.value = text; updateCharCount(); detectLinkInText(text); showDraftBtn(text); }
+    const draft = JSON.parse(raw);
+    const el = document.getElementById('post-text');
+    if (el) {
+      el.innerHTML = draft.html || '';
+      if (!draft.html && draft.text) el.textContent = draft.text;
+      const text = el.innerText || el.textContent || '';
+      updateCharCount(); detectLinkInText(text); showDraftBtn(text);
+    }
     document.getElementById('draft-banner').style.display = 'none';
   } catch(e) {}
 }
@@ -1519,7 +1545,7 @@ function dismissLinkPreview() {
 
 // ── Create post ────────────────────────────────────────────────
 async function createPost() {
-  const text = document.getElementById('post-text').value.trim();
+  const text = composerGetText().trim();
   if (!text && !_postImageFiles.length && !_postVideoFile && !_gifSelectedUrl && !_pollActive) return showToast('Escreva algo, adicione uma imagem, GIF, vídeo ou crie uma enquete.');
   if (text.length > 2000) return showToast('Post muito longo. Máximo 2000 caracteres.');
   // Scheduled post: save to localStorage
@@ -1529,9 +1555,8 @@ async function createPost() {
     posts.push({ text, privacy: PRIVACY[_privacyIdx].v, scheduledAt: _scheduleTime.getTime() });
     localStorage.setItem(SCHED_KEY, JSON.stringify(posts));
     _scheduleTime = null; updateScheduleBtn();
-    document.getElementById('post-text').value = '';
+    document.getElementById('post-text').innerHTML = '';
     updateCharCount();
-    updateComposerPreview();
     showToast('Post agendado com sucesso!');
     return;
   }
@@ -1632,8 +1657,7 @@ async function createPost() {
         }
       }
     }
-    document.getElementById('post-text').value = '';
-    updateComposerPreview();
+    document.getElementById('post-text').innerHTML = '';
     _postVideoFile = null;
     _gifSelectedUrl = null;
     _scheduleTime = null; updateScheduleBtn();
@@ -2499,15 +2523,15 @@ async function submitReport(reason) {
 }
 
 // ── @Mention + #Hashtag autocomplete ──────────────────────────
-function checkMentionInput(ta) {
-  const textBefore = ta.value.slice(0, ta.selectionStart);
+function checkMentionInput(el) {
+  const textBefore = getTextBeforeCaret(el);
 
   // @mention
   const mentionMatch = textBefore.match(/@(\w*)$/);
   if (mentionMatch) {
     _mentionType  = 'mention';
     _mentionQuery = mentionMatch[1].toLowerCase();
-    _mentionStart = ta.selectionStart - mentionMatch[0].length;
+    _mentionStart = textBefore.length - mentionMatch[0].length;
     const matches = _mentionQuery
       ? _friendsList.filter(f => (f.displayName||'').toLowerCase().includes(_mentionQuery)).slice(0, 6)
       : _friendsList.slice(0, 6);
@@ -2520,7 +2544,7 @@ function checkMentionInput(ta) {
   const hashMatch = textBefore.match(/#(\w*)$/);
   if (hashMatch && _trendingTags.length) {
     _mentionType  = 'hashtag';
-    _mentionStart = ta.selectionStart - hashMatch[0].length;
+    _mentionStart = textBefore.length - hashMatch[0].length;
     const tag     = hashMatch[1].toLowerCase();
     const matches = tag
       ? _trendingTags.filter(t => t.toLowerCase().startsWith(tag)).slice(0, 6)
@@ -2567,30 +2591,29 @@ function showHashtagDropdown(tags) {
 }
 
 function insertHashtag(tag) {
-  const ta = document.getElementById('post-text');
-  if (!ta || _mentionStart < 0) { hideMentionDropdown(); return; }
-  const cursor = ta.selectionStart;
-  const before = ta.value.slice(0, _mentionStart);
-  const after  = ta.value.slice(cursor);
-  ta.value = before + `#${tag} ` + after;
-  const newCursor = _mentionStart + tag.length + 2;
-  ta.setSelectionRange(newCursor, newCursor);
-  ta.focus();
+  const el = document.getElementById('post-text');
+  if (!el || _mentionStart < 0) { hideMentionDropdown(); return; }
+  const charsBack = getTextBeforeCaret(el).length - _mentionStart;
+  el.focus();
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    for (let i = 0; i < charsBack; i++) sel.modify('extend', 'backward', 'character');
+    document.execCommand('insertText', false, `#${tag} `);
+  }
   hideMentionDropdown();
   updateCharCount();
 }
 
 function insertMention(name) {
-  const ta = document.getElementById('post-text');
-  if (!ta || _mentionStart < 0) { hideMentionDropdown(); return; }
-  const cursor = ta.selectionStart;
-  const before = ta.value.slice(0, _mentionStart);
-  const after  = ta.value.slice(cursor);
-  const mention = `@${name}`;
-  ta.value = before + mention + ' ' + after;
-  const newCursor = _mentionStart + mention.length + 1;
-  ta.setSelectionRange(newCursor, newCursor);
-  ta.focus();
+  const el = document.getElementById('post-text');
+  if (!el || _mentionStart < 0) { hideMentionDropdown(); return; }
+  const charsBack = getTextBeforeCaret(el).length - _mentionStart;
+  el.focus();
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    for (let i = 0; i < charsBack; i++) sel.modify('extend', 'backward', 'character');
+    document.execCommand('insertText', false, `@${name} `);
+  }
   hideMentionDropdown();
   updateCharCount();
 }

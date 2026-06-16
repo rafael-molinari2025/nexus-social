@@ -541,28 +541,25 @@ ul, ol { list-style: none; }
   min-height: 100px;
 }
 
-.composer-preview {
-  display: none;
-  margin-top: .4rem;
-  padding: .55rem .85rem;
-  background: var(--gray-50);
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--text-primary);
-  word-break: break-word;
+/* contenteditable composer div — extends .composer-textarea */
+div.composer-textarea {
+  cursor: text;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  user-select: text;
+  -webkit-user-select: text;
 }
-.composer-preview-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+div.composer-textarea:empty::before {
+  content: attr(data-placeholder);
   color: var(--text-muted);
-  margin-bottom: .3rem;
+  pointer-events: none;
+  display: block;
 }
-[data-theme="dark"] .composer-preview { background: var(--surface); }
+div.composer-textarea b,
+div.composer-textarea strong { font-weight: 700; }
+div.composer-textarea i,
+div.composer-textarea em { font-style: italic; }
 
 .composer-footer {
   display: flex;
