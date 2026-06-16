@@ -1170,31 +1170,58 @@ function onGifSearch(q) {
   _gifSearchTimer = setTimeout(() => fetchGifs(q.trim()), 400);
 }
 
+let _gifItems = []; // [{full, preview}]
+
 async function fetchGifs(q) {
   const grid = document.getElementById('gif-grid');
   if (!grid) return;
   grid.innerHTML = '<div class="gif-empty"><i class="ti ti-loader-2 ti-spin" style="font-size:24px"></i></div>';
+  _gifItems = [];
+
+  // 1ª tentativa: Tenor v1 (demo key pública estável)
   try {
-    const GIPHY_KEY = 'dc6zaTOxFJmzC';
-    const url = `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q)}&api_key=${GIPHY_KEY}&limit=20&lang=pt&rating=pg`;
+    const url = `https://api.tenor.com/v1/search?q=${encodeURIComponent(q)}&key=LIVDSRZULELA&limit=20&media_filter=minimal&locale=pt_BR`;
     const res = await fetch(url);
-    if (!res.ok) throw new Error('GIPHY ' + res.status);
+    if (!res.ok) throw new Error('tenor_' + res.status);
     const data = await res.json();
-    if (!data.data?.length) { grid.innerHTML = '<div class="gif-empty">Nenhum GIF encontrado</div>'; return; }
-    const items = data.data.map(r => {
-      const preview = r.images?.fixed_height_small || r.images?.fixed_height;
-      const full    = r.images?.original;
-      if (!preview?.url || !full?.url) return '';
-      const pUrl = preview.url.replace(/"/g, '');
-      const fUrl = full.url.replace(/"/g, '');
-      return `<div class="gif-item" onclick="selectGif('${fUrl}','${pUrl}')">
-        <img src="${pUrl}" alt="GIF" loading="lazy">
-      </div>`;
-    }).filter(Boolean).join('');
-    grid.innerHTML = items || '<div class="gif-empty">Nenhum GIF encontrado</div>';
-  } catch(e) {
-    grid.innerHTML = '<div class="gif-empty">Erro ao buscar GIFs. Verifique sua conexão.</div>';
-  }
+    if (data.results?.length) {
+      _gifItems = data.results.map(r => {
+        const m = r.media?.[0];
+        return { full: m?.gif?.url || '', preview: m?.tinygif?.url || m?.gif?.url || '' };
+      }).filter(g => g.full && g.preview);
+      if (_gifItems.length) { _renderGifGrid(grid); return; }
+    }
+  } catch(_) {}
+
+  // 2ª tentativa: GIPHY (fallback)
+  try {
+    const url = `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q)}&api_key=dc6zaTOxFJmzC&limit=20&rating=pg`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('giphy_' + res.status);
+    const data = await res.json();
+    if (data.data?.length) {
+      _gifItems = data.data.map(r => ({
+        full:    r.images?.original?.url || '',
+        preview: r.images?.fixed_height_small?.url || r.images?.fixed_height?.url || ''
+      })).filter(g => g.full && g.preview);
+      if (_gifItems.length) { _renderGifGrid(grid); return; }
+    }
+  } catch(_) {}
+
+  grid.innerHTML = '<div class="gif-empty">Nenhum GIF encontrado. Tente outra busca.</div>';
+}
+
+function _renderGifGrid(grid) {
+  grid.innerHTML = _gifItems.map((g, i) =>
+    `<div class="gif-item" onclick="selectGifByIdx(${i})">
+      <img src="${g.preview}" alt="GIF" loading="lazy">
+    </div>`
+  ).join('') || '<div class="gif-empty">Nenhum GIF encontrado</div>';
+}
+
+function selectGifByIdx(i) {
+  const g = _gifItems[i];
+  if (g) selectGif(g.full, g.preview);
 }
 
 function selectGif(fullUrl, previewUrl) {
