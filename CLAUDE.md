@@ -94,8 +94,19 @@ A página de login usa `redirectIfLoggedIn()` em vez de `requireAuth`.
 
 O diretório `api/` contém serverless functions deployadas no **Vercel** (`nexus-social-fawn.vercel.app`), **não** no Firebase Hosting — o `firebase.json` exclui `api/**` do deploy. Funções:
 
-- **`api/token.js`** — gera tokens RTC para o Agora.io usando `agora-token`. Requer `AGORA_CERT` no ambiente Vercel. Aceita `?channel=<id>` e retorna `{ token, expireAt }`.
+- **`api/token.js`** — gera tokens RTC para o Agora.io usando `agora-token`. Aceita `?channel=<id>` e retorna `{ token, expireAt }`.
 - **`api/notify.js`** — envia push notifications via Firebase Admin SDK. Chamado internamente por `sendPushToUser()` em `utils.js`; requer `Authorization: Bearer <idToken>` e body `{ toUid, title, body, url, tag }`.
+- **`api/moderate.js`** — modera texto de posts via Claude Haiku antes da publicação. Recebe `POST { text }` e retorna `{ decision, reason, categories[] }`. Decisions: `allow` / `flag` / `block`. Fail-open: se a IA falhar, retorna `allow` para não bloquear o usuário.
+- **`api/scan.js`** — varredura em background de posts das últimas 48h sem `modStatus`. Roda via cron Vercel a cada 6 horas (`vercel.json`). Pode ser disparado manualmente via `POST` com header `x-scan-secret`. Posts sem texto (só imagem/vídeo) são aprovados automaticamente sem chamar a IA.
+
+### Variáveis de ambiente no Vercel
+
+| Variável | Usada em | Descrição |
+|----------|----------|-----------|
+| `AGORA_CERT` | `api/token.js` | Certificate do Agora.io para geração de tokens RTC |
+| `ANTHROPIC_API_KEY` | `api/moderate.js`, `api/scan.js` | Chave da API Anthropic (Claude Haiku) |
+| `FIREBASE_SERVICE_ACCOUNT` | `api/notify.js`, `api/scan.js` | JSON string da conta de serviço Firebase Admin |
+| `SCAN_SECRET` | `api/scan.js` | String aleatória para trigger manual do scan via POST |
 
 ### Live streaming (Agora.io)
 
@@ -251,6 +262,7 @@ Para elementos de UI críticos (botões de ação, navegação), preferir texto/
 - `users/{uid}.isAdmin` / `isVerified` — campos protegidos; nunca escrever diretamente do cliente em contexto de usuário comum.
 - `posts/{id}.privacy` — campo ausente em posts antigos; **sempre** usar `resource.data.get('privacy', 'public')` nas regras Firestore, nunca comparar `resource.data.privacy == 'public'` diretamente (causa falha em queries de lista).
 - `posts/{id}.isArchived` — posts arquivados pelo autor; a query em `arquivo.html` requer o índice de 3 campos `authorId + isArchived + createdAt DESC`.
+- `posts/{id}.modStatus` — valores possíveis: `approved` / `flagged` / `removed` / `pending` (ausente em posts antigos = não moderado). Escrito por `api/moderate.js` (inline ao publicar) e `api/scan.js` (background). O campo `modSource` indica a origem: `'scan'` para o cron, ausente para moderação inline. Apenas admins podem alterar esses campos pelo cliente (regra Firestore).
 - `conversations/{id}.lastMessageAt` — campo de ordenação de conversas (índice composto em `firestore.indexes.json`).
 - `conversations/{id}.type` — `'group'` para grupos; ausente/undefined para conversas diretas. Grupos têm `name`, `emoji` e `admins[]` adicionais.
 - `conversations/{id}.lastReadAt: { [uid]: Timestamp }` — rastreia quando cada participante leu; usado para double-check azul em mensagens.

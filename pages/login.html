@@ -192,11 +192,19 @@
         <div style="display:flex;flex-direction:column;gap:.75rem">
 
           <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <div class="input-icon-wrap">
+              <i class="ti ti-mail input-icon"></i>
+              <input class="form-input" type="email" id="signup-email-confirm" placeholder="seu@email.com" autocomplete="email">
+            </div>
+          </div>
+
+          <div class="form-group">
             <label class="form-label">Nome de usuário</label>
             <div class="input-icon-wrap">
               <i class="ti ti-at input-icon"></i>
               <input class="form-input" type="text" id="signup-username"
-                     placeholder="rafamolinari" autocomplete="username"
+                     placeholder="nome.usuario" autocomplete="username"
                      oninput="this.value=this.value.replace(/[^a-z0-9_.]/gi,'').toLowerCase()">
             </div>
             <div class="pass-hint">Apenas letras, números, _ e . Sem espaços.</div>
@@ -360,6 +368,7 @@
     if (!first || !last) return showError('Informe seu nome e sobrenome.');
     if (!email) return showError('Informe um e-mail válido.');
     if (pass.length < 6) return showError('A senha deve ter pelo menos 6 caracteres.');
+    document.getElementById('signup-email-confirm').value = email;
     document.getElementById('signup-step-1').style.display = 'none';
     document.getElementById('signup-step-2').style.display = '';
     document.getElementById('dot-1').className = 'step-dot done';
@@ -397,7 +406,7 @@
     clearError();
     const first    = document.getElementById('signup-firstname').value.trim();
     const last     = document.getElementById('signup-lastname').value.trim();
-    const email    = document.getElementById('signup-email').value.trim();
+    const email    = document.getElementById('signup-email-confirm').value.trim() || document.getElementById('signup-email').value.trim();
     const pass     = document.getElementById('signup-password').value;
     const username = document.getElementById('signup-username').value.trim().toLowerCase();
     const birth    = document.getElementById('signup-birthdate').value;
