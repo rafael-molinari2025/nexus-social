@@ -2108,6 +2108,20 @@ async function setReaction(postId, emoji) {
     }
   }
   await ref.update(updates);
+
+  // Re-render o card localmente (o onSnapshot não re-renderiza posts existentes)
+  const newRxns = {};
+  REACTIONS.forEach(e => {
+    newRxns[e] = (rxns[e]||[]).filter(uid => uid !== currentUser.uid);
+  });
+  if (!already) newRxns[emoji] = [...(newRxns[emoji]||[]), currentUser.uid];
+  const updatedP = { ...p, reactions: newRxns, likes: (p.likes||[]).filter(uid => uid !== currentUser.uid) };
+  const postEl = document.getElementById(`post-${postId}`);
+  if (postEl) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = postHTML(postId, updatedP);
+    postEl.replaceWith(tmp.firstElementChild);
+  }
 }
 
 // ── Carousel ───────────────────────────────────────────────────

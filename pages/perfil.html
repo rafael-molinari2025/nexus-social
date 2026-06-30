@@ -847,7 +847,7 @@ async function loadProfilePosts(uid) {
         ${_profilePostImageHTML(p)}
         <div class="post-actions" style="padding:.35rem 0">
           <button class="post-action-btn${liked?' liked':''}" id="like-btn-${doc.id}" onclick="toggleLike('${doc.id}')">
-            <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
+            <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" aria-hidden="true"></i> ${(p.likes||[]).length}
           </button>
           <button class="post-action-btn" onclick="location.href='post.html?id=${doc.id}'">
             <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0} comentários
@@ -898,7 +898,7 @@ async function toggleLike(postId) {
     if (btn) {
       const newCount = isLiked ? likes.length - 1 : likes.length + 1;
       btn.className = `post-action-btn${!isLiked ? ' liked' : ''}`;
-      btn.innerHTML = `<i class="ti ti-heart" aria-hidden="true"></i> ${newCount}`;
+      btn.innerHTML = `<i class="ti ${!isLiked ? 'ti-heart-filled' : 'ti-heart'}" aria-hidden="true"></i> ${newCount}`;
     }
   } catch(e) {
     showToast('Erro ao curtir.');
