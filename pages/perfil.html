@@ -189,10 +189,19 @@
       </div>
 
       <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <div class="input-icon-wrap">
+          <i class="ti ti-mail input-icon"></i>
+          <input class="form-input" type="email" id="edit-email" placeholder="seu@email.com" autocomplete="email">
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:.25rem">Alterar o e-mail exige que você confirme sua senha atual.</div>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">Nome de usuário</label>
         <div class="input-icon-wrap">
           <span class="input-icon" style="font-family:monospace;font-weight:600;font-size:16px">@</span>
-          <input class="form-input" type="text" id="edit-username" placeholder="rafamolinari"
+          <input class="form-input" type="text" id="edit-username" placeholder="nome.usuario"
                  oninput="this.value=this.value.replace(/[^a-z0-9_.]/gi,'').toLowerCase()">
         </div>
       </div>
@@ -557,6 +566,7 @@ async function renderProfile(uid) {
     const parts = (d.displayName || '').split(' ');
     document.getElementById('edit-firstname').value = parts[0] || '';
     document.getElementById('edit-lastname').value  = parts.slice(1).join(' ') || '';
+    document.getElementById('edit-email').value     = currentUser.email || '';
     document.getElementById('edit-username').value  = d.username  || '';
     document.getElementById('edit-bio').value       = d.bio       || '';
     document.getElementById('edit-birthdate').value = d.birthdate || '';
@@ -1240,6 +1250,7 @@ function shareProfile(uid) {
 async function saveProfile() {
   const first    = document.getElementById('edit-firstname').value.trim();
   const last     = document.getElementById('edit-lastname').value.trim();
+  const newEmail = document.getElementById('edit-email').value.trim().toLowerCase();
   const username = document.getElementById('edit-username').value.trim().toLowerCase();
   const bio      = document.getElementById('edit-bio').value.trim();
   const birth    = document.getElementById('edit-birthdate').value;
@@ -1248,6 +1259,9 @@ async function saveProfile() {
 
   if (!first) return showToast('O nome é obrigatório.');
   if (username && username.length < 3) return showToast('Username deve ter pelo menos 3 caracteres.');
+  if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return showToast('E-mail inválido.');
+
+  const emailChanged = newEmail && newEmail !== currentUser.email;
 
   const displayName = last ? `${first} ${last}` : first;
   const btn = document.querySelector('#edit-modal .btn-primary');
@@ -1288,6 +1302,26 @@ async function saveProfile() {
     if (username) updates.username = username;
     if (birth) updates.birthdate = birth;
     if (editGender) updates.gender = editGender;
+
+    // Alterar e-mail requer reautenticação
+    if (emailChanged) {
+      const senha = prompt('Para alterar o e-mail, confirme sua senha atual:');
+      if (!senha) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
+        return;
+      }
+      try {
+        const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, senha);
+        await currentUser.reauthenticateWithCredential(credential);
+        await currentUser.updateEmail(newEmail);
+        await updateUserData(currentUser.uid, { email: newEmail });
+      } catch(eAuth) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
+        return showToast(eAuth.code === 'auth/wrong-password' ? 'Senha incorreta.' : 'Erro ao alterar e-mail.');
+      }
+    }
 
     await updateUserData(currentUser.uid, updates);
     await currentUser.updateProfile({ displayName });

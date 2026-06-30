@@ -99,11 +99,15 @@ initTheme();
 // ── Auth guard ────────────────────────────────────────────────
 function requireAuth(callback) {
   auth.onAuthStateChanged(user => {
+    const loginPath = _isInPages ? 'login.html' : 'pages/login.html';
     if (!user) {
-      // Redirecionar para login (path relativo)
-      const loginPath = _isInPages ? 'login.html' : 'pages/login.html';
       window.location.href = loginPath;
     } else {
+      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+      if (!user.emailVerified && !isGoogle) {
+        auth.signOut().then(() => { window.location.href = loginPath; });
+        return;
+      }
       callback(user);
       // Registrar FCM token uma vez por sessão
       if (!sessionStorage.getItem('_fcm_ok')) {
@@ -126,9 +130,14 @@ function requireAuth(callback) {
 }
 
 // ── Redirect if already logged in ────────────────────────────
-function redirectIfLoggedIn() {
+function redirectIfLoggedIn(unverifiedCallback) {
   auth.onAuthStateChanged(user => {
     if (user) {
+      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+      if (!user.emailVerified && !isGoogle) {
+        if (unverifiedCallback) unverifiedCallback(user);
+        return;
+      }
       const profilePath = _isInPages
         ? `perfil.html?uid=${user.uid}`
         : `pages/perfil.html?uid=${user.uid}`;

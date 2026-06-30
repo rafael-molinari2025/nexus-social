@@ -102,7 +102,7 @@
     <div id="auth-error" class="auth-error"></div>
 
     <!-- Abas -->
-    <div style="display:flex;background:var(--gray-100);border-radius:var(--radius-md);padding:3px;gap:3px">
+    <div id="tabs-container" style="display:flex;background:var(--gray-100);border-radius:var(--radius-md);padding:3px;gap:3px">
       <button class="tab-toggle active" id="tab-login" onclick="switchTab('login')">Entrar</button>
       <button class="tab-toggle" id="tab-signup" onclick="switchTab('signup')">Cadastrar</button>
     </div>
@@ -260,6 +260,23 @@
       </div>
     </div>
 
+    <!-- ═══════════════ VERIFICAR E-MAIL ═══════════════ -->
+    <div id="form-verify" style="display:none;text-align:center;padding:.5rem 0">
+      <div style="font-size:44px;margin-bottom:.75rem">📧</div>
+      <h3 style="font-size:17px;font-weight:600;margin-bottom:.4rem;color:var(--text-primary)">Verifique seu e-mail</h3>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:1.5rem;line-height:1.5">
+        Enviamos um link de confirmação para<br>
+        <strong id="verify-email-display" style="color:var(--text-primary)"></strong>
+      </p>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;height:42px;border-radius:var(--radius-md);margin-bottom:.65rem" onclick="checkVerified()">
+        <i class="ti ti-circle-check"></i> Já verifiquei
+      </button>
+      <button type="button" onclick="resendVerification()" style="background:none;border:none;color:var(--purple-600);font-size:13px;cursor:pointer;font-family:var(--font-sans)">
+        Reenviar e-mail de verificação
+      </button>
+    </div>
+
+    <div id="google-section">
     <div class="divider">ou</div>
 
     <button class="btn-google" onclick="loginGoogle()">
@@ -271,6 +288,7 @@
       </svg>
       Continuar com Google
     </button>
+    </div><!-- /google-section -->
   </div>
 </div>
 
@@ -281,7 +299,7 @@
 <script src="../js/firebase-config.js"></script>
 <script src="../js/utils.js"></script>
 <script>
-  redirectIfLoggedIn();
+  redirectIfLoggedIn(user => showVerifyScreen(user.email));
 
   // Set max date (must be 13+)
   const maxDate = new Date();
@@ -392,6 +410,10 @@
     if (!email || !pass) return showError('Preencha e-mail e senha.');
     try {
       const { user } = await auth.signInWithEmailAndPassword(email, pass);
+      if (!user.emailVerified) {
+        showVerifyScreen(user.email);
+        return;
+      }
       await handleAuthSuccess(user);
     } catch(e) {
       showError(
@@ -399,6 +421,44 @@
           ? 'E-mail ou senha incorretos.'
           : 'Erro ao entrar. Tente novamente.'
       );
+    }
+  }
+
+  function showVerifyScreen(email) {
+    document.getElementById('tabs-container').style.display = 'none';
+    document.getElementById('form-login').style.display    = 'none';
+    document.getElementById('form-signup').style.display   = 'none';
+    document.getElementById('google-section').style.display = 'none';
+    document.getElementById('form-verify').style.display   = '';
+    document.getElementById('verify-email-display').textContent = email || '';
+    document.getElementById('auth-card').classList.remove('wide');
+    clearError();
+  }
+
+  async function checkVerified() {
+    const user = auth.currentUser;
+    if (!user) return showError('Sessão expirada. Faça login novamente.');
+    await user.reload();
+    if (user.emailVerified) {
+      await handleAuthSuccess(user);
+    } else {
+      showError('E-mail ainda não verificado. Verifique sua caixa de entrada e clique no link.');
+    }
+  }
+
+  async function resendVerification() {
+    const user = auth.currentUser;
+    if (!user) return showError('Sessão expirada. Faça login novamente.');
+    try {
+      await user.sendEmailVerification();
+      const el = document.getElementById('auth-error');
+      el.textContent = 'E-mail reenviado! Verifique sua caixa de entrada.';
+      el.style.background  = 'var(--green-50, rgba(46,168,117,0.12))';
+      el.style.borderColor = 'var(--green-400, #2EA875)';
+      el.style.color       = 'var(--green-700, #0F6E56)';
+      el.style.display     = 'block';
+    } catch(e) {
+      showError('Erro ao reenviar. Aguarde um momento e tente novamente.');
     }
   }
 
@@ -430,7 +490,6 @@
       const result = await auth.createUserWithEmailAndPassword(email, pass);
       user = result.user;
       await user.updateProfile({ displayName });
-      user.sendEmailVerification().catch(() => {});
     } catch(e) {
       btn.disabled = false;
       btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
@@ -453,35 +512,29 @@
         return showError('Este nome de usuário já está em uso. Escolha outro.');
       }
     } catch(e) {
-      // falha de rede na checagem — prossegue; conflito de username será raro e resolvível no perfil
       console.warn('username check failed, proceeding:', e);
     }
 
     // ── Passo 3: salvar perfil no Firestore (com retry) ───────
-    const profileData = {
-      displayName,
-      username,
-      birthdate: birth,
-      gender: selectedGender,
-      city,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    const firestoreData = {
+      uid: user.uid, email: user.email, displayName,
+      displayName_lower: displayName.toLowerCase(),
+      username, birthdate: birth, gender: selectedGender, city,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-
     for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        await handleAuthSuccess(user, profileData);
-        return; // sucesso — handleAuthSuccess já redireciona
-      } catch(e) {
-        if (attempt === 3) {
-          // após 3 tentativas, a conta Auth existe; redireciona para o perfil
-          // o documento Firestore será criado no próximo login via handleAuthSuccess
-          console.error('Firestore write failed after 3 attempts, redirecting:', e);
-          window.location.href = `/pages/perfil.html?uid=${user.uid}`;
-          return;
-        }
-        await new Promise(r => setTimeout(r, 600 * attempt)); // backoff: 600ms, 1200ms
+      try { await updateUserData(user.uid, firestoreData); break; }
+      catch(e) {
+        if (attempt < 3) await new Promise(r => setTimeout(r, 600 * attempt));
       }
     }
+
+    // ── Passo 4: enviar e-mail de verificação e aguardar confirmação ──
+    try { await user.sendEmailVerification(); } catch(_) {}
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-user-plus"></i> Criar conta';
+    showVerifyScreen(user.email);
   }
 
   async function loginGoogle() {
