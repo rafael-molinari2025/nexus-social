@@ -1966,9 +1966,9 @@ function postHTML(id, p) {
       </div>` : ''}
     <div class="post-actions">
       <div class="reaction-wrap">
-        <button class="post-action-btn${myRxn ? ' reacted' : ''}"
+        <button class="post-action-btn${myRxn ? ' liked' : ''}"
                 onclick="setReaction('${id}','${myRxn||'❤️'}')">
-          ${myRxn || '<i class="ti ti-heart" aria-hidden="true"></i>'}
+          <i class="ti ${myRxn ? 'ti-heart-filled' : 'ti-heart'}" aria-hidden="true"></i>
           ${totalRxn || ''}
         </button>
         <div class="reaction-picker">${pickerBtns}</div>
