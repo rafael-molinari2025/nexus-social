@@ -486,15 +486,25 @@ function groupNotifications(notifs) {
     const key = `${n.type}:${n.link || ''}`;
     if (byKey[key]) {
       byKey[key]._extra = (byKey[key]._extra || 0) + 1;
+      if (n.fromName) byKey[key]._names.push(n.fromName);
+      if (!n.read) byKey[key].read = false;
     } else {
-      byKey[key] = { ...n, _extra: 0 };
+      byKey[key] = { ...n, _extra: 0, _names: [n.fromName].filter(Boolean) };
       groups.push(byKey[key]);
     }
   }
   return groups.map(n => {
     if (!n._extra) return n;
-    const suffix = n._extra === 1 ? 'mais 1 pessoa' : `mais ${n._extra} pessoas`;
-    return { ...n, message: `${(n.message || '').replace(/\.$/, '')} e ${suffix}.` };
+    const first  = sanitize(n._names[0] || n.fromName || 'Alguém');
+    const others = n._extra;
+    let msg;
+    if (n.type === 'post_like')
+      msg = `${first} e mais ${others} pessoa${others !== 1 ? 's' : ''} curtiram seu post`;
+    else if (n.type === 'post_comment')
+      msg = `${first} e mais ${others} pessoa${others !== 1 ? 's' : ''} comentaram seu post`;
+    else
+      msg = `${(n.message || '').replace(/\.$/, '')} e mais ${others} pessoa${others !== 1 ? 's' : ''}.`;
+    return { ...n, message: msg };
   });
 }
 

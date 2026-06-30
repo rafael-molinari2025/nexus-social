@@ -9,7 +9,9 @@ if (!admin.apps.length) {
 const NEXUS_ORIGIN = 'https://nexus.primetitec.com.br';
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '';
+  const allowed = ['https://nexus.primetitec.com.br', 'https://rede-social-acf40.web.app', 'https://rede-social-acf40.firebaseapp.com'];
+  res.setHeader('Access-Control-Allow-Origin', allowed.includes(origin) ? origin : NEXUS_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();

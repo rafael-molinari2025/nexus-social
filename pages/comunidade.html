@@ -192,7 +192,7 @@ function renderPage() {
               <textarea class="composer-textarea" id="comm-post-text" placeholder="Compartilhe algo com a comunidade..."></textarea>
               <div class="composer-footer">
                 <div></div>
-                <button class="btn btn-primary btn-sm" onclick="createCommPost()">
+                <button class="btn btn-primary btn-sm" id="comm-post-btn" onclick="createCommPost()">
                   <i class="ti ti-send" aria-hidden="true"></i> Publicar
                 </button>
               </div>
@@ -365,8 +365,13 @@ async function createCommPost() {
   if (!isMember) return showToast('Entre na comunidade para postar.');
   const text = document.getElementById('comm-post-text').value.trim();
   if (!text) return showToast('Escreva algo para publicar.');
+  if (!checkRateLimit('commpost_' + currentUser.uid, 3, 60000))
+    return showToast('Muitos posts seguidos. Aguarde um momento.');
+  const btn = document.getElementById('comm-post-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
+  const reset = () => { if (btn) { btn.disabled = false; btn.textContent = 'Publicar'; } };
   try {
-    await db.collection('posts').add({
+    const postData = {
       text,
       communityId: commId,
       communityName: commData.name,
@@ -374,12 +379,32 @@ async function createCommPost() {
       authorName: currentUser.displayName,
       authorPhoto: currentUser.photoURL || null,
       likes: [],
+      reactions: {},
       commentsCount: 0,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
+    // Moderação inline
+    try {
+      const modRes = await fetch('https://nexus-social-fawn.vercel.app/api/moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const mod = modRes.ok ? await modRes.json() : { decision: 'allow' };
+      if (mod.decision === 'block') {
+        showToast('Publicação bloqueada: ' + (mod.reason || 'conteúdo viola as diretrizes.'));
+        reset(); return;
+      }
+      postData.modStatus     = mod.decision === 'flag' ? 'flagged' : 'approved';
+      postData.modReason     = mod.reason     || '';
+      postData.modCategories = mod.categories || [];
+    } catch (_) { postData.modStatus = 'pending'; }
+
+    await db.collection('posts').add(postData);
     document.getElementById('comm-post-text').value = '';
     showToast('Post publicado!');
   } catch(e) { showToast('Erro ao publicar.'); }
+  reset();
 }
 
 async function toggleLike(postId) {

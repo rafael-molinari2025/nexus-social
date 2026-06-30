@@ -238,6 +238,8 @@ async function sendScrap() {
   const text = document.getElementById('scrap-write-text').value.trim();
   if (!selectedFriend) return showToast('Selecione um amigo.');
   if (!text) return showToast('Escreva algo no recado.');
+  if (!checkRateLimit('scrap_' + currentUser.uid, 5, 60000))
+    return showToast('Muitos recados seguidos. Aguarde um momento.');
 
   const btn = document.getElementById('send-scrap-btn');
   btn.disabled = true;

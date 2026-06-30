@@ -371,7 +371,10 @@ requireAuth(async user => {
     firestoreData = { uid, ...rescue };
   }
   profileData = firestoreData || { uid, displayName: user.displayName, email: user.email };
-  renderTopbar(await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName }, 'profile');
+  const _topbarData = (uid === user.uid)
+    ? profileData
+    : (await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName });
+  renderTopbar(_topbarData, 'profile');
   renderProfile(uid);
 });
 
@@ -690,7 +693,7 @@ async function loadAboutTab(uid) {
       ${rows}
       ${socialSection}
       ${!hasContent ? '<p style="font-size:13px;color:var(--text-muted);margin:.5rem 0">Nenhuma informação preenchida ainda.</p>' : ''}
-      ${isOwn ? `<button class="btn btn-sm" style="margin-top:.75rem;width:100%;justify-content:center" onclick="openEditModal()">
+      ${isOwn ? `<button class="btn btn-sm" style="margin-top:.75rem;width:100%;justify-content:center" onclick="openModal()">
         <i class="ti ti-pencil"></i> Editar perfil
       </button>` : ''}`;
   } catch(e) {
@@ -1091,7 +1094,6 @@ function selectEditGender(g) {
 }
 
 function openModal() { document.getElementById('edit-modal').classList.add('open'); }
-function openEditModal() { openModal(); }
 function closeModal() {
   document.getElementById('edit-modal').classList.remove('open');
   const grid = document.getElementById('emoji-quick-grid');

@@ -147,34 +147,6 @@ async function loadMoreNotifs() {
   await loadNotifs(false);
 }
 
-function groupNotifs(notifs) {
-  const groups = [];
-  const seenMap = new Map();
-  for (const n of notifs) {
-    const canGroup = (n.type === 'post_like' || n.type === 'post_comment') && n.link;
-    const key = canGroup ? `${n.type}:${n.link}` : null;
-    if (key && seenMap.has(key)) {
-      const g = seenMap.get(key);
-      g.count++;
-      g.names.push(n.fromName);
-      if (!n.read) g.read = false;
-    } else {
-      const g = { ...n, count: 1, names: [n.fromName] };
-      groups.push(g);
-      if (key) seenMap.set(key, g);
-    }
-  }
-  return groups;
-}
-
-function groupedMsg(n) {
-  if (n.count <= 1) return sanitize(n.message || '');
-  const others = n.count - 1;
-  const first = sanitize(n.names[0] || 'Alguém');
-  if (n.type === 'post_like')    return `<strong>${first}</strong> e mais ${others} pessoa${others !== 1 ? 's' : ''} curtiram seu post`;
-  if (n.type === 'post_comment') return `<strong>${first}</strong> e mais ${others} pessoa${others !== 1 ? 's' : ''} comentaram seu post`;
-  return sanitize(n.message || '');
-}
 
 function renderNotifs(hasMore = false) {
   const el = document.getElementById('notif-list');
@@ -190,11 +162,11 @@ function renderNotifs(hasMore = false) {
     return;
   }
 
-  const grouped = groupNotifs(filtered);
+  const grouped = groupNotifications(filtered);
   const items = grouped.map(n => {
     const ic   = notifIcon(n.type);
     const href = notifLink(n);
-    const msg  = groupedMsg(n);
+    const msg  = sanitize(n.message || '');
     return `<div class="notif-full-item${n.read ? '' : ' unread'}" onclick="location.href='${href}'">
         <div class="notif-full-icon" style="background:${ic.bg}">
           <i class="ti ${ic.icon}" style="color:${ic.color}"></i>

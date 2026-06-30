@@ -110,7 +110,7 @@
     <!-- Filtros contextuais -->
     <div id="filter-bar" style="display:none;overflow-x:auto;scrollbar-width:none;padding-bottom:.5rem;margin-bottom:.25rem">
       <!-- Posts filters -->
-      <div id="filter-posts" style="display:none;display:flex;gap:.4rem;flex-wrap:nowrap;min-width:max-content">
+      <div id="filter-posts" style="display:none;gap:.4rem;flex-wrap:nowrap;min-width:max-content">
         <button class="search-tab active" style="padding:.3rem .75rem;font-size:12px" id="fp-all" onclick="setPostFilter('all')">Todos</button>
         <button class="search-tab" style="padding:.3rem .75rem;font-size:12px" id="fp-image" onclick="setPostFilter('image')"><i class="ti ti-photo"></i> Com imagem</button>
         <button class="search-tab" style="padding:.3rem .75rem;font-size:12px" id="fp-text" onclick="setPostFilter('text')"><i class="ti ti-text-size"></i> Só texto</button>
@@ -164,7 +164,7 @@ const CATEGORY_COLORS = {
 requireAuth(async user => {
   currentUser = user;
   const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
-  renderTopbar(userData, '');
+  renderTopbar(userData, 'search');
 
   // Pré-carregar amigos e solicitações pendentes
   const [fSnap, rSnap] = await Promise.all([
