@@ -379,12 +379,13 @@ function profileCompletenessHTML(d) {
   const fields = [
     { key: 'photoURL',   label: 'Foto de perfil' },
     { key: 'coverURL',   label: 'Foto de capa' },
+    { key: 'username',   label: 'Nome de usuário' },
     { key: 'bio',        label: 'Bio' },
     { key: 'city',       label: 'Cidade' },
     { key: 'gender',     label: 'Gênero' },
     { key: 'birthdate',  label: 'Data de nascimento' },
-    { key: 'website',    label: 'Website' },
-    { key: 'username',   label: 'Nome de usuário' },
+    { key: 'work',       label: 'Trabalho' },
+    { key: 'education',  label: 'Educação' },
   ];
   const filled = fields.filter(f => d[f.key]).length;
   const pct = Math.round((filled / fields.length) * 100);
@@ -678,23 +679,6 @@ async function loadAboutTab(uid) {
          </div>`
       : '';
 
-    // Profile completion widget (owner only)
-    let completionBar = '';
-    if (isOwn) {
-      const tracked = ['photoURL','coverURL','bio','city','gender','birthdate','website','work','education'];
-      const filled  = tracked.filter(k => !!d[k]).length;
-      const pct     = Math.round((filled / tracked.length) * 100);
-      completionBar = `<div style="background:var(--gray-50);border:0.5px solid var(--border);border-radius:var(--radius-md);padding:.875rem;margin-bottom:.75rem">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem">
-          <span style="font-size:13px;font-weight:600">Perfil ${pct}% completo</span>
-          ${pct===100 ? '<span style="font-size:12px;color:#22c55e">✓ Completo!</span>' : `<span style="font-size:12px;color:var(--text-muted)">${tracked.length-filled} campo${tracked.length-filled!==1?'s':''} faltando</span>`}
-        </div>
-        <div style="height:6px;background:var(--gray-200);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:var(--purple-600);border-radius:3px"></div>
-        </div>
-      </div>`;
-    }
-
     const hasContent = bioSection || rows || socialSection;
     if (!hasContent && !isOwn) {
       el.innerHTML = '<div class="empty-state"><i class="ti ti-info-circle"></i><p>Nenhuma informação disponível.</p></div>';
@@ -702,7 +686,6 @@ async function loadAboutTab(uid) {
     }
 
     el.innerHTML = `
-      ${completionBar}
       ${bioSection}
       ${rows}
       ${socialSection}
