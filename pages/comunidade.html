@@ -656,11 +656,39 @@ async function deleteThisCommunity() {
 }
 
 function openEditCommModal() {
-  const name = prompt('Novo nome da comunidade:', commData.name);
-  if (name === null) return;
-  const desc = prompt('Nova descrição:', commData.description || '');
-  if (desc === null) return;
-  updateCommunityInfo(name.trim(), desc.trim());
+  const existing = document.getElementById('edit-comm-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'edit-comm-modal';
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header">
+        <span class="modal-title"><i class="ti ti-pencil"></i> Editar comunidade</span>
+        <button class="btn btn-icon" onclick="document.getElementById('edit-comm-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="padding:1rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.75rem">
+        <div class="form-group">
+          <label class="form-label">Nome da comunidade</label>
+          <input class="form-input" id="edit-comm-name" type="text" maxlength="80" value="${sanitize(commData.name||'')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descrição</label>
+          <textarea class="form-control" id="edit-comm-desc" rows="3" maxlength="500" style="resize:vertical">${sanitize(commData.description||'')}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="saveEditComm()"><i class="ti ti-check"></i> Salvar</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  document.getElementById('edit-comm-name').focus();
+}
+
+async function saveEditComm() {
+  const name = document.getElementById('edit-comm-name')?.value.trim();
+  const desc = document.getElementById('edit-comm-desc')?.value.trim() || '';
+  document.getElementById('edit-comm-modal')?.remove();
+  updateCommunityInfo(name, desc);
 }
 
 async function updateCommunityInfo(name, desc) {

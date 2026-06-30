@@ -1278,24 +1278,12 @@ async function saveProfile() {
     if (birth) updates.birthdate = birth;
     if (editGender) updates.gender = editGender;
 
-    // Alterar e-mail requer reautenticação
+    // Alterar e-mail requer reautenticação — mostrar modal dedicado
     if (emailChanged) {
-      const senha = prompt('Para alterar o e-mail, confirme sua senha atual:');
-      if (!senha) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
-        return;
-      }
-      try {
-        const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, senha);
-        await currentUser.reauthenticateWithCredential(credential);
-        await currentUser.updateEmail(newEmail);
-        await updateUserData(currentUser.uid, { email: newEmail });
-      } catch(eAuth) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
-        return showToast(eAuth.code === 'auth/wrong-password' ? 'Senha incorreta.' : 'Erro ao alterar e-mail.');
-      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
+      _showReauthModal(newEmail, displayName, updates);
+      return;
     }
 
     await updateUserData(currentUser.uid, updates);
@@ -1309,6 +1297,69 @@ async function saveProfile() {
   }
   btn.disabled = false;
   btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar alterações';
+}
+
+let _reauthPending = null;
+
+function _showReauthModal(newEmail, displayName, updates) {
+  document.getElementById('reauth-modal')?.remove();
+  _reauthPending = { newEmail, displayName, updates };
+  const m = document.createElement('div');
+  m.id = 'reauth-modal';
+  m.className = 'modal-overlay open';
+  m.innerHTML = `
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <span class="modal-title">Confirmar identidade</span>
+        <button class="btn btn-icon" onclick="document.getElementById('reauth-modal').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="padding:1rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.75rem">
+        <p style="font-size:13px;color:var(--text-muted)">Para alterar o e-mail, confirme sua senha atual.</p>
+        <input class="form-input" id="reauth-pwd" type="password" placeholder="Senha atual" autocomplete="current-password">
+        <p id="reauth-err" style="font-size:12px;color:var(--coral-400,#f87171);display:none;margin:0"></p>
+        <button class="btn btn-primary" id="reauth-confirm-btn" onclick="_reauthAndSave()">
+          <i class="ti ti-check"></i> Confirmar
+        </button>
+      </div>
+    </div>`;
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  document.body.appendChild(m);
+  const pwd = document.getElementById('reauth-pwd');
+  pwd.focus();
+  pwd.addEventListener('keydown', e => { if (e.key === 'Enter') _reauthAndSave(); });
+}
+
+async function _reauthAndSave() {
+  const pwd    = document.getElementById('reauth-pwd');
+  const errEl  = document.getElementById('reauth-err');
+  const confBtn = document.getElementById('reauth-confirm-btn');
+  const senha  = pwd?.value || '';
+  if (!senha) { errEl.textContent = 'Digite sua senha.'; errEl.style.display = ''; return; }
+
+  confBtn.disabled = true;
+  confBtn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Verificando…';
+
+  try {
+    const { newEmail, displayName, updates } = _reauthPending;
+    const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, senha);
+    await currentUser.reauthenticateWithCredential(credential);
+    await currentUser.updateEmail(newEmail);
+    await updateUserData(currentUser.uid, { email: newEmail });
+    document.getElementById('reauth-modal')?.remove();
+    _reauthPending = null;
+
+    await updateUserData(currentUser.uid, updates);
+    await currentUser.updateProfile({ displayName });
+    showToast('Perfil atualizado!');
+    closeModal();
+    profileData = { ...profileData, ...updates };
+    renderProfile(currentUser.uid);
+  } catch(eAuth) {
+    errEl.textContent = eAuth.code === 'auth/wrong-password' ? 'Senha incorreta.' : 'Erro ao verificar identidade.';
+    errEl.style.display = '';
+    confBtn.disabled = false;
+    confBtn.innerHTML = '<i class="ti ti-check"></i> Confirmar';
+  }
 }
 
 document.getElementById('edit-modal').addEventListener('click', e => {
