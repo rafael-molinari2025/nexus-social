@@ -313,11 +313,11 @@ async function loadPopularPosts() {
       return `
         <div class="trend-post" onclick="location.href='post.html?id=${p.id}'" style="cursor:pointer">
           <div class="trend-post-header">
-            <div style="cursor:pointer" onclick="event.stopPropagation();location.href='perfil.html?uid=${sanitize(p.authorId)}'">
+            <div style="cursor:pointer" onclick="event.stopPropagation();location.href='perfil.html?uid=${encodeURIComponent(p.authorId)}'">
               ${av}
             </div>
             <div>
-              <div class="trend-post-author" onclick="event.stopPropagation();location.href='perfil.html?uid=${sanitize(p.authorId)}'">${sanitize(p.authorName||'Usuário')}</div>
+              <div class="trend-post-author" onclick="event.stopPropagation();location.href='perfil.html?uid=${encodeURIComponent(p.authorId)}'">${sanitize(p.authorName||'Usuário')}</div>
               <div class="trend-post-time">${timeAgo(p.createdAt)}</div>
             </div>
           </div>

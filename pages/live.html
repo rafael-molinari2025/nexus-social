@@ -850,6 +850,8 @@ async function sendMsg(liveId) {
   const input = document.getElementById('chat-input');
   const text  = (input?.value || '').trim();
   if (!text || !currentUser) return;
+  if (!checkRateLimit('livechat_' + currentUser.uid, 5, 3000))
+    return showToast('Devagar! Aguarde um momento.');
   input.value = '';
   try {
     await db.collection('lives').doc(liveId).collection('messages').add({

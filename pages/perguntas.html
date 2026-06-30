@@ -312,6 +312,8 @@ function questionCardHTML(id, q) {
 async function sendQuestion() {
   const text = document.getElementById('question-text').value.trim();
   if (!text) return showToast('Digite sua pergunta.');
+  if (!checkRateLimit('question_' + currentUser.uid, 5, 60000))
+    return showToast('Muitos envios seguidos. Aguarde um momento.');
   const anon = document.getElementById('anon-check').checked;
   const btn  = document.getElementById('send-btn');
   btn.disabled = true;

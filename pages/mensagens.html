@@ -456,15 +456,13 @@ requireAuth(async user => {
   const ud = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
   renderTopbar(ud, 'messages');
 
-  // Carregar lista de conversas primeiro
+  // Carregar lista de conversas
   loadConversations();
 
-  // Abrir conversa da URL com pequeno delay para garantir que o listener iniciou
+  // Abrir conversa da URL — openOrCreateConversation usa Firestore diretamente,
+  // não depende do sidebar estar renderizado; activeConvId garante o highlight posterior
   const withUid = new URLSearchParams(location.search).get('with');
-  if (withUid) {
-    // Aguardar um tick para o listener de conversas registrar
-    setTimeout(() => openOrCreateConversation(withUid), 100);
-  }
+  if (withUid) openOrCreateConversation(withUid);
 });
 
 // ── Conversation ID (deterministic) ─────────────────────────────

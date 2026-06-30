@@ -477,7 +477,7 @@ function postCardHTML(id, p) {
     ${p.text ? `<div class="post-body" style="padding:.5rem 0;max-height:120px;overflow:hidden">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<span style="color:var(--purple-600)">#$1</span>')}</div>` : ''}
     ${p.imageURL ? `<img src="${p.imageURL}" alt="Imagem" loading="lazy" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-md);margin-bottom:.5rem">` : ''}
     <div class="post-actions" style="padding:.35rem 0">
-      <span class="post-action-btn"><i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}</span>
+      <span class="post-action-btn"><i class="ti ti-heart" aria-hidden="true"></i> ${_RXN_EMOJIS.reduce((s,e)=>s+((p.reactions&&p.reactions[e])||[]).length,0)+(p.likes||[]).length||''}</span>
       <span class="post-action-btn"><i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0}</span>
     </div>
   </div>`;

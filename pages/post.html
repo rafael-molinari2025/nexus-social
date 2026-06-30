@@ -322,16 +322,57 @@ async function likeComment(commentId) {
 
 async function editComment(commentId) {
   const textEl = document.getElementById(`ctext-${commentId}`);
-  if (!textEl) return;
-  const currentText = textEl.textContent;
-  const newText = prompt('Editar comentário:', currentText);
-  if (!newText || newText.trim() === currentText.trim()) return;
-  try {
-    await db.collection('posts').doc(postId).collection('comments').doc(commentId)
-      .update({ text: newText.trim(), editedAt: firebase.firestore.FieldValue.serverTimestamp() });
-    textEl.innerHTML = sanitize(newText.trim()).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/@(\w+)/g, '<span style="color:var(--purple-600);font-weight:500">@$1</span>');
-    showToast('Comentário editado.');
-  } catch(e) { showToast('Erro ao editar comentário.'); }
+  if (!textEl || textEl.dataset.editing) return;
+  textEl.dataset.editing = '1';
+  const currentText = textEl.textContent.trim();
+
+  const ta = document.createElement('textarea');
+  ta.className = 'comment-input';
+  ta.style.cssText = 'width:100%;min-height:56px;resize:vertical;margin-bottom:.3rem';
+  ta.value = currentText;
+  ta.maxLength = 1000;
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-primary btn-sm';
+  saveBtn.innerHTML = '<i class="ti ti-check"></i> Salvar';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-sm';
+  cancelBtn.innerHTML = '<i class="ti ti-x"></i> Cancelar';
+  cancelBtn.style.marginLeft = '.35rem';
+
+  const wrap = document.createElement('div');
+  wrap.style.marginTop = '.3rem';
+  wrap.append(ta, saveBtn, cancelBtn);
+
+  const restore = () => {
+    textEl.style.display = '';
+    wrap.remove();
+    delete textEl.dataset.editing;
+  };
+
+  textEl.style.display = 'none';
+  textEl.after(wrap);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  cancelBtn.addEventListener('click', restore);
+
+  saveBtn.addEventListener('click', async () => {
+    const newText = ta.value.trim();
+    if (!newText || newText === currentText) { restore(); return; }
+    saveBtn.disabled = true;
+    try {
+      await db.collection('posts').doc(postId).collection('comments').doc(commentId)
+        .update({ text: newText, editedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      textEl.innerHTML = sanitize(newText).replace(/\n/g,'<br>')
+        .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+        .replace(/_(.*?)_/g,'<em>$1</em>')
+        .replace(/@(\w+)/g,'<span style="color:var(--purple-600);font-weight:500">@$1</span>');
+      showToast('Comentário editado.');
+    } catch(e) { showToast('Erro ao editar comentário.'); }
+    restore();
+  });
 }
 
 let _commentGifUrl = null;
