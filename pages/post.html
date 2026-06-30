@@ -536,15 +536,16 @@ function selectCommentGif(url) {
   showToast('GIF selecionado!');
 }
 
-async function deleteComment(commentId) {
-  if (!confirm('Excluir este comentário?')) return;
-  const batch = db.batch();
-  batch.delete(db.collection('posts').doc(postId).collection('comments').doc(commentId));
-  batch.update(db.collection('posts').doc(postId), {
-    commentsCount: firebase.firestore.FieldValue.increment(-1)
+function deleteComment(commentId) {
+  confirmAction('Excluir este comentário?', async () => {
+    const batch = db.batch();
+    batch.delete(db.collection('posts').doc(postId).collection('comments').doc(commentId));
+    batch.update(db.collection('posts').doc(postId), {
+      commentsCount: firebase.firestore.FieldValue.increment(-1)
+    });
+    await batch.commit();
+    showToast('Comentário excluído.');
   });
-  await batch.commit();
-  showToast('Comentário excluído.');
 }
 
 async function toggleLike() {
@@ -560,11 +561,12 @@ async function toggleLike() {
   if (btn) btn.disabled = false;
 }
 
-async function deletePost() {
-  if (!confirm('Excluir este post?')) return;
-  await db.collection('posts').doc(postId).delete();
-  showToast('Post excluído.');
-  setTimeout(() => history.back(), 1200);
+function deletePost() {
+  confirmAction('Excluir este post?', async () => {
+    await db.collection('posts').doc(postId).delete();
+    showToast('Post excluído.');
+    setTimeout(() => history.back(), 1200);
+  });
 }
 
 function openShareModal() {

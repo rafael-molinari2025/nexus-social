@@ -968,15 +968,14 @@ async function loadScraps(uid) {
   el.innerHTML = html + scrapsHTML;
 }
 
-async function deleteProfileScrap(id) {
-  if (!confirm('Excluir este recado?')) return;
-  try {
-    await db.collection('scraps').doc(id).delete();
-    document.getElementById(`pscrap-${id}`)?.remove();
-    showToast('Recado excluído.');
-  } catch(e) {
-    showToast('Erro ao excluir recado.');
-  }
+function deleteProfileScrap(id) {
+  confirmAction('Excluir este recado?', async () => {
+    try {
+      await db.collection('scraps').doc(id).delete();
+      document.getElementById(`pscrap-${id}`)?.remove();
+      showToast('Recado excluído.');
+    } catch(e) { showToast('Erro ao excluir recado.'); }
+  });
 }
 
 async function toggleProfileScrapLike(id, btn) {
@@ -1538,6 +1537,8 @@ function openCreateHighlightModal() {
 async function saveHighlight() {
   const title = document.getElementById('hl-title')?.value.trim();
   if (!title) return showToast('Digite um título.');
+  if (!checkRateLimit('highlight_' + currentUser.uid, 5, 60000))
+    return showToast('Muitos destaques criados. Aguarde um momento.');
   const emoji  = document.getElementById('hl-emoji')?.value.trim() || '⭐';
   const imgFile = document.getElementById('hl-img')?.files[0];
   const btn = document.querySelector('#highlight-create-modal .btn-primary');
@@ -1558,11 +1559,12 @@ async function saveHighlight() {
   }
 }
 
-async function deleteHighlight(itemId, uid) {
-  if (!confirm('Excluir este destaque?')) return;
-  await db.collection('highlights').doc(uid).collection('items').doc(itemId).delete();
-  showToast('Destaque excluído.');
-  loadHighlights(uid, true);
+function deleteHighlight(itemId, uid) {
+  confirmAction('Excluir este destaque?', async () => {
+    await db.collection('highlights').doc(uid).collection('items').doc(itemId).delete();
+    showToast('Destaque excluído.');
+    loadHighlights(uid, true);
+  });
 }
 
 function openHighlightViewer(itemId, uid) {
@@ -1779,11 +1781,12 @@ async function approveDepoimento(uid, itemId) {
   loadDepoimentos(uid);
 }
 
-async function deleteDepoimento(uid, itemId) {
-  if (!confirm('Excluir este depoimento?')) return;
-  await db.collection('testimonials').doc(uid).collection('items').doc(itemId).delete();
-  showToast('Depoimento excluído.');
-  loadDepoimentos(uid);
+function deleteDepoimento(uid, itemId) {
+  confirmAction('Excluir este depoimento?', async () => {
+    await db.collection('testimonials').doc(uid).collection('items').doc(itemId).delete();
+    showToast('Depoimento excluído.');
+    loadDepoimentos(uid);
+  });
 }
 
 document.addEventListener('keydown', e => {

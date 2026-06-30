@@ -2232,17 +2232,19 @@ async function toggleBookmark(postId) {
   showToast(saved ? 'Removido dos salvos.' : 'Post salvo!');
 }
 
-async function archivePost(postId) {
-  if (!confirm('Arquivar este post? Ele ficará visível apenas para você em Configurações > Arquivo.')) return;
-  await db.collection('posts').doc(postId).update({ isArchived: true });
-  showToast('Post arquivado.');
-  document.getElementById(`post-${postId}`)?.remove();
+function archivePost(postId) {
+  confirmAction('Arquivar este post? Ele ficará visível apenas para você em Configurações > Arquivo.', async () => {
+    await db.collection('posts').doc(postId).update({ isArchived: true });
+    showToast('Post arquivado.');
+    document.getElementById(`post-${postId}`)?.remove();
+  });
 }
 
-async function deletePost(postId) {
-  if (!confirm('Excluir este post permanentemente?')) return;
-  await db.collection('posts').doc(postId).delete();
-  showToast('Post excluído.');
+function deletePost(postId) {
+  confirmAction('Excluir este post permanentemente?', async () => {
+    await db.collection('posts').doc(postId).delete();
+    showToast('Post excluído.');
+  });
 }
 
 function sharePost(postId) {
@@ -3077,16 +3079,17 @@ async function viewStory(storyId, allIds = [], currentIdx = 0) {
   }).catch(() => {});
 }
 
-async function deleteOwnStory(storyId) {
-  if (!confirm('Excluir este story permanentemente?')) return;
-  clearTimeout(_storyTimer);
-  document.getElementById('story-view-overlay')?.remove();
-  try {
-    await db.collection('stories').doc(storyId).delete();
-    showToast('Story excluído.');
-    // Remove from cache so it doesn't re-appear
-    try { sessionStorage.removeItem('nx_stories_cache'); } catch {}
-  } catch(e) { showToast('Erro ao excluir story.'); }
+function deleteOwnStory(storyId) {
+  confirmAction('Excluir este story permanentemente?', async () => {
+    clearTimeout(_storyTimer);
+    document.getElementById('story-view-overlay')?.remove();
+    try {
+      await db.collection('stories').doc(storyId).delete();
+      showToast('Story excluído.');
+      // Remove from cache so it doesn't re-appear
+      try { sessionStorage.removeItem('nx_stories_cache'); } catch {}
+    } catch(e) { showToast('Erro ao excluir story.'); }
+  });
 }
 
 // ── Story reply via DM ────────────────────────────────────────
@@ -3294,6 +3297,7 @@ async function publishStory() {
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Publicando…';
   const reset = () => { btn.disabled = false; btn.innerHTML = '<i class="ti ti-sparkles"></i> Publicar story'; };
+  if (!checkRateLimit('story_' + currentUser.uid, 5, 60000)) { showToast('Muitos stories seguidos. Aguarde.'); return reset(); }
   try {
     const ud = await getUserData(currentUser.uid) || {};
     const expires = new Date(Date.now() + 24 * 3600 * 1000);
@@ -3578,6 +3582,8 @@ function openViewNoteModal(note) {
 async function saveNote() {
   const text = document.getElementById('note-input')?.value?.trim();
   if (!text) { showToast('Escreva algo primeiro.'); return; }
+  if (!checkRateLimit('note_' + currentUser.uid, 5, 60000))
+    return showToast('Muitas notas seguidas. Aguarde um momento.');
   try {
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
     await db.collection('notes').doc(currentUser.uid).set({

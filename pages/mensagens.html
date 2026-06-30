@@ -1556,14 +1556,15 @@ async function showGroupMembers(cid) {
   }).join('');
 }
 
-async function leaveGroup(cid) {
-  if (!confirm('Sair deste grupo?')) return;
-  await db.collection('conversations').doc(cid).update({
-    participants: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+function leaveGroup(cid) {
+  confirmAction('Sair deste grupo?', async () => {
+    await db.collection('conversations').doc(cid).update({
+      participants: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+    });
+    showToast('Você saiu do grupo.');
+    mobileBackToList();
+    loadConversations();
   });
-  showToast('Você saiu do grupo.');
-  mobileBackToList();
-  loadConversations();
 }
 
 // ── Group creation modal ──────────────────────────────────────
@@ -1705,15 +1706,16 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ── Deletar conversa ────────────────────────────────────────────
-async function deleteConversation(cid) {
-  if (!confirm('Excluir esta conversa? Ela sumirá apenas para você.')) return;
-  try {
-    await db.collection('conversations').doc(cid).update({
-      deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
-    });
-    showToast('Conversa excluída.');
-    mobileBackToList();
-  } catch(e) { showToast('Erro ao excluir conversa.'); }
+function deleteConversation(cid) {
+  confirmAction('Excluir esta conversa? Ela sumirá apenas para você.', async () => {
+    try {
+      await db.collection('conversations').doc(cid).update({
+        deletedFor: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+      });
+      showToast('Conversa excluída.');
+      mobileBackToList();
+    } catch(e) { showToast('Erro ao excluir conversa.'); }
+  });
 }
 
 // ── Chat themes ─────────────────────────────────────────────────

@@ -307,14 +307,15 @@ async function createAlbum() {
   } catch(e) { showToast('Erro ao criar álbum.'); }
 }
 
-async function deleteAlbum(id, name) {
-  if (!confirm(`Excluir o álbum "${name}"? As fotos não serão excluídas.`)) return;
-  try {
-    await db.collection('users').doc(currentUser.uid).collection('albums').doc(id).delete();
-    if (_activeAlbum === id) _activeAlbum = null;
-    await loadAlbums();
-    loadContent();
-  } catch(e) { showToast('Erro ao excluir álbum.'); }
+function deleteAlbum(id, name) {
+  confirmAction(`Excluir o álbum "${name}"? As fotos não serão excluídas.`, async () => {
+    try {
+      await db.collection('users').doc(currentUser.uid).collection('albums').doc(id).delete();
+      if (_activeAlbum === id) _activeAlbum = null;
+      await loadAlbums();
+      loadContent();
+    } catch(e) { showToast('Erro ao excluir álbum.'); }
+  });
 }
 
 async function assignPhotoToAlbum(photoId, btn) {
@@ -515,15 +516,14 @@ async function handleUpload(input) {
 }
 
 // ── Excluir foto ──────────────────────────────────────────────
-async function deletePhoto(photoId) {
-  if (!confirm('Excluir esta foto da galeria?')) return;
-  try {
-    await db.collection('photos').doc(photoId).delete();
-    showToast('Foto excluída.');
-    loadContent();
-  } catch(e) {
-    showToast('Erro ao excluir foto.');
-  }
+function deletePhoto(photoId) {
+  confirmAction('Excluir esta foto da galeria?', async () => {
+    try {
+      await db.collection('photos').doc(photoId).delete();
+      showToast('Foto excluída.');
+      loadContent();
+    } catch(e) { showToast('Erro ao excluir foto.'); }
+  });
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────

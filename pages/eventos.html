@@ -635,6 +635,11 @@ async function saveEvent() {
   const err   = document.getElementById('ev-modal-error');
   if (!title) { err.textContent = 'O título é obrigatório.'; err.style.display='block'; return; }
   if (!date)  { err.textContent = 'A data é obrigatória.'; err.style.display='block'; return; }
+  if (!checkRateLimit('event_' + currentUser.uid, 5, 60000)) {
+    err.textContent = 'Muitos eventos criados seguidos. Aguarde um momento.';
+    err.style.display = 'block';
+    return;
+  }
   err.style.display = 'none';
 
   const btn = document.getElementById('ev-save-btn');
@@ -688,14 +693,15 @@ async function saveEvent() {
 }
 
 // ── Delete ────────────────────────────────────────────────────
-async function deleteEvent(e, evId) {
+function deleteEvent(e, evId) {
   e.stopPropagation();
-  if (!confirm('Excluir este evento? Esta ação não pode ser desfeita.')) return;
-  try {
-    await db.collection('events').doc(evId).delete();
-    showToast('Evento excluído.');
-    loadEvents();
-  } catch(e) { showToast('Erro ao excluir evento.'); }
+  confirmAction('Excluir este evento? Esta ação não pode ser desfeita.', async () => {
+    try {
+      await db.collection('events').doc(evId).delete();
+      showToast('Evento excluído.');
+      loadEvents();
+    } catch(e) { showToast('Erro ao excluir evento.'); }
+  });
 }
 
 // ── Detail modal ──────────────────────────────────────────────

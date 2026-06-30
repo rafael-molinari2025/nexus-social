@@ -335,15 +335,14 @@ async function blockFriendFromList(targetUid, name, btn) {
   } catch(e) { showToast('Erro ao atualizar bloqueio.'); }
 }
 
-async function removeFriend(friendshipDocId, name) {
-  if (!confirm(`Desfazer amizade com ${name}?`)) return;
-  try {
-    await db.collection('friendships').doc(friendshipDocId).delete();
-    showToast('Amizade desfeita.');
-    loadFriends();
-  } catch(e) {
-    showToast('Erro ao desfazer amizade.');
-  }
+function removeFriend(friendshipDocId, name) {
+  confirmAction(`Desfazer amizade com ${name}?`, async () => {
+    try {
+      await db.collection('friendships').doc(friendshipDocId).delete();
+      showToast('Amizade desfeita.');
+      loadFriends();
+    } catch(e) { showToast('Erro ao desfazer amizade.'); }
+  });
 }
 
 // ── Sugestões ─────────────────────────────────────────────────

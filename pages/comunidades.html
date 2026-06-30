@@ -219,6 +219,8 @@ async function createCommunity() {
   const desc = document.getElementById('comm-desc').value.trim();
   const cat  = document.getElementById('comm-category').value;
   if (!name) return showToast('O nome é obrigatório.');
+  if (!checkRateLimit('community_' + currentUser.uid, 3, 60000))
+    return showToast('Muitas comunidades criadas. Aguarde um momento.');
 
   const ref = await db.collection('communities').add({
     name, name_lower: name.toLowerCase(), description: desc, category: cat,
@@ -275,18 +277,19 @@ async function saveEditCommunity() {
   } catch(e) { showToast('Erro ao atualizar comunidade.'); }
 }
 
-async function deleteCommunity(id, name) {
-  if (!confirm(`Excluir a comunidade "${name}"? Todos os membros serão removidos.`)) return;
-  try {
-    const membersSnap = await db.collection('community_members').where('communityId','==',id).get();
-    const batch = db.batch();
-    membersSnap.docs.forEach(d => batch.delete(d.ref));
-    batch.delete(db.collection('communities').doc(id));
-    await batch.commit();
-    showToast('Comunidade excluída.');
-    loadMyCommunities();
-    loadAllCommunities();
-  } catch(e) { showToast('Erro ao excluir comunidade.'); }
+function deleteCommunity(id, name) {
+  confirmAction(`Excluir a comunidade "${name}"? Todos os membros serão removidos.`, async () => {
+    try {
+      const membersSnap = await db.collection('community_members').where('communityId','==',id).get();
+      const batch = db.batch();
+      membersSnap.docs.forEach(d => batch.delete(d.ref));
+      batch.delete(db.collection('communities').doc(id));
+      await batch.commit();
+      showToast('Comunidade excluída.');
+      loadMyCommunities();
+      loadAllCommunities();
+    } catch(e) { showToast('Erro ao excluir comunidade.'); }
+  });
 }
 
 document.addEventListener('keydown', e => {

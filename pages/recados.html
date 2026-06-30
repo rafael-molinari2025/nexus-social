@@ -277,15 +277,14 @@ async function sendScrap() {
   btn.innerHTML = '<i class="ti ti-send" aria-hidden="true"></i> Enviar';
 }
 
-async function deleteScrap(id) {
-  if (!confirm('Excluir este recado?')) return;
-  try {
-    await db.collection('scraps').doc(id).delete();
-    document.getElementById(`scrap-${id}`)?.remove();
-    showToast('Recado excluído.');
-  } catch(e) {
-    showToast('Erro ao excluir recado.');
-  }
+function deleteScrap(id) {
+  confirmAction('Excluir este recado?', async () => {
+    try {
+      await db.collection('scraps').doc(id).delete();
+      document.getElementById(`scrap-${id}`)?.remove();
+      showToast('Recado excluído.');
+    } catch(e) { showToast('Erro ao excluir recado.'); }
+  });
 }
 
 async function toggleScrapLike(id, btn) {

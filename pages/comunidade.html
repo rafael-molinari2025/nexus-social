@@ -420,10 +420,11 @@ async function toggleLike(postId) {
   if (btn) btn.disabled = false;
 }
 
-async function deletePost(postId) {
-  if (!confirm('Excluir este post?')) return;
-  await db.collection('posts').doc(postId).delete();
-  showToast('Post excluído.');
+function deletePost(postId) {
+  confirmAction('Excluir este post?', async () => {
+    await db.collection('posts').doc(postId).delete();
+    showToast('Post excluído.');
+  });
 }
 
 async function togglePinPost(postId, isPinned) {
@@ -570,22 +571,23 @@ async function loadAllMembers(reset = true) {
   }
 }
 
-async function removeMember(memberDocId, memberName, memberUid) {
-  if (!confirm(`Remover ${memberName} da comunidade?`)) return;
-  try {
-    const batch = db.batch();
-    batch.delete(db.collection('community_members').doc(memberDocId));
-    batch.update(db.collection('communities').doc(commId), {
-      membersCount: firebase.firestore.FieldValue.increment(-1)
-    });
-    await batch.commit();
-    showToast(`${memberName} foi removido da comunidade.`);
-    commData.membersCount = Math.max(0, (commData.membersCount||1) - 1);
-    document.getElementById('member-count')?.textContent !== undefined &&
-      (document.getElementById('member-count').textContent = commData.membersCount);
-    loadAllMembers();
-    loadTopMembers();
-  } catch(e) { showToast('Erro ao remover membro.'); }
+function removeMember(memberDocId, memberName, memberUid) {
+  confirmAction(`Remover ${memberName} da comunidade?`, async () => {
+    try {
+      const batch = db.batch();
+      batch.delete(db.collection('community_members').doc(memberDocId));
+      batch.update(db.collection('communities').doc(commId), {
+        membersCount: firebase.firestore.FieldValue.increment(-1)
+      });
+      await batch.commit();
+      showToast(`${memberName} foi removido da comunidade.`);
+      commData.membersCount = Math.max(0, (commData.membersCount||1) - 1);
+      document.getElementById('member-count')?.textContent !== undefined &&
+        (document.getElementById('member-count').textContent = commData.membersCount);
+      loadAllMembers();
+      loadTopMembers();
+    } catch(e) { showToast('Erro ao remover membro.'); }
+  });
 }
 
 // ── Regras da comunidade ──────────────────────────────────────
@@ -632,27 +634,29 @@ async function saveRules() {
   } catch(e) { showToast('Erro ao salvar regras.'); }
 }
 
-async function promoteToAdmin(memberDocId, memberName, memberUid) {
-  if (!confirm(`Promover ${memberName} a administrador desta comunidade?`)) return;
-  try {
-    await db.collection('community_members').doc(memberDocId).update({ role: 'admin' });
-    showToast(`${memberName} agora é administrador.`);
-    loadAllMembers();
-    loadTopMembers();
-  } catch(e) { showToast('Erro ao promover membro.'); }
+function promoteToAdmin(memberDocId, memberName, memberUid) {
+  confirmAction(`Promover ${memberName} a administrador desta comunidade?`, async () => {
+    try {
+      await db.collection('community_members').doc(memberDocId).update({ role: 'admin' });
+      showToast(`${memberName} agora é administrador.`);
+      loadAllMembers();
+      loadTopMembers();
+    } catch(e) { showToast('Erro ao promover membro.'); }
+  });
 }
 
-async function deleteThisCommunity() {
-  if (!confirm(`Excluir a comunidade "${commData.name}"? Esta ação é permanente.`)) return;
-  try {
-    const membersSnap = await db.collection('community_members').where('communityId','==',commId).get();
-    const batch = db.batch();
-    membersSnap.docs.forEach(d => batch.delete(d.ref));
-    batch.delete(db.collection('communities').doc(commId));
-    await batch.commit();
-    showToast('Comunidade excluída.');
-    setTimeout(() => location.href = 'comunidades.html', 1200);
-  } catch(e) { showToast('Erro ao excluir comunidade.'); }
+function deleteThisCommunity() {
+  confirmAction(`Excluir a comunidade "${commData.name}"? Esta ação é permanente.`, async () => {
+    try {
+      const membersSnap = await db.collection('community_members').where('communityId','==',commId).get();
+      const batch = db.batch();
+      membersSnap.docs.forEach(d => batch.delete(d.ref));
+      batch.delete(db.collection('communities').doc(commId));
+      await batch.commit();
+      showToast('Comunidade excluída.');
+      setTimeout(() => location.href = 'comunidades.html', 1200);
+    } catch(e) { showToast('Erro ao excluir comunidade.'); }
+  });
 }
 
 function openEditCommModal() {
@@ -726,22 +730,23 @@ async function joinCommunity() {
   }
 }
 
-async function leaveCommunity() {
-  if (!confirm('Sair desta comunidade?')) return;
-  try {
-    const snap = await db.collection('community_members')
-      .where('communityId','==',commId).where('uid','==',currentUser.uid).get();
-    await Promise.all(snap.docs.map(d => d.ref.delete()));
-    await db.collection('communities').doc(commId).update({
-      membersCount: firebase.firestore.FieldValue.increment(-1)
-    });
-    showToast('Você saiu da comunidade.');
-    isMember = false;
-    isAdmin = false;
-    memberDocId = null;    // ← CORRIGIDO: limpar memberDocId
-    commData.membersCount = Math.max(0, (commData.membersCount||1) - 1);
-    renderPage();
-  } catch(e) { showToast('Erro ao sair da comunidade.'); }
+function leaveCommunity() {
+  confirmAction('Sair desta comunidade?', async () => {
+    try {
+      const snap = await db.collection('community_members')
+        .where('communityId','==',commId).where('uid','==',currentUser.uid).get();
+      await Promise.all(snap.docs.map(d => d.ref.delete()));
+      await db.collection('communities').doc(commId).update({
+        membersCount: firebase.firestore.FieldValue.increment(-1)
+      });
+      showToast('Você saiu da comunidade.');
+      isMember = false;
+      isAdmin = false;
+      memberDocId = null;
+      commData.membersCount = Math.max(0, (commData.membersCount||1) - 1);
+      renderPage();
+    } catch(e) { showToast('Erro ao sair da comunidade.'); }
+  });
 }
 
 // ── Tabs ──────────────────────────────────────────────────────

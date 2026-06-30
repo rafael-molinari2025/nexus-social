@@ -165,16 +165,17 @@
     }
   }
 
-  async function deleteArchivedPost(postId, btn) {
-    if (!confirm('Excluir permanentemente? Esta ação não pode ser desfeita.')) return;
-    btn.disabled = true;
-    await db.collection('posts').doc(postId).delete();
-    document.getElementById(`arch-${postId}`)?.remove();
-    showToast('Post excluído permanentemente.');
-    const list = document.getElementById('arch-list');
-    if (!list.querySelector('.arch-post')) {
-      list.innerHTML = `<div class="empty-state"><i class="ti ti-archive-off"></i><p>Nenhum post arquivado</p></div>`;
-    }
+  function deleteArchivedPost(postId, btn) {
+    confirmAction('Excluir permanentemente? Esta ação não pode ser desfeita.', async () => {
+      btn.disabled = true;
+      await db.collection('posts').doc(postId).delete();
+      document.getElementById(`arch-${postId}`)?.remove();
+      showToast('Post excluído permanentemente.');
+      const list = document.getElementById('arch-list');
+      if (!list.querySelector('.arch-post')) {
+        list.innerHTML = `<div class="empty-state"><i class="ti ti-archive-off"></i><p>Nenhum post arquivado</p></div>`;
+      }
+    });
   }
   </script>
 </body>

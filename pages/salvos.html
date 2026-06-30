@@ -237,17 +237,18 @@ async function saveCollection(existingId, bd) {
   } catch(e) { showToast('Erro ao salvar coleção.'); }
 }
 
-async function deleteCollection(collId, bd) {
-  if (!confirm('Apagar esta coleção? Os posts salvos não serão removidos dos Salvos.')) return;
-  try {
-    await COLLS_REF().doc(collId).delete();
-    _collections = _collections.filter(c => c.id !== collId);
-    if (_activeCollId === collId) _activeCollId = null;
-    bd?.remove();
-    renderCollBar();
-    loadSaved(true);
-    showToast('Coleção apagada.');
-  } catch(e) { showToast('Erro ao apagar.'); }
+function deleteCollection(collId, bd) {
+  confirmAction('Apagar esta coleção? Os posts salvos não serão removidos dos Salvos.', async () => {
+    try {
+      await COLLS_REF().doc(collId).delete();
+      _collections = _collections.filter(c => c.id !== collId);
+      if (_activeCollId === collId) _activeCollId = null;
+      bd?.remove();
+      renderCollBar();
+      loadSaved(true);
+      showToast('Coleção apagada.');
+    } catch(e) { showToast('Erro ao apagar.'); }
+  });
 }
 
 function openManageCollections() {

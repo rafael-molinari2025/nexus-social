@@ -48,6 +48,24 @@ function timeAgo(ts) {
 }
 
 // ── Toast notifications ──────────────────────────────────────
+function confirmAction(message, onConfirm) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  d.innerHTML = `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;max-width:340px;width:100%;box-shadow:var(--shadow-lg)">
+      <p style="font-size:14px;margin:0 0 1.1rem;line-height:1.5;color:var(--text-primary)">${sanitize(message)}</p>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button class="_ca-cancel btn btn-sm">Cancelar</button>
+        <button class="_ca-ok btn btn-primary btn-sm">Confirmar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(d);
+  const close = () => d.remove();
+  d.querySelector('._ca-cancel').addEventListener('click', close);
+  d.querySelector('._ca-ok').addEventListener('click', () => { close(); onConfirm(); });
+  d.addEventListener('click', e => { if (e.target === d) close(); });
+}
+
 function showToast(msg, duration = 3500) {
   let t = document.getElementById('toast');
   if (!t) {

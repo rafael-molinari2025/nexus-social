@@ -263,16 +263,17 @@ async function updateReport(reportId, status) {
   } catch(e) { showToast('Erro ao atualizar denúncia.'); }
 }
 
-async function deleteReportedPost(reportId, postId) {
+function deleteReportedPost(reportId, postId) {
   if (!postId) return showToast('ID do post não encontrado.');
-  if (!confirm('Excluir este post permanentemente? Esta ação não pode ser desfeita.')) return;
-  try {
-    await db.collection('posts').doc(postId).delete();
-    await updateReport(reportId, 'resolved');
-    showToast('Post excluído e denúncia resolvida.');
-  } catch(e) {
-    showToast('Erro ao excluir post. Verifique as permissões de admin no Firestore.');
-  }
+  confirmAction('Excluir este post permanentemente? Esta ação não pode ser desfeita.', async () => {
+    try {
+      await db.collection('posts').doc(postId).delete();
+      await updateReport(reportId, 'resolved');
+      showToast('Post excluído e denúncia resolvida.');
+    } catch(e) {
+      showToast('Erro ao excluir post. Verifique as permissões de admin no Firestore.');
+    }
+  });
 }
 
 // ── User verification ─────────────────────────────────────────
