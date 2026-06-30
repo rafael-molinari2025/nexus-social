@@ -401,17 +401,29 @@ function renderTopbar(user, activePage = 'feed') {
         si.parentElement.style.position = 'relative';
         si.parentElement.appendChild(dd);
       }
-      dd.innerHTML = hist.map(q => {
-        const safe = q.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-        return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .875rem;cursor:pointer;transition:background var(--transition);font-size:13px;color:var(--text-primary)" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='none'" onclick="document.getElementById('search-input').value='${safe}';this.closest('#search-history-dd').remove();location.href='${PAGES}busca.html?q=${encodeURIComponent(q)}'">
+      dd.innerHTML = hist.map((q, i) =>
+        `<div class="search-hist-item" data-idx="${i}" style="display:flex;align-items:center;gap:.5rem;padding:.5rem .875rem;cursor:pointer;transition:background var(--transition);font-size:13px;color:var(--text-primary)" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='none'">
           <i class="ti ti-history" style="font-size:14px;color:var(--text-muted);flex-shrink:0"></i>
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>
-          <button onclick="event.stopPropagation();removeSearchHistory('${safe}');renderTopbarSearchHistory()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;font-size:13px;display:flex;align-items:center" title="Remover"><i class="ti ti-x"></i></button>
-        </div>`;
-      }).join('');
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sanitize(q)}</span>
+          <button class="search-hist-rm" data-idx="${i}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;font-size:13px;display:flex;align-items:center" title="Remover"><i class="ti ti-x"></i></button>
+        </div>`
+      ).join('');
+      dd.querySelectorAll('.search-hist-item').forEach(item => {
+        const idx = Number(item.dataset.idx);
+        item.addEventListener('click', e => {
+          if (e.target.closest('.search-hist-rm')) {
+            e.stopPropagation();
+            removeHistory(hist[idx]);
+            renderSearchHistory();
+            return;
+          }
+          si.value = hist[idx];
+          document.getElementById('search-history-dd')?.remove();
+          location.href = `${PAGES}busca.html?q=${encodeURIComponent(hist[idx])}`;
+        });
+      });
     }
 
-    window.removeSearchHistory = q => removeHistory(q);
     window.renderTopbarSearchHistory = renderSearchHistory;
 
     si.addEventListener('focus', () => { if (!si.value.trim()) renderSearchHistory(); });
@@ -586,6 +598,48 @@ document.addEventListener('click', e => {
     if (dd) dd.remove();
   }
 });
+
+// ── Unified reaction toggle (used by all secondary pages) ────────
+const _RXN_EMOJIS = ['❤️','😂','😮','😢','😡','👏'];
+
+async function toggleReaction(postId) {
+  const user = auth.currentUser;
+  if (!user) return null;
+  const ref  = db.collection('posts').doc(postId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const p    = snap.data();
+  const rxns = p.reactions || {};
+
+  const myRxn  = _RXN_EMOJIS.find(e => (rxns[e]||[]).includes(user.uid))
+              || ((p.likes||[]).includes(user.uid) ? '❤️' : null);
+  const isLiked = !!myRxn;
+
+  const updates = {};
+  _RXN_EMOJIS.forEach(e => {
+    if ((rxns[e]||[]).includes(user.uid))
+      updates[`reactions.${e}`] = firebase.firestore.FieldValue.arrayRemove(user.uid);
+  });
+  if ((p.likes||[]).includes(user.uid))
+    updates.likes = firebase.firestore.FieldValue.arrayRemove(user.uid);
+
+  if (!isLiked) {
+    updates[`reactions.❤️`] = firebase.firestore.FieldValue.arrayUnion(user.uid);
+    if (p.authorId && p.authorId !== user.uid) {
+      createNotification(p.authorId, 'post_like', {
+        message: `${user.displayName} curtiu seu post.`,
+        link: `/pages/post.html?id=${postId}`,
+        fromUid: user.uid,
+        fromName: user.displayName
+      });
+    }
+  }
+
+  await ref.update(updates);
+
+  const totalBefore = _RXN_EMOJIS.reduce((s,e) => s + (rxns[e]||[]).length, 0) + (p.likes||[]).length;
+  return { liked: !isLiked, count: isLiked ? Math.max(0, totalBefore - 1) : totalBefore + 1 };
+}
 
 // ── Rate limiter ──────────────────────────────────────────────
 const _rateLimits = {};

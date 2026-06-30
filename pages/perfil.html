@@ -817,7 +817,9 @@ async function loadProfilePosts(uid) {
 
     el.innerHTML = docs.map(doc => {
       const p = doc.data();
-      const liked   = (p.likes||[]).includes(currentUser.uid);
+      const _rxns   = p.reactions || {};
+      const liked   = (p.likes||[]).includes(currentUser.uid) || _RXN_EMOJIS.some(e => (_rxns[e]||[]).includes(currentUser.uid));
+      const likeCount = _RXN_EMOJIS.reduce((s,e) => s + (_rxns[e]||[]).length, 0) + (p.likes||[]).length;
       const isPinned = doc.id === pinnedId;
       const pinBtn = isOwn
         ? isPinned
@@ -830,7 +832,7 @@ async function loadProfilePosts(uid) {
         ${_profilePostImageHTML(p)}
         <div class="post-actions" style="padding:.35rem 0">
           <button class="post-action-btn${liked?' liked':''}" id="like-btn-${doc.id}" onclick="toggleLike('${doc.id}')">
-            <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" aria-hidden="true"></i> ${(p.likes||[]).length}
+            <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" aria-hidden="true"></i> ${likeCount||''}
           </button>
           <button class="post-action-btn" onclick="location.href='post.html?id=${doc.id}'">
             <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0} comentários
@@ -865,27 +867,15 @@ async function unpinPost() {
 }
 
 async function toggleLike(postId) {
-  if (!currentUser) return;
   const btn = document.getElementById(`like-btn-${postId}`);
   if (btn) btn.disabled = true;
   try {
-    const ref = db.collection('posts').doc(postId);
-    const snap = await ref.get();
-    const likes = snap.data().likes || [];
-    const isLiked = likes.includes(currentUser.uid);
-    await ref.update({
-      likes: isLiked
-        ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
-        : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
-    });
-    if (btn) {
-      const newCount = isLiked ? likes.length - 1 : likes.length + 1;
-      btn.className = `post-action-btn${!isLiked ? ' liked' : ''}`;
-      btn.innerHTML = `<i class="ti ${!isLiked ? 'ti-heart-filled' : 'ti-heart'}" aria-hidden="true"></i> ${newCount}`;
+    const result = await toggleReaction(postId);
+    if (result && btn) {
+      btn.className = `post-action-btn${result.liked ? ' liked' : ''}`;
+      btn.innerHTML = `<i class="ti ${result.liked ? 'ti-heart-filled' : 'ti-heart'}" aria-hidden="true"></i> ${result.count || ''}`;
     }
-  } catch(e) {
-    showToast('Erro ao curtir.');
-  }
+  } catch(e) { showToast('Erro ao curtir.'); }
   if (btn) btn.disabled = false;
 }
 

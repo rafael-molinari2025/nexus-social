@@ -38,10 +38,11 @@ Responda APENAS com JSON: {"decision":"allow","reason":"","categories":[]}
 Valores: "block" (viola claramente), "flag" (suspeito), "allow" (aceitável)`;
 
 module.exports = async function handler(req, res) {
-  // Autenticação: cron GET do Vercel ou POST com secret
+  // Autenticação: Vercel Cron envia GET com header x-vercel-cron:1
+  // Trigger manual: POST com header x-scan-secret ou query ?secret=
   const secret = req.headers['x-scan-secret'] || req.query.secret;
-  const isVercelCron = req.headers['x-vercel-signature'] !== undefined || req.method === 'GET';
-  const isManual = req.method === 'POST' && secret && secret === process.env.SCAN_SECRET;
+  const isVercelCron = req.method === 'GET' && req.headers['x-vercel-cron'] === '1';
+  const isManual = req.method === 'POST' && !!process.env.SCAN_SECRET && secret === process.env.SCAN_SECRET;
 
   if (!isVercelCron && !isManual) {
     return res.status(401).json({ error: 'Não autorizado' });

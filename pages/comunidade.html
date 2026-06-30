@@ -325,7 +325,9 @@ function postHTML(id, p) {
   const av = p.authorPhoto
     ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : getInitials(p.authorName);
-  const liked = p.likes && p.likes.includes(currentUser.uid);
+  const _rxns = p.reactions || {};
+  const liked = (p.likes||[]).includes(currentUser.uid) || _RXN_EMOJIS.some(e => (_rxns[e]||[]).includes(currentUser.uid));
+  const likeCount = _RXN_EMOJIS.reduce((s,e) => s + (_rxns[e]||[]).length, 0) + (p.likes||[]).length;
   const canDelete = p.authorId === currentUser.uid || isAdmin;
   return `
   <div class="post" id="post-${id}">
@@ -346,8 +348,8 @@ function postHTML(id, p) {
     </div>
     <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>')}</div>
     <div class="post-actions">
-      <button class="post-action-btn${liked?' liked':''}" onclick="toggleLike('${id}')">
-        <i class="ti ti-heart" aria-hidden="true"></i> ${(p.likes||[]).length}
+      <button class="post-action-btn${liked?' liked':''}" id="like-${id}" onclick="toggleLike('${id}')">
+        <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" aria-hidden="true"></i> ${likeCount||''}
       </button>
       <button class="post-action-btn" onclick="location.href='post.html?id=${id}'">
         <i class="ti ti-message-circle" aria-hidden="true"></i> ${p.commentsCount||0} comentários
@@ -381,14 +383,16 @@ async function createCommPost() {
 }
 
 async function toggleLike(postId) {
-  const ref = db.collection('posts').doc(postId);
-  const snap = await ref.get();
-  const likes = snap.data().likes || [];
-  await ref.update({
-    likes: likes.includes(currentUser.uid)
-      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
-      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
-  });
+  const btn = document.getElementById(`like-${postId}`);
+  if (btn) btn.disabled = true;
+  try {
+    const result = await toggleReaction(postId);
+    if (result && btn) {
+      btn.className = `post-action-btn${result.liked ? ' liked' : ''}`;
+      btn.innerHTML = `<i class="ti ${result.liked ? 'ti-heart-filled' : 'ti-heart'}" aria-hidden="true"></i> ${result.count || ''}`;
+    }
+  } catch(e) { showToast('Erro ao curtir.'); }
+  if (btn) btn.disabled = false;
 }
 
 async function deletePost(postId) {
