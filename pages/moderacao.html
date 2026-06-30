@@ -82,12 +82,19 @@
     </div>
 
     <!-- Scan manual -->
-    <div class="scan-bar">
+    <div class="scan-bar" style="flex-wrap:wrap;gap:.5rem">
       <i class="ti ti-radar" style="color:var(--purple-400);font-size:20px;flex-shrink:0"></i>
-      <div class="scan-bar-info">
+      <div class="scan-bar-info" style="flex:1;min-width:180px">
         Varredura automática a cada 6h. Execute manualmente para verificar posts recentes agora.
       </div>
-      <button class="btn btn-primary btn-sm" id="scan-btn" onclick="runScan()">
+      <div id="scan-secret-wrap" style="display:none;align-items:center;gap:.35rem">
+        <input id="scan-secret-input" type="password" maxlength="200" placeholder="SCAN_SECRET"
+               style="height:32px;padding:0 .6rem;font-size:13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);font-family:var(--font-sans);width:160px"
+               onkeydown="if(event.key==='Enter')runScan();if(event.key==='Escape')cancelScan()">
+        <button class="btn btn-primary btn-sm" onclick="runScan()"><i class="ti ti-player-play"></i> Executar</button>
+        <button class="btn btn-sm" onclick="cancelScan()"><i class="ti ti-x"></i></button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="scan-btn" onclick="showScanInput()">
         <i class="ti ti-player-play"></i> Varrer agora
       </button>
     </div>
@@ -253,13 +260,29 @@ async function setModStatus(postId, status) {
   }
 }
 
+function showScanInput() {
+  document.getElementById('scan-btn').style.display = 'none';
+  const wrap = document.getElementById('scan-secret-wrap');
+  wrap.style.display = 'flex';
+  document.getElementById('scan-secret-input').focus();
+}
+
+function cancelScan() {
+  document.getElementById('scan-secret-input').value = '';
+  document.getElementById('scan-secret-wrap').style.display = 'none';
+  document.getElementById('scan-btn').style.display = '';
+}
+
 async function runScan() {
+  const secret = document.getElementById('scan-secret-input')?.value.trim();
+  if (!secret) return;
   const btn = document.getElementById('scan-btn');
+  const wrap = document.getElementById('scan-secret-wrap');
+  wrap.style.display = 'none';
+  btn.style.display = '';
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Varrendo…';
   try {
-    const secret = prompt('Informe o SCAN_SECRET:');
-    if (!secret) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-player-play"></i> Varrer agora'; return; }
     const res = await fetch('https://nexus-social-fawn.vercel.app/api/scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-scan-secret': secret }
@@ -275,6 +298,7 @@ async function runScan() {
   } catch(e) {
     showToast('Falha ao conectar com o servidor de varredura.');
   }
+  document.getElementById('scan-secret-input').value = '';
   btn.disabled = false;
   btn.innerHTML = '<i class="ti ti-player-play"></i> Varrer agora';
 }

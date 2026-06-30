@@ -171,9 +171,16 @@
     <div class="gallery-header">
       <h1 class="gallery-title">Galeria de Fotos</h1>
       <div style="display:flex;gap:.5rem;align-items:center">
-        <button class="btn btn-sm" onclick="createAlbum()" title="Criar álbum">
+        <button class="btn btn-sm" id="album-create-btn" onclick="openAlbumInput()" title="Criar álbum">
           <i class="ti ti-folder-plus" aria-hidden="true"></i>
         </button>
+        <div id="album-create-form" style="display:none;align-items:center;gap:.35rem">
+          <input id="album-name-input" type="text" maxlength="40" placeholder="Nome do álbum"
+                 style="height:32px;padding:0 .6rem;font-size:13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);font-family:var(--font-sans)"
+                 onkeydown="if(event.key==='Enter')createAlbum();if(event.key==='Escape')closeAlbumInput()">
+          <button class="btn btn-primary btn-sm" onclick="createAlbum()">OK</button>
+          <button class="btn btn-sm" onclick="closeAlbumInput()"><i class="ti ti-x"></i></button>
+        </div>
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('file-input').click()">
           <i class="ti ti-plus" aria-hidden="true"></i> Adicionar fotos
         </button>
@@ -272,16 +279,31 @@ function filterByAlbum(albumId) {
   loadContent();
 }
 
+function openAlbumInput() {
+  document.getElementById('album-create-btn').style.display = 'none';
+  const form = document.getElementById('album-create-form');
+  form.style.display = 'flex';
+  document.getElementById('album-name-input').focus();
+}
+
+function closeAlbumInput() {
+  document.getElementById('album-create-btn').style.display = '';
+  document.getElementById('album-create-form').style.display = 'none';
+  document.getElementById('album-name-input').value = '';
+}
+
 async function createAlbum() {
-  const name = prompt('Nome do álbum:');
-  if (!name?.trim()) return;
+  const input = document.getElementById('album-name-input');
+  const name = input?.value.trim();
+  if (!name) return;
   try {
     await db.collection('users').doc(currentUser.uid).collection('albums').add({
-      name: name.trim(),
+      name,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    closeAlbumInput();
     await loadAlbums();
-    showToast(`Álbum "${name.trim()}" criado!`);
+    showToast(`Álbum "${name}" criado!`);
   } catch(e) { showToast('Erro ao criar álbum.'); }
 }
 

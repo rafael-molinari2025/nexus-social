@@ -648,7 +648,20 @@ function toggleCam() {
 }
 
 async function endLive(liveId) {
-  if (!confirm('Encerrar a transmissão?')) return;
+  const endBtn = document.querySelector('.ctrl-end');
+  if (endBtn && endBtn.dataset.confirm !== '1') {
+    endBtn.dataset.confirm = '1';
+    endBtn.title = 'Clique novamente para confirmar';
+    endBtn.style.opacity = '0.7';
+    setTimeout(() => {
+      if (endBtn.isConnected && endBtn.dataset.confirm) {
+        delete endBtn.dataset.confirm;
+        endBtn.title = 'Encerrar live';
+        endBtn.style.opacity = '';
+      }
+    }, 3000);
+    return;
+  }
   try {
     _localAudio?.close();
     _localVideo?.close();
@@ -839,7 +852,7 @@ function subscribeChat(liveId) {
         const d = ch.doc.data();
         const el = document.createElement('div');
         el.className = 'live-chat-msg';
-        el.innerHTML = `<span class="msg-sender" onclick="location.href='perfil.html?uid=${d.senderUid}'">${sanitize(d.senderName||'Usuário')}</span>${sanitize(d.text||'')}`;
+        el.innerHTML = `<span class="msg-sender" onclick="location.href='perfil.html?uid=${encodeURIComponent(d.senderUid)}'">${sanitize(d.senderName||'Usuário')}</span>${sanitize(d.text||'')}`;
         box.appendChild(el);
         box.scrollTop = box.scrollHeight;
       });

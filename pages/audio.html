@@ -410,7 +410,7 @@ function renderParticipants() {
   grid.innerHTML = parts.map(p => {
     const cl = getAvatarColor(p.uid);
     const av = p.photoURL
-      ? `<img src="${p.photoURL}" alt="">`
+      ? `<img src="${p.photoURL}" alt="${sanitize(p.displayName||'')}">`
       : `<span style="color:${cl.color}">${getInitials(p.displayName||'?')}</span>`;
     const muteIcon = p.muted ? `<div class="mute-icon"><i class="ti ti-microphone-off"></i></div>` : '';
     const handIcon = p.handRaised ? ' ✋' : '';
@@ -418,7 +418,7 @@ function renderParticipants() {
     const hostBadge = p.uid === _currentRoomHostUid
       ? `<div class="participant-role">Host</div>` : '';
     const kickBtn = amHost && !isMe
-      ? `<button onclick="kickParticipant('${p.uid}','${sanitize(p.displayName||'Usuário').replace(/'/g,"\\'")}',this)"
+      ? `<button class="kick-btn" data-uid="${encodeURIComponent(p.uid)}" data-name="${sanitize(p.displayName||'Usuário')}"
            style="margin-top:.2rem;background:none;border:none;color:rgba(255,80,80,.7);cursor:pointer;font-size:11px;padding:0">
            Remover
          </button>` : '';
@@ -428,12 +428,28 @@ function renderParticipants() {
       ${hostBadge}${kickBtn}
     </div>`;
   }).join('') || '<p style="color:rgba(255,255,255,.5);font-size:13px">Nenhum participante</p>';
+
+  grid.querySelectorAll('.kick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.confirm !== '1') {
+        btn.dataset.confirm = '1';
+        btn.textContent = 'Confirmar?';
+        setTimeout(() => {
+          if (btn.isConnected && btn.dataset.confirm) {
+            delete btn.dataset.confirm;
+            btn.textContent = 'Remover';
+          }
+        }, 3000);
+        return;
+      }
+      kickParticipant(decodeURIComponent(btn.dataset.uid), btn.dataset.name, btn);
+    });
+  });
 }
 
 // ── Controles do host ─────────────────────────────────────────
 async function kickParticipant(uid, name, btn) {
   if (!currentRoomId || _currentRoomHostUid !== currentUser.uid) return;
-  if (!confirm(`Remover ${name} da sala?`)) return;
   btn.disabled = true;
   try {
     await db.collection('audio_rooms').doc(currentRoomId).collection('participants').doc(uid).delete();
