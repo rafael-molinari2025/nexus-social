@@ -88,14 +88,17 @@
 <script src="../js/utils.js"></script>
 <script>
 const CATEGORY_COLORS = {
-  tecnologia: {bg:'#EEF2FF',c:'#6366F1',icon:'ti-code'},
-  musica:     {bg:'#FAEEDA',c:'#854F0B',icon:'ti-music'},
-  arte:       {bg:'#FBEAF0',c:'#993556',icon:'ti-palette'},
-  esportes:   {bg:'#E1F5EE',c:'#0F6E56',icon:'ti-ball-football'},
-  jogos:      {bg:'#FAECE7',c:'#993C1D',icon:'ti-device-gamepad'},
-  livros:     {bg:'#E6F1FB',c:'#185FA5',icon:'ti-book'},
-  outros:     {bg:'#F1EFE8',c:'#5F5E5A',icon:'ti-users-group'}
+  tecnologia: {bg:'#EEF2FF',c:'#6366F1',darkBg:'rgba(99,102,241,.15)',darkC:'#818CF8',icon:'ti-code'},
+  musica:     {bg:'#FAEEDA',c:'#854F0B',darkBg:'rgba(251,191,36,.12)',darkC:'#FCD34D',icon:'ti-music'},
+  arte:       {bg:'#FBEAF0',c:'#993556',darkBg:'rgba(244,114,182,.12)',darkC:'#F9A8D4',icon:'ti-palette'},
+  esportes:   {bg:'#E1F5EE',c:'#0F6E56',darkBg:'rgba(52,211,153,.12)',darkC:'#6EE7B7',icon:'ti-ball-football'},
+  jogos:      {bg:'#FAECE7',c:'#993C1D',darkBg:'rgba(251,113,133,.12)',darkC:'#FCA5A5',icon:'ti-device-gamepad'},
+  livros:     {bg:'#E6F1FB',c:'#185FA5',darkBg:'rgba(96,165,250,.12)',darkC:'#93C5FD',icon:'ti-book'},
+  outros:     {bg:'#F1EFE8',c:'#5F5E5A',darkBg:'rgba(156,163,175,.12)',darkC:'#9CA3AF',icon:'ti-users-group'}
 };
+const _isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+const _clBg = cl => _isDark() ? cl.darkBg : cl.bg;
+const _clC  = cl => _isDark() ? cl.darkC  : cl.c;
 
 const params = new URLSearchParams(location.search);
 const commId = params.get('id');
@@ -156,21 +159,21 @@ function renderPage() {
 
   document.getElementById('page-content').innerHTML = `
     <!-- Cover -->
-    <div class="comm-cover" style="background:linear-gradient(135deg,${cl.c}22,${cl.bg})">
-      <i class="ti ${cl.icon} comm-cover-icon" style="color:${cl.c}" aria-hidden="true"></i>
+    <div class="comm-cover" style="background:linear-gradient(135deg,${_clC(cl)}22,${_clBg(cl)})">
+      <i class="ti ${cl.icon} comm-cover-icon" style="color:${_clC(cl)}" aria-hidden="true"></i>
     </div>
 
     <!-- Header -->
     <div class="comm-header-card">
-      <div class="comm-header-icon" style="background:${cl.bg}">
-        <i class="ti ${cl.icon}" style="color:${cl.c}" aria-hidden="true"></i>
+      <div class="comm-header-icon" style="background:${_clBg(cl)}">
+        <i class="ti ${cl.icon}" style="color:${_clC(cl)}" aria-hidden="true"></i>
       </div>
       <div class="comm-header-info">
         <div class="comm-header-name">${sanitize(commData.name)}</div>
         ${commData.description ? `<div class="comm-header-desc">${sanitize(commData.description)}</div>` : ''}
         <div class="comm-header-meta">
           <span class="comm-meta-item"><i class="ti ti-users" aria-hidden="true"></i> <strong>${commData.membersCount||0}</strong> membros</span>
-          <span style="background:${cl.bg};color:${cl.c};font-size:11px;font-weight:500;padding:2px 10px;border-radius:var(--radius-full)">${commData.category||'outros'}</span>
+          <span style="background:${_clBg(cl)};color:${_clC(cl)};font-size:11px;font-weight:500;padding:2px 10px;border-radius:var(--radius-full)">${commData.category||'outros'}</span>
           ${commData.createdAt ? `<span class="comm-meta-item"><i class="ti ti-calendar" aria-hidden="true"></i> Criada ${timeAgo(commData.createdAt)}</span>` : ''}
         </div>
       </div>
@@ -323,7 +326,7 @@ function filterCommPosts(q) {
 function postHTML(id, p) {
   const cl = getAvatarColor(p.authorId);
   const av = p.authorPhoto
-    ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${p.authorPhoto}" alt="${sanitize(p.authorName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : getInitials(p.authorName);
   const _rxns = p.reactions || {};
   const liked = (p.likes||[]).includes(currentUser.uid) || _RXN_EMOJIS.some(e => (_rxns[e]||[]).includes(currentUser.uid));
@@ -450,7 +453,7 @@ async function loadTopMembers() {
     if (!u) return '';
     const cl = getAvatarColor(u.uid);
     const av = u.photoURL
-      ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      ? `<img src="${u.photoURL}" alt="${sanitize(u.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
     const role = doc.data().role;
     return `<div class="member-item" onclick="location.href='perfil.html?uid=${u.uid}'">
@@ -465,7 +468,7 @@ function _renderMemberRow(doc, u) {
   if (!u) return '';
   const cl = getAvatarColor(u.uid);
   const av = u.photoURL
-    ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${u.photoURL}" alt="${sanitize(u.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
   const role = doc.data ? doc.data().role : doc.role;
   const canRemove = isAdmin && u.uid !== currentUser.uid;

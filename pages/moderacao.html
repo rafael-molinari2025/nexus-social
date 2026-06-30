@@ -206,7 +206,7 @@ async function loadPosts(status) {
 function postCardHTML(id, p) {
   const cl = getAvatarColor(p.authorId);
   const av = p.authorPhoto
-    ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${p.authorPhoto}" alt="${sanitize(p.authorName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(p.authorName || '?')}</span>`;
 
   const statusBadge = {

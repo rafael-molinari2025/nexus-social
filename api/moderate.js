@@ -9,7 +9,8 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { text = '' } = req.body || {};
+  const rawText = req.body && typeof req.body.text === 'string' ? req.body.text : '';
+  const text = rawText;
 
   // Sem texto = aprovado
   if (!text.trim()) {

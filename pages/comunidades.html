@@ -142,14 +142,17 @@
 <script>
 let currentUser = null;
 const CATEGORY_COLORS = {
-  tecnologia: {bg:'#EEF2FF',c:'#6366F1',icon:'ti-code'},
-  musica:     {bg:'#FAEEDA',c:'#854F0B',icon:'ti-music'},
-  arte:       {bg:'#FBEAF0',c:'#993556',icon:'ti-palette'},
-  esportes:   {bg:'#E1F5EE',c:'#0F6E56',icon:'ti-ball-football'},
-  jogos:      {bg:'#FAECE7',c:'#993C1D',icon:'ti-device-gamepad'},
-  livros:     {bg:'#E6F1FB',c:'#185FA5',icon:'ti-book'},
-  outros:     {bg:'#F1EFE8',c:'#5F5E5A',icon:'ti-users-group'}
+  tecnologia: {bg:'#EEF2FF',c:'#6366F1',darkBg:'rgba(99,102,241,.15)',darkC:'#818CF8',icon:'ti-code'},
+  musica:     {bg:'#FAEEDA',c:'#854F0B',darkBg:'rgba(251,191,36,.12)',darkC:'#FCD34D',icon:'ti-music'},
+  arte:       {bg:'#FBEAF0',c:'#993556',darkBg:'rgba(244,114,182,.12)',darkC:'#F9A8D4',icon:'ti-palette'},
+  esportes:   {bg:'#E1F5EE',c:'#0F6E56',darkBg:'rgba(52,211,153,.12)',darkC:'#6EE7B7',icon:'ti-ball-football'},
+  jogos:      {bg:'#FAECE7',c:'#993C1D',darkBg:'rgba(251,113,133,.12)',darkC:'#FCA5A5',icon:'ti-device-gamepad'},
+  livros:     {bg:'#E6F1FB',c:'#185FA5',darkBg:'rgba(96,165,250,.12)',darkC:'#93C5FD',icon:'ti-book'},
+  outros:     {bg:'#F1EFE8',c:'#5F5E5A',darkBg:'rgba(156,163,175,.12)',darkC:'#9CA3AF',icon:'ti-users-group'}
 };
+const _isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+const _clBg = cl => _isDark() ? cl.darkBg : cl.bg;
+const _clC  = cl => _isDark() ? cl.darkC  : cl.c;
 
 requireAuth(async user => {
   currentUser = user;
@@ -174,15 +177,15 @@ function commCardHTML(id, d, isOwner = false) {
     </div>` : '';
   return `
   <div class="comm-card" onclick="location.href='comunidade.html?id=${id}'">
-    <div class="comm-card-banner" style="background:${cl.bg}">
-      <i class="ti ${cl.icon}" style="font-size:32px;color:${cl.c}" aria-hidden="true"></i>
+    <div class="comm-card-banner" style="background:${_clBg(cl)}">
+      <i class="ti ${cl.icon}" style="font-size:32px;color:${_clC(cl)}" aria-hidden="true"></i>
     </div>
     <div class="comm-card-body">
       <div class="comm-card-name">${sanitize(d.name)}</div>
       <div class="comm-card-desc">${sanitize(d.description||'')}</div>
       <div class="comm-card-footer">
         <div class="comm-card-members"><i class="ti ti-users" aria-hidden="true"></i> ${d.membersCount||0} membros</div>
-        <span style="font-size:10px;background:${cl.bg};color:${cl.c};padding:2px 8px;border-radius:var(--radius-full);font-weight:500">${d.category||'outros'}</span>
+        <span style="font-size:10px;background:${_clBg(cl)};color:${_clC(cl)};padding:2px 8px;border-radius:var(--radius-full);font-weight:500">${d.category||'outros'}</span>
       </div>
       ${adminBtns}
     </div>

@@ -415,7 +415,7 @@ async function renderProfile(uid) {
   const d = profileData;
   const cl = getAvatarColor(uid);
   const av = d.photoURL
-    ? `<img src="${d.photoURL}" alt="${d.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${d.photoURL}" alt="${sanitize(d.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(d.displayName)}</span>`;
 
   let isFriend = false, hasPendingRequest = false, isBlocked = false, mutualCount = 0;
@@ -477,7 +477,7 @@ async function renderProfile(uid) {
              </div>`;
 
   const coverStyle = d.coverURL
-    ? `background-image:url('${d.coverURL}');background-size:cover;background-position:center;`
+    ? `background-image:url('${d.coverURL.replace(/'/g,'%27')}');background-size:cover;background-position:center;`
     : '';
 
   document.getElementById('profile-page').innerHTML = `
@@ -782,10 +782,10 @@ function _profilePostImageHTML(p) {
   const imgs = p.images?.length ? p.images : (p.imageURL ? [p.imageURL] : []);
   if (!imgs.length) return '';
   if (imgs.length === 1) {
-    return `<img class="post-image" src="${imgs[0]}" alt="Imagem" loading="lazy" style="border-radius:var(--radius-md);margin-bottom:.5rem;cursor:zoom-in" onclick="openLightbox(['${imgs[0]}'])">`;
+    return `<img class="post-image" src="${sanitize(imgs[0])}" alt="Imagem" loading="lazy" style="border-radius:var(--radius-md);margin-bottom:.5rem;cursor:zoom-in" onclick="openLightbox(${JSON.stringify([imgs[0]]).replace(/"/g,'&quot;')})">`;
   }
   return `<div style="display:grid;grid-template-columns:repeat(${Math.min(imgs.length,2)},1fr);gap:.25rem;margin-bottom:.5rem;border-radius:var(--radius-md);overflow:hidden">
-    ${imgs.slice(0,4).map((url,i) => `<img src="${url}" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;cursor:zoom-in" onclick="openLightbox(${JSON.stringify(imgs)},${i})">`).join('')}
+    ${imgs.slice(0,4).map((url,i) => `<img src="${sanitize(url)}" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;cursor:zoom-in" onclick="openLightbox(${JSON.stringify(imgs).replace(/"/g,'&quot;')},${i})">`).join('')}
   </div>`;
 }
 
@@ -891,7 +891,7 @@ async function loadProfileFriends(uid) {
   el.innerHTML = `<div class="friends-big-grid">${users.filter(Boolean).map(u => {
     const cl = getAvatarColor(u.uid);
     const av = u.photoURL
-      ? `<img src="${u.photoURL}" alt="${u.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      ? `<img src="${u.photoURL}" alt="${sanitize(u.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       : `<span style="color:${cl.color}">${getInitials(u.displayName)}</span>`;
     return `<div class="friend-big-item" onclick="location.href='perfil.html?uid=${u.uid}'">
       <div class="avatar avatar-48" style="background:${cl.bg}">${av}</div>
@@ -939,7 +939,7 @@ async function loadScraps(uid) {
     const s = doc.data();
     const cl = getAvatarColor(s.fromUid);
     const av = s.fromPhoto
-      ? `<img src="${s.fromPhoto}" alt="${s.fromName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      ? `<img src="${s.fromPhoto}" alt="${sanitize(s.fromName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       : `<span style="color:${cl.color}">${getInitials(s.fromName)}</span>`;
     const canDelete = isOwn || s.fromUid === currentUser.uid;
     const likes = s.likes || [];
@@ -1000,6 +1000,8 @@ async function toggleProfileScrapLike(id, btn) {
 async function postScrap(toUid) {
   const text = document.getElementById('scrap-text').value.trim();
   if (!text) return showToast('Escreva um recado.');
+  if (!checkRateLimit('scrap_' + currentUser.uid, 5, 60000))
+    return showToast('Muitos recados seguidos. Aguarde um momento.');
   // Buscar nome do destinatário para salvar toName
   const toUser = await getUserData(toUid);
   const toName = toUser ? (toUser.displayName || 'Usuário') : 'Usuário';
@@ -1750,6 +1752,8 @@ async function submitDepoimento(toUid) {
   const text = document.getElementById('depo-text')?.value.trim();
   if (!text) return showToast('Escreva algo antes de enviar.');
   if (text.length > 500) return showToast('Máximo 500 caracteres.');
+  if (!checkRateLimit('depoimento_' + currentUser.uid, 3, 60000))
+    return showToast('Muitos depoimentos seguidos. Aguarde um momento.');
   const btn = document.querySelector('#depo-form-modal .btn-primary');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Enviando…'; }
   try {

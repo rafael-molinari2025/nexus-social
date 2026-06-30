@@ -150,7 +150,7 @@ async function loadScraps(type) {
 
       const cl = getAvatarColor(authorUid);
       const av = authorPhoto
-        ? `<img src="${authorPhoto}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        ? `<img src="${authorPhoto}" alt="${sanitize(authorName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : `<span style="color:${cl.color}">${getInitials(authorName)}</span>`;
 
       const likes = s.likes || [];

@@ -134,7 +134,7 @@ function loadPost() {
     _postData = p;
     const cl = getAvatarColor(p.authorId);
     const av = p.authorPhoto
-      ? `<img src="${p.authorPhoto}" alt="${p.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      ? `<img src="${p.authorPhoto}" alt="${sanitize(p.authorName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       : getInitials(p.authorName);
     const _rxns    = p.reactions || {};
     const liked    = (p.likes||[]).includes(currentUser.uid) || _RXN_EMOJIS.some(e => (_rxns[e]||[]).includes(currentUser.uid));
@@ -156,7 +156,7 @@ function loadPost() {
           <button class="btn btn-icon" onclick="deletePost()" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
       </div>
       ${p.text ? `<div class="post-body" style="font-size:16px;padding:0 1rem 1rem;line-height:1.7">${sanitize(p.text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" style="color:#0ea5e9;text-decoration:none;font-weight:500">@$1</a>')}</div>` : ''}
-      ${p.videoURL ? `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:480px;background:#000;display:block" onclick="event.stopPropagation()"></video>` : (p.images && p.images.length > 1) ? `<div style="display:flex;gap:.25rem;flex-wrap:wrap;padding:0 1rem .75rem">${p.images.map(url=>`<img src="${url}" style="flex:1;min-width:120px;max-height:320px;object-fit:cover;border-radius:var(--radius-md);cursor:zoom-in" onclick="openLightbox(${JSON.stringify(p.images).replace(/"/g,'&quot;')})">`).join('')}</div>` : (p.imageURL ? `<img src="${p.imageURL}" style="width:100%;max-height:420px;object-fit:cover;cursor:zoom-in;display:block" onclick="openLightbox(['${p.imageURL}'])">` : '')}
+      ${p.videoURL ? `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:480px;background:#000;display:block" onclick="event.stopPropagation()"></video>` : (p.images && p.images.length > 1) ? `<div style="display:flex;gap:.25rem;flex-wrap:wrap;padding:0 1rem .75rem">${p.images.map(url=>`<img src="${url}" style="flex:1;min-width:120px;max-height:320px;object-fit:cover;border-radius:var(--radius-md);cursor:zoom-in" onclick="openLightbox(${JSON.stringify(p.images).replace(/"/g,'&quot;')})">`).join('')}</div>` : (p.imageURL ? `<img src="${sanitize(p.imageURL)}" style="width:100%;max-height:420px;object-fit:cover;cursor:zoom-in;display:block" onclick="openLightbox(${JSON.stringify([p.imageURL]).replace(/"/g,'&quot;')})">` : '')}
       ${p.poll ? pollHTML(p.poll) : ''}
       ${p.linkPreview ? linkPreviewCardHTML(p.linkPreview) : ''}
       <div class="post-actions" style="border-top:0.5px solid var(--border)">
@@ -270,7 +270,7 @@ async function loadMoreComments() {
 function commentHTML(id, c) {
   const cl = getAvatarColor(c.authorId);
   const av = c.authorPhoto
-    ? `<img src="${c.authorPhoto}" alt="${c.authorName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${c.authorPhoto}" alt="${sanitize(c.authorName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(c.authorName)}</span>`;
   const canDelete = c.authorId === currentUser.uid;
   const liked = (c.likes || []).includes(currentUser.uid);

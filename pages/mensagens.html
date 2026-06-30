@@ -533,7 +533,7 @@ function loadConversations() {
 function convItemHTML({ id, data: d, other }) {
   const cl = getAvatarColor(other.uid);
   const av = other.photoURL
-    ? `<img src="${other.photoURL}" alt="${other.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${other.photoURL}" alt="${sanitize(other.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(other.displayName)}</span>`;
   const unread = (d.unread || {})[currentUser.uid] || 0;
   const preview = d.lastMessage || '';
@@ -594,7 +594,7 @@ async function openConversation(cid, otherUid) {
   const other = await getUserData(otherUid) || { displayName: 'Usuário', uid: otherUid };
   const cl = getAvatarColor(other.uid);
   const av = other.photoURL
-    ? `<img src="${other.photoURL}" alt="${other.displayName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    ? `<img src="${other.photoURL}" alt="${sanitize(other.displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<span style="color:${cl.color}">${getInitials(other.displayName)}</span>`;
 
   document.getElementById('chat-main').innerHTML = `
@@ -840,13 +840,13 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
               ? chatPollHTML(doc.id, activeConvId, m.poll, isMine)
               : m.audioURL
                 ? `<div class="voice-msg-player"><i class="ti ti-microphone" style="font-size:14px;flex-shrink:0"></i><audio src="${m.audioURL}" controls preload="metadata"></audio></div>`
-                : (m.imageURL ? `<img src="${m.imageURL}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
+                : (m.imageURL ? `<img src="${sanitize(m.imageURL)}" alt="Imagem" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(${JSON.stringify([m.imageURL]).replace(/"/g,'&quot;')})">` : '')
                   + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
           </div>
           ${reactionsHtml}
           <div class="msg-time">
-            <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(senderName).replace(/'/g,"\\'")}','${previewText.replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
-            <button class="msg-reply-btn" onclick="forwardMessage('${previewText.replace(/'/g,"\\'")}')" title="Encaminhar"><i class="ti ti-corner-up-right"></i></button>
+            <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(senderName).replace(/'/g,"\\'")}','${sanitize(previewText).replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
+            <button class="msg-reply-btn" onclick="forwardMessage('${sanitize(previewText).replace(/'/g,"\\'")}')" title="Encaminhar"><i class="ti ti-corner-up-right"></i></button>
             ${time}${isMine ? ` <i class="ti ti-checks msg-read-check${_otherLastReadAt && m.createdAt && m.createdAt.toMillis() <= _otherLastReadAt.toMillis() ? ' read' : ''}"></i>` : ''}
           </div>
         </div>
@@ -1037,6 +1037,8 @@ async function sendMessage(cid, otherUid) {
   const text = input.value.trim();
   if (!text) return;
   if (text.length > 1000) { showToast('Mensagem muito longa. Máximo 1000 caracteres.'); return; }
+  if (!checkRateLimit('msg_' + currentUser.uid, 15, 10000))
+    return showToast('Muitas mensagens seguidas. Aguarde.');
 
   input.value = '';
   autoResize(input);
@@ -1174,6 +1176,8 @@ async function sendImageMessage(cid, otherUid, input) {
   input.value = '';
   if (!file) return;
   if (file.size > 8 * 1024 * 1024) { showToast('Imagem muito grande. Máximo 8MB.'); return; }
+  if (!checkRateLimit('msg_' + currentUser.uid, 15, 10000))
+    return showToast('Muitas mensagens seguidas. Aguarde.');
   const btn = document.getElementById('send-btn');
   if (btn) btn.disabled = true;
   showToast('Enviando imagem…');
@@ -1439,13 +1443,13 @@ function renderGroupMessages(docs, participantData, showLoadOlder) {
             ? chatPollHTML(doc.id, activeConvId, m.poll, isMine)
             : m.audioURL
               ? `<div class="voice-msg-player"><i class="ti ti-microphone" style="font-size:14px;flex-shrink:0"></i><audio src="${m.audioURL}" controls preload="metadata"></audio></div>`
-              : (m.imageURL ? `<img src="${m.imageURL}" alt="" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(['${m.imageURL}'])">` : '')
+              : (m.imageURL ? `<img src="${sanitize(m.imageURL)}" alt="" style="max-width:100%;border-radius:10px;display:block;margin-bottom:${m.text?'.4rem':'0'}" onclick="openLightbox(${JSON.stringify([m.imageURL]).replace(/"/g,'&quot;')})">` : '')
                 + (m.text ? sanitize(m.text).replace(/\n/g,'<br>') : '')}
         </div>
         ${reactionsHtml}
         <div class="msg-time">
-          <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(gSenderName).replace(/'/g,"\\'")}','${gPreviewText.replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
-          <button class="msg-reply-btn" onclick="forwardMessage('${gPreviewText.replace(/'/g,"\\'")}')"><i class="ti ti-corner-up-right"></i></button>
+          <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(gSenderName).replace(/'/g,"\\'")}','${sanitize(gPreviewText).replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
+          <button class="msg-reply-btn" onclick="forwardMessage('${sanitize(gPreviewText).replace(/'/g,"\\'")}')"><i class="ti ti-corner-up-right"></i></button>
           ${time}
         </div>
       </div>
@@ -1458,6 +1462,8 @@ async function sendGroupMessage(cid) {
   const input = document.getElementById('chat-input');
   const text  = input?.value.trim();
   if (!text) return;
+  if (!checkRateLimit('msg_' + currentUser.uid, 15, 10000))
+    return showToast('Muitas mensagens seguidas. Aguarde.');
   input.value = '';
   autoResize(input);
   const btn = document.getElementById('send-btn');
@@ -1502,6 +1508,8 @@ async function sendGroupImageMessage(cid, input) {
   const file = input.files[0];
   input.value = '';
   if (!file || file.size > 8*1024*1024) { showToast('Imagem muito grande.'); return; }
+  if (!checkRateLimit('msg_' + currentUser.uid, 15, 10000))
+    return showToast('Muitas mensagens seguidas. Aguarde.');
   showToast('Enviando…');
   try {
     const imageURL = await uploadToCloudinary(file);
