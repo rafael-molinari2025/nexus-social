@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-v5';
+const CACHE_NAME = 'nexus-v6';
 const STATIC_ASSETS = [
   '/css/style.css',
   '/js/utils.js',
