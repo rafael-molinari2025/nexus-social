@@ -708,6 +708,9 @@ div.composer-textarea em { font-style: italic; }
 .post-action-btn.liked { color: var(--rose-500); }
 .post-action-btn.liked:hover { color: var(--rose-600); background: rgba(244,63,94,0.08); }
 .post-action-btn.bookmarked { color: var(--indigo-500); }
+/* ti-heart-filled não existe na versão local do Tabler — usa caractere Unicode ♥ */
+.ti-heart-filled { font-family: system-ui, -apple-system, sans-serif !important; font-size: 15px; line-height: 1; }
+.ti-heart-filled::before { content: "\2665"; }
 .post-action-btn i { font-size: 17px; }
 
 /* ── Emoji reactions ── */
