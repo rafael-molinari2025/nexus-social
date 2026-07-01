@@ -116,8 +116,18 @@
       background: var(--surface); flex-shrink: 0;
     }
     .chat-header-info { flex: 1; min-width: 0; }
-    .chat-header-name { font-size: 15px; font-weight: 600; }
-    .chat-header-status { font-size: 12px; color: var(--text-muted); }
+    .chat-header-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-header-status { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-header-actions { display: flex; align-items: center; gap: .25rem; flex-shrink: 0; }
+    @media (max-width: 480px) {
+      .chat-header-actions {
+        overflow-x: auto; scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        max-width: 120px;
+      }
+      .chat-header-actions::-webkit-scrollbar { display: none; }
+      .chat-header-actions .btn-sm { padding: .3rem .45rem; }
+    }
 
     /* Messages area */
     .chat-messages {
@@ -269,7 +279,7 @@
       border: 1.5px solid var(--border); border-radius: 22px;
       background: var(--gray-100); font-size: 14px;
       font-family: var(--font-sans); resize: none;
-      outline: none; max-height: 120px; overflow-y: auto;
+      outline: none; max-height: 120px; overflow-y: hidden;
       line-height: 1.4; color: var(--text-primary);
       transition: border-color var(--transition), background var(--transition);
     }
@@ -354,6 +364,12 @@
         color: var(--text-secondary); font-size: 20px;
         flex-shrink: 0;
       }
+
+      /* Input area compacta no mobile para textarea ter espaço suficiente */
+      .chat-input-area { padding: .5rem .75rem; gap: .4rem; }
+      .chat-input { padding: .55rem .85rem; font-size: 13.5px; }
+      .chat-send-btn { width: 36px; height: 36px; flex-shrink: 0; }
+      .chat-input-area .chat-send-btn:not([id="send-btn"]) { width: 34px; height: 34px; }
     }
     @media (min-width: 769px) {
       .chat-back-btn { display: none; }
@@ -608,21 +624,23 @@ async function openConversation(cid, otherUid) {
         <div class="chat-header-name">${sanitize(other.displayName)}</div>
         <div class="chat-header-status" id="chat-status">online</div>
       </div>
-      <a href="perfil.html?uid=${other.uid}" class="btn btn-sm" title="Ver perfil">
-        <i class="ti ti-user"></i>
-      </a>
-      <button class="btn btn-sm" onclick="toggleChatSearch()" title="Buscar mensagens" id="chat-search-btn">
-        <i class="ti ti-search"></i>
-      </button>
-      <button class="btn btn-sm" onclick="openThemePicker('${cid}')" title="Tema da conversa">
-        <i class="ti ti-palette"></i>
-      </button>
-      <button class="btn btn-sm" onclick="toggleDisappearing('${cid}')" title="Mensagens temporárias" id="disappearing-btn">
-        <i class="ti ti-clock-off"></i>
-      </button>
-      <button class="btn btn-sm" onclick="deleteConversation('${cid}')" title="Excluir conversa" style="color:var(--coral-400)">
-        <i class="ti ti-trash"></i>
-      </button>
+      <div class="chat-header-actions">
+        <a href="perfil.html?uid=${other.uid}" class="btn btn-sm" title="Ver perfil">
+          <i class="ti ti-user"></i>
+        </a>
+        <button class="btn btn-sm" onclick="toggleChatSearch()" title="Buscar mensagens" id="chat-search-btn">
+          <i class="ti ti-search"></i>
+        </button>
+        <button class="btn btn-sm" onclick="openThemePicker('${cid}')" title="Tema da conversa">
+          <i class="ti ti-palette"></i>
+        </button>
+        <button class="btn btn-sm" onclick="toggleDisappearing('${cid}')" title="Mensagens temporárias" id="disappearing-btn">
+          <i class="ti ti-clock-off"></i>
+        </button>
+        <button class="btn btn-sm" onclick="deleteConversation('${cid}')" title="Excluir conversa" style="color:var(--coral-400)">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>
     </div>
     <div id="chat-search-bar" style="display:none;padding:.4rem 1rem;border-bottom:0.5px solid var(--border);background:var(--surface);align-items:center;gap:.5rem">
       <i class="ti ti-search" style="color:var(--text-muted);font-size:14px"></i>
@@ -1107,7 +1125,9 @@ function handleKey(e, cid, otherUid) {
 
 function autoResize(el) {
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  const h = Math.min(el.scrollHeight, 120);
+  el.style.height = h + 'px';
+  el.style.overflowY = h >= 120 ? 'auto' : 'hidden';
 }
 
 // ── Voice messages ───────────────────────────────────────────
@@ -1327,9 +1347,11 @@ async function openGroupConversation(cid) {
           ${count} participante${count !== 1 ? 's' : ''} · Ver membros
         </div>
       </div>
-      <button class="btn btn-sm" onclick="toggleChatSearch()" title="Buscar mensagens"><i class="ti ti-search"></i></button>
-      <button class="btn btn-sm" onclick="showGroupMembers('${cid}')" title="Membros"><i class="ti ti-users"></i></button>
-      <button class="btn btn-sm" style="color:var(--coral-400)" onclick="leaveGroup('${cid}')" title="Sair do grupo"><i class="ti ti-door-exit"></i></button>
+      <div class="chat-header-actions">
+        <button class="btn btn-sm" onclick="toggleChatSearch()" title="Buscar mensagens"><i class="ti ti-search"></i></button>
+        <button class="btn btn-sm" onclick="showGroupMembers('${cid}')" title="Membros"><i class="ti ti-users"></i></button>
+        <button class="btn btn-sm" style="color:var(--coral-400)" onclick="leaveGroup('${cid}')" title="Sair do grupo"><i class="ti ti-door-exit"></i></button>
+      </div>
     </div>
     <div id="chat-search-bar" style="display:none;padding:.4rem 1rem;border-bottom:0.5px solid var(--border);background:var(--surface);align-items:center;gap:.5rem">
       <i class="ti ti-search" style="color:var(--text-muted);font-size:14px"></i>
