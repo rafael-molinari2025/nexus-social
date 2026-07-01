@@ -510,12 +510,13 @@ function openCommentGifPicker() {
 
 async function searchCommentGifs(q) {
   clearTimeout(_gifSearchTimer);
+  const query = (q && q.trim()) ? q.trim() : 'reação';
   _gifSearchTimer = setTimeout(async () => {
     const grid = document.getElementById('gif-grid');
     if (!grid) return;
     grid.innerHTML = '<div class="gif-empty"><i class="ti ti-loader-2 ti-spin" style="font-size:24px"></i></div>';
     try {
-      const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q||'trending')}&key=${TENOR_KEY}&limit=18&media_filter=gif,tinygif`;
+      const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${TENOR_KEY}&limit=18&media_filter=gif,tinygif`;
       const res = await fetch(url);
       const data = await res.json();
       const results = data.results || [];
@@ -833,6 +834,8 @@ function showError(msg) {
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  const gifPicker = document.querySelector('.gif-picker-backdrop');
+  if (gifPicker) { gifPicker.remove(); return; }
   document.getElementById('edit-post-modal')?.classList.remove('open');
   const dyn = document.querySelector('.modal-overlay.open:not(#edit-post-modal)');
   if (dyn) dyn.remove();

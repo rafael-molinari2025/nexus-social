@@ -1191,16 +1191,17 @@ function openGifPicker() {
       <input class="gif-search-input" id="gif-search" placeholder="Buscar GIFs…" oninput="onGifSearch(this.value)" autofocus>
       <button onclick="this.closest('.gif-picker-backdrop').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;padding:0 .4rem">&times;</button>
     </div>
-    <div class="gif-grid" id="gif-grid"><div class="gif-empty">Digite algo para buscar GIFs</div></div>
+    <div class="gif-grid" id="gif-grid"><div class="gif-empty"><i class="ti ti-loader-2 ti-spin" style="font-size:24px"></i></div></div>
   </div>`;
   document.body.appendChild(bd);
   setTimeout(() => document.getElementById('gif-search')?.focus(), 60);
+  fetchGifs('trending');
 }
 
 function onGifSearch(q) {
   clearTimeout(_gifSearchTimer);
   if (!q.trim()) {
-    document.getElementById('gif-grid').innerHTML = '<div class="gif-empty">Digite algo para buscar GIFs</div>';
+    _gifSearchTimer = setTimeout(() => fetchGifs('trending'), 400);
     return;
   }
   _gifSearchTimer = setTimeout(() => fetchGifs(q.trim()), 400);
@@ -1214,9 +1215,12 @@ async function fetchGifs(q) {
   grid.innerHTML = '<div class="gif-empty"><i class="ti ti-loader-2 ti-spin" style="font-size:24px"></i></div>';
   _gifItems = [];
 
+  const isTrending = q === 'trending';
   // 1ª tentativa: Tenor v1 (demo key pública estável)
   try {
-    const url = `https://api.tenor.com/v1/search?q=${encodeURIComponent(q)}&key=LIVDSRZULELA&limit=20&media_filter=minimal&locale=pt_BR`;
+    const url = isTrending
+      ? `https://api.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&media_filter=minimal&locale=pt_BR`
+      : `https://api.tenor.com/v1/search?q=${encodeURIComponent(q)}&key=LIVDSRZULELA&limit=20&media_filter=minimal&locale=pt_BR`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('tenor_' + res.status);
     const data = await res.json();
@@ -3667,6 +3671,9 @@ async function loadTrendingCommunities() {
 // ── Fechar modais com Escape ───────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  // pickers (emoji / gif)
+  const picker = document.querySelector('.emoji-picker-backdrop, .gif-picker-backdrop');
+  if (picker) { picker.remove(); return; }
   // dynamic modals (created programmatically)
   const dynamic = document.querySelector('#repost-modal, #share-comm-modal, #poll-vote-modal');
   if (dynamic) { dynamic.remove(); return; }
