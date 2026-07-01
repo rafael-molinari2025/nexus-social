@@ -52,13 +52,15 @@
     .profile-fullname { font-size: 20px; font-weight: 600; margin-top: .5rem; }
     .profile-location { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: .3rem; margin-top: .25rem; }
     .profile-bio-text { font-size: 14px; color: var(--text-secondary); margin-top: .65rem; line-height: 1.55; }
-    .profile-tabs { display: flex; gap: 0; border-bottom: 0.5px solid var(--border); margin-bottom: 1rem; }
+    .profile-tabs { display: flex; gap: 0; border-bottom: 0.5px solid var(--border); margin-bottom: 1rem; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .profile-tabs::-webkit-scrollbar { display: none; }
     .profile-tab {
       padding: .75rem 1.25rem; background: none; border: none;
       font-size: 14px; font-weight: 500; color: var(--text-muted);
       border-bottom: 2px solid transparent; margin-bottom: -0.5px;
       cursor: pointer; font-family: var(--font-sans);
       transition: all var(--transition);
+      white-space: nowrap; flex-shrink: 0;
     }
     .profile-tab.active { color: var(--purple-600); border-bottom-color: var(--purple-600); }
     .tab-content { display: none; }
@@ -125,7 +127,7 @@
       .fields-row-2 { grid-template-columns: 1fr; }
       .profile-fullname { font-size: 18px; }
       .profile-info-card { padding: 0 1rem 1.25rem; }
-      .profile-tab { padding: .65rem .85rem; font-size: 13px; }
+      .profile-tab { padding: .6rem .75rem; font-size: 12.5px; white-space: nowrap; flex-shrink: 0; }
       /* Edit modal: modal centralizado mesmo no mobile */
       #edit-modal {
         align-items: center !important;
@@ -538,7 +540,7 @@ async function renderProfile(uid) {
     </div>
 
     <div class="card" style="padding:.25rem 0">
-      <div class="profile-tabs" style="overflow-x:auto;scrollbar-width:none">
+      <div class="profile-tabs">
         <button class="profile-tab active" onclick="switchTab('posts')"><i class="ti ti-layout-list" aria-hidden="true"></i> Posts</button>
         <button class="profile-tab" onclick="switchTab('fotos')"><i class="ti ti-photo" aria-hidden="true"></i> Fotos</button>
         <button class="profile-tab" onclick="switchTab('friends')"><i class="ti ti-users" aria-hidden="true"></i> Amigos</button>

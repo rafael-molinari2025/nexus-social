@@ -1434,6 +1434,22 @@ textarea.form-input {
 }
 
 /* ══════════════════════════════════════════════
+   TOUCH TARGETS — MOBILE (≤ 768px)
+   Garante área de toque mínima em botões pequenos
+══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Botões de ação do post — altura mínima para toque */
+  .post-action-btn { min-height: 36px; }
+
+  /* Post-action overflow — barra rolável sem indicador de scroll */
+  .post-actions { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .post-actions::-webkit-scrollbar { display: none; }
+
+  /* Botão de Upload de avatar */
+  .avatar-upload-btn { min-width: 36px; min-height: 36px; }
+}
+
+/* ══════════════════════════════════════════════
    TAB TOGGLE (login, recados)
 ══════════════════════════════════════════════ */
 .tab-toggle {
