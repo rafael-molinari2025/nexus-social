@@ -191,39 +191,58 @@ async function loadAnalytics(days) {
   loader.textContent = 'Carregando...';
 
   const since = new Date(Date.now() - days * 86400000);
+  const sinceTs = firebase.firestore.Timestamp.fromDate(since);
 
+  // ── Posts do usuário no período ──────────────────────────────
   try {
-    // Busca posts do usuário no período
     const snap = await db.collection('posts')
       .where('authorId', '==', currentUser.uid)
-      .where('createdAt', '>=', since)
+      .where('createdAt', '>=', sinceTs)
       .orderBy('createdAt', 'desc')
       .limit(200)
       .get();
-
     allPosts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) {
+    console.error('analytics posts:', e);
+    allPosts = [];
+    loader.textContent = 'Erro ao carregar posts';
+  }
 
-    // Busca reposts de posts do usuário (aproximado: posts com repostOf.authorId)
+  // ── Reposts dos posts do usuário (sem filtro de data para evitar índice composto) ──
+  let repostCount = 0;
+  try {
     const repostSnap = await db.collection('posts')
       .where('repostOf.authorId', '==', currentUser.uid)
-      .where('createdAt', '>=', since)
       .get();
+    // filtra por data em JS
+    repostCount = repostSnap.docs.filter(d => {
+      const ts = d.data().createdAt;
+      const date = ts?.toDate ? ts.toDate() : (ts?.seconds ? new Date(ts.seconds * 1000) : null);
+      return date && date >= since;
+    }).length;
+  } catch(e) {
+    console.error('analytics reposts:', e);
+  }
 
-    // Amigos
+  // ── Amigos ───────────────────────────────────────────────────
+  let friendsCount = 0;
+  try {
     const friendsSnap = await db.collection('friendships')
       .where('users', 'array-contains', currentUser.uid).get();
-
-    renderKPIs(allPosts, repostSnap.size, friendsSnap.size);
-    renderTopPosts(allPosts);
-    renderHashtagChart(allPosts);
-    renderContentBreakdown(allPosts);
-    renderBestHours(allPosts);
-
-    loader.textContent = `${allPosts.length} posts analisados`;
+    friendsCount = friendsSnap.size;
   } catch(e) {
-    console.error('analytics:', e);
-    loader.textContent = 'Erro ao carregar';
+    console.error('analytics friends:', e);
   }
+
+  renderKPIs(allPosts, repostCount, friendsCount);
+  renderTopPosts(allPosts);
+  renderHashtagChart(allPosts);
+  renderContentBreakdown(allPosts);
+  renderBestHours(allPosts);
+
+  loader.textContent = allPosts.length > 0
+    ? `${allPosts.length} posts analisados`
+    : 'Nenhum post no período';
 }
 
 function renderKPIs(posts, reposts, friends) {
