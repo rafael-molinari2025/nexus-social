@@ -503,7 +503,7 @@ async function renderProfile(uid) {
       ${d.status && (d.status.emoji || d.status.text) ? `<div style="font-size:13px;color:var(--text-secondary);margin-top:.2rem">${sanitize(d.status.emoji||'')} ${sanitize(d.status.text||'')}</div>` : ''}
       ${!isOwn && mutualCount > 0 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:.2rem;cursor:pointer;display:inline-flex;align-items:center;gap:.25rem" onclick="showMutualFriendsModal()" title="Ver amigos em comum"><i class="ti ti-users" aria-hidden="true"></i> ${mutualCount} amigo${mutualCount!==1?'s':''} em comum <i class="ti ti-chevron-right" style="font-size:10px"></i></div>` : ''}
       ${d.city ? `<div class="profile-location"><i class="ti ti-map-pin" aria-hidden="true"></i>${sanitize(d.city)}</div>` : ''}
-      ${d.website ? `<div class="profile-location"><i class="ti ti-world" aria-hidden="true"></i><a href="${sanitize(d.website)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none" onclick="event.stopPropagation()">${sanitize(d.website.replace(/^https?:\/\//,''))}</a></div>` : ''}
+      ${d.website ? `<div class="profile-location"><i class="ti ti-world" aria-hidden="true"></i><a href="${safeUrl(d.website)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none" onclick="event.stopPropagation()">${sanitize(d.website.replace(/^https?:\/\//,''))}</a></div>` : ''}
       ${d.bio  ? `<div class="profile-bio-text">${sanitize(d.bio)}</div>` : ''}
       ${(() => {
         const sl = d.socialLinks || {};
@@ -517,7 +517,7 @@ async function renderProfile(uid) {
         ].filter(Boolean);
         if (!links.length) return '';
         return `<div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem">${links.map(l =>
-          `<a href="${sanitize(l.href)}" target="_blank" rel="noopener noreferrer"
+          `<a href="${safeUrl(l.href)}" target="_blank" rel="noopener noreferrer"
             style="display:inline-flex;align-items:center;gap:.3rem;font-size:12px;color:${l.color};background:var(--surface-2,var(--gray-50));border:0.5px solid var(--border);border-radius:var(--radius-full);padding:.2rem .6rem;text-decoration:none;transition:box-shadow var(--transition)"
             onclick="event.stopPropagation()">
             <i class="ti ${l.icon}" style="font-size:14px"></i>${sanitize(l.label)}
@@ -650,7 +650,7 @@ async function loadAboutTab(uid) {
       if (!val) return '';
       const display = f.transform ? f.transform(val) : val;
       const content = f.link
-        ? `<a href="${sanitize(val)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none">${sanitize(display)}</a>`
+        ? `<a href="${safeUrl(val)}" target="_blank" rel="noopener noreferrer" style="color:var(--purple-600);text-decoration:none">${sanitize(display)}</a>`
         : sanitize(display);
       return `<div style="display:flex;align-items:center;gap:.75rem;padding:.55rem 0;border-bottom:0.5px solid var(--border)">
         <i class="ti ${f.icon}" style="font-size:18px;color:var(--purple-400);flex-shrink:0;width:22px;text-align:center"></i>
@@ -676,7 +676,7 @@ async function loadAboutTab(uid) {
            <div style="font-size:12px;color:var(--text-muted);margin-bottom:.45rem">Redes sociais</div>
            <div style="display:flex;flex-wrap:wrap;gap:.35rem">
              ${socialDefs.map(l =>
-               `<a href="${sanitize(l.href)}" target="_blank" rel="noopener noreferrer"
+               `<a href="${safeUrl(l.href)}" target="_blank" rel="noopener noreferrer"
                  style="display:inline-flex;align-items:center;gap:.3rem;font-size:12px;color:${l.color};background:var(--gray-50);border:0.5px solid var(--border);border-radius:var(--radius-full);padding:.25rem .65rem;text-decoration:none">
                  <i class="ti ${l.icon}" style="font-size:14px"></i>${sanitize(l.label)}
                </a>`).join('')}

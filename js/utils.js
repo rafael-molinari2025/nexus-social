@@ -213,7 +213,7 @@ function _fireBrowserNotif(notif) {
       renotify: true
     });
     if (notif.link) n.onclick = () => { window.focus(); location.href = notif.link; };
-  } catch(e) {}
+  } catch(e) { /* browser may block Notification API */ }
 }
 
 async function requestBrowserNotifications(userId) {
@@ -243,7 +243,7 @@ async function sendPushToUser(toUid, title, body, url, tag) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
       body: JSON.stringify({ toUid, title, body, url, tag })
     });
-  } catch(e) {}
+  } catch(e) { /* push notification delivery is best-effort */ }
 }
 
 const _PUSH_TITLES = {
@@ -408,7 +408,7 @@ function renderTopbar(user, activePage = 'feed') {
       localStorage.setItem(HIST_KEY, JSON.stringify(getHistory().filter(x => x !== q)));
     };
 
-    function renderSearchHistory() {
+    const renderSearchHistory = () => {
       const hist = getHistory();
       let dd = document.getElementById('search-history-dd');
       if (!hist.length) { if (dd) dd.remove(); return; }
@@ -586,7 +586,7 @@ async function toggleNotifPanel(uid) {
   body.innerHTML = grouped.map(n => {
     const ic = notifIcon(n.type);
     return `
-      <div class="notif-item${n.read ? '' : ' unread'}" data-href="${n.link || ''}">
+      <div class="notif-item${n.read ? '' : ' unread'}" data-href="${safeUrl(n.link)}">
         <div class="notif-icon" style="background:${ic.bg}">
           <i class="ti ${ic.icon}" style="color:${ic.color}"></i>
         </div>
@@ -807,6 +807,14 @@ function sanitize(str = '') {
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&#39;');
+}
+
+function safeUrl(url) {
+  if (!url) return '#';
+  try {
+    const u = new URL(url);
+    return ['https:', 'http:'].includes(u.protocol) ? url : '#';
+  } catch { return '#'; }
 }
 
 // ── Online status ─────────────────────────────────────────────

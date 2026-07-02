@@ -279,15 +279,42 @@ let currentUser = null;
 let _currentTab = 'upcoming';
 let _editingId  = null;
 let _evCoverFile = null;
+let _openDetailId = null;
 
 requireAuth(async user => {
   currentUser = user;
   const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
   renderTopbar(userData, 'events');
   loadEvents();
-  // Set min date to today
   document.getElementById('ev-date').min = new Date().toISOString().slice(0,10);
+  const sharedId = new URLSearchParams(location.search).get('id');
+  if (sharedId) openDetail(sharedId);
 });
+
+// ── Compartilhar ──────────────────────────────────────────────
+function shareEvent(e, evId) {
+  e.stopPropagation();
+  const url = `${location.origin}/pages/eventos?id=${evId}`;
+  const titleEl = document.querySelector(`#ev-card-${evId} .ev-title`);
+  const title = (titleEl ? titleEl.textContent : '') || 'Evento no Nexus';
+  if (navigator.share) {
+    navigator.share({ title, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => showToast('Link copiado! 🔗'));
+  }
+}
+
+function shareCurrentDetail() {
+  if (!_openDetailId) return;
+  const url = `${location.origin}/pages/eventos?id=${_openDetailId}`;
+  const titleEl = document.querySelector('#ev-detail-content h2');
+  const title = (titleEl ? titleEl.textContent : '') || 'Evento no Nexus';
+  if (navigator.share) {
+    navigator.share({ title, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => showToast('Link copiado! 🔗'));
+  }
+}
 
 // ── Tabs ──────────────────────────────────────────────────────
 function switchTab(tab) {
@@ -525,7 +552,11 @@ function evCardHTML(ev) {
       </button>
       ${isOwn ? `<button class="ev-rsvp-btn" style="flex:0;padding:.45rem .6rem" onclick="openEditModal(event,'${ev.id}')" title="Editar"><i class="ti ti-pencil"></i></button>
         <button class="ev-rsvp-btn" style="flex:0;padding:.45rem .6rem;color:var(--coral-400)" onclick="deleteEvent(event,'${ev.id}')" title="Excluir"><i class="ti ti-trash"></i></button>` : ''}
-    </div>` : `<div style="padding:.5rem 1rem 1rem;font-size:12px;color:var(--text-muted)">Evento encerrado</div>`}
+      <button class="ev-rsvp-btn" style="flex:0;padding:.45rem .6rem" onclick="shareEvent(event,'${ev.id}')" title="Compartilhar"><i class="ti ti-share"></i></button>
+    </div>` : `<div style="padding:.5rem 1rem 1rem;font-size:12px;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between">
+      <span>Evento encerrado</span>
+      <button class="ev-rsvp-btn" style="flex:0;padding:.35rem .55rem;border-color:transparent" onclick="shareEvent(event,'${ev.id}')" title="Compartilhar"><i class="ti ti-share"></i></button>
+    </div>`}
   </div>`;
 }
 
@@ -710,6 +741,7 @@ async function openDetail(evId) {
   const snap = await db.collection('events').doc(evId).get();
   if (!snap.exists) return;
   const ev = { id: snap.id, ...snap.data() };
+  _openDetailId = ev.id;
   const going      = (ev.attendees||[]).includes(currentUser.uid);
   const interested = (ev.interested||[]).includes(currentUser.uid);
   const isOwn      = ev.createdBy === currentUser.uid;
@@ -757,7 +789,15 @@ async function openDetail(evId) {
         <button class="ev-rsvp-btn${interested?' interested':''}" style="flex:1;height:42px;font-size:13px" onclick="rsvp(event,'${ev.id}','interested');closeDetailModal()">
           <i class="ti ti-star${interested?'-filled':''}"></i> ${interested?'Interessado':'Interesse'}
         </button>
-      </div>` : `<p style="text-align:center;font-size:13px;color:var(--text-muted)">Este evento já aconteceu.</p>`}
+        <button class="ev-rsvp-btn" style="flex:0;padding:.45rem .75rem;height:42px;font-size:13px" onclick="shareCurrentDetail()" title="Compartilhar">
+          <i class="ti ti-share"></i>
+        </button>
+      </div>` : `<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
+        <p style="font-size:13px;color:var(--text-muted);margin:0">Este evento já aconteceu.</p>
+        <button class="ev-rsvp-btn" style="flex:0;padding:.45rem .75rem;white-space:nowrap" onclick="shareCurrentDetail()">
+          <i class="ti ti-share"></i> Compartilhar
+        </button>
+      </div>`}
     </div>`;
   document.getElementById('ev-detail-modal').classList.add('open');
 }

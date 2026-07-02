@@ -135,6 +135,10 @@
           style="display:none;background:rgba(255,255,255,.15);color:#fff">
           <i class="ti ti-lock-open" id="lock-icon"></i>
         </button>
+        <button class="ctrl-btn" title="Compartilhar sala" onclick="shareCurrentRoom()"
+          style="background:rgba(255,255,255,.15);color:#fff">
+          <i class="ti ti-share"></i>
+        </button>
       </div>
     </div>
 
@@ -191,10 +195,13 @@ requireAuth(async user => {
   const userData = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
   renderTopbar(userData, '');
 
-  // Re-entrar sala se estava numa antes (page refresh)
   const savedRoom = sessionStorage.getItem('nexus_audio_room');
-  if (savedRoom) joinRoom(savedRoom).catch(() => sessionStorage.removeItem('nexus_audio_room'));
-
+  const urlRoom = new URLSearchParams(location.search).get('room');
+  if (savedRoom) {
+    joinRoom(savedRoom).catch(() => sessionStorage.removeItem('nexus_audio_room'));
+  } else if (urlRoom) {
+    joinRoom(urlRoom);
+  }
   loadRooms();
 });
 
@@ -218,13 +225,17 @@ async function loadRooms() {
     el.innerHTML = snap.docs.map(doc => {
       const r = doc.data();
       const count = r.participantCount || 0;
+      const escapedTitle = (r.title || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return `<div class="room-card" onclick="joinRoom('${doc.id}')">
         <div class="room-card-icon">${r.emoji || '🎙️'}</div>
         <div class="room-card-info">
           <div class="room-card-title">${sanitize(r.title)}</div>
           <div class="room-card-host"><i class="ti ti-user" style="font-size:11px"></i> ${sanitize(r.hostName)}</div>
         </div>
-        <div class="room-card-count"><i class="ti ti-users"></i> ${count}</div>
+        <div style="display:flex;align-items:center;gap:.4rem;flex-shrink:0">
+          <div class="room-card-count"><i class="ti ti-users"></i> ${count}</div>
+          <button style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:.3rem;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px" title="Compartilhar" onclick="shareRoom(event,'${doc.id}','${escapedTitle}')"><i class="ti ti-share"></i></button>
+        </div>
       </div>`;
     }).join('');
   } catch(e) {
@@ -327,7 +338,10 @@ async function joinRoom(roomId) {
     });
 
     // Token do servidor Agora
-    const tokenRes = await fetch(`https://nexus-social-fawn.vercel.app/api/token?channel=${roomId}`);
+    const idToken = await auth.currentUser?.getIdToken();
+    const tokenRes = await fetch(`https://nexus-social-fawn.vercel.app/api/token?channel=${roomId}`, {
+      headers: idToken ? { 'Authorization': `Bearer ${idToken}` } : {}
+    });
     const { token } = await tokenRes.json();
 
     await agoraClient.join('8bcdfd0d63bd4caab7e75bfe24fba59a', roomId, token, currentUser.uid);
@@ -477,6 +491,24 @@ function _updateLockBtn() {
   icon.className = _roomLocked ? 'ti ti-lock' : 'ti ti-lock-open';
   btn.style.background = _roomLocked ? '#F59E0B' : 'rgba(255,255,255,.15)';
   btn.title = _roomLocked ? 'Destrancar sala' : 'Trancar sala';
+}
+
+// ── Compartilhar ──────────────────────────────────────────────
+function shareRoom(e, roomId, title) {
+  if (e) e.stopPropagation();
+  const url = `${location.origin}/pages/audio?room=${roomId}`;
+  const text = title ? `Sala: ${title}` : 'Sala de áudio no Nexus';
+  if (navigator.share) {
+    navigator.share({ title: text, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => showToast('Link copiado! 🔗'));
+  }
+}
+
+function shareCurrentRoom() {
+  if (!currentRoomId) return;
+  const title = document.getElementById('room-title-display')?.textContent || 'Sala de áudio';
+  shareRoom(null, currentRoomId, title);
 }
 </script>
 </body>

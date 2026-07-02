@@ -523,7 +523,7 @@ async function searchCommentGifs(q) {
       if (!results.length) { grid.innerHTML = '<div class="gif-empty">Nenhum GIF encontrado.</div>'; return; }
       grid.innerHTML = results.map(r => {
         const src = r.media_formats?.tinygif?.url || r.media_formats?.gif?.url || '';
-        return `<img class="gif-item" src="${src}" loading="lazy" onclick="selectCommentGif('${src}')">`;
+        return `<img class="gif-item" src="${src}" loading="lazy" data-src="${sanitize(src)}" onclick="selectCommentGif(this.dataset.src)">`;
       }).join('');
     } catch(e) { grid.innerHTML = '<div class="gif-empty">Erro ao buscar GIFs.</div>'; }
   }, 400);

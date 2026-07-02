@@ -859,7 +859,7 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
       ? `<div class="msg-reactions">${reactKeys.map(e => {
           const arr = reactions[e];
           const isMineReact = arr.includes(currentUser.uid);
-          return `<button class="msg-reaction-pill${isMineReact?' mine':''}" onclick="reactMsg('${doc.id}','${e}')" title="${arr.length} ${isMineReact?'(você)':''}">${e} <span>${arr.length}</span></button>`;
+          return `<button class="msg-reaction-pill${isMineReact?' mine':''}" data-msgid="${doc.id}" data-emoji="${sanitize(e)}" onclick="reactMsg(this.dataset.msgid,this.dataset.emoji)" title="${arr.length} ${isMineReact?'(você)':''}">${sanitize(e)} <span>${arr.length}</span></button>`;
         }).join('')}</div>` : '';
     const replyBlock = m.replyTo
       ? `<div class="reply-quote" onclick="document.getElementById('msg-${m.replyTo.msgId}')?.scrollIntoView({behavior:'smooth',block:'center'})">
@@ -882,8 +882,8 @@ function buildMessagesHTML(docs, other, showLoadOlder) {
           </div>
           ${reactionsHtml}
           <div class="msg-time">
-            <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(senderName).replace(/'/g,"\\'")}','${sanitize(previewText).replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
-            <button class="msg-reply-btn" onclick="forwardMessage('${sanitize(previewText).replace(/'/g,"\\'")}')" title="Encaminhar"><i class="ti ti-corner-up-right"></i></button>
+            <button class="msg-reply-btn" data-mid="${doc.id}" data-snd="${sanitize(senderName)}" data-prv="${sanitize(previewText)}" onclick="setReply(this.dataset.mid,this.dataset.snd,this.dataset.prv)"><i class="ti ti-arrow-back-up"></i></button>
+            <button class="msg-reply-btn" data-prv="${sanitize(previewText)}" onclick="forwardMessage(this.dataset.prv)" title="Encaminhar"><i class="ti ti-corner-up-right"></i></button>
             ${time}${isMine ? ` <i class="ti ti-checks msg-read-check${_otherLastReadAt && m.createdAt && m.createdAt.toMillis() <= _otherLastReadAt.toMillis() ? ' read' : ''}"></i>` : ''}
           </div>
         </div>
@@ -1530,7 +1530,7 @@ function renderGroupMessages(docs, participantData, showLoadOlder) {
     const reactionsHtml = reactKeys.length
       ? `<div class="msg-reactions">${reactKeys.map(e => {
           const arr = reactions[e];
-          return `<button class="msg-reaction-pill${arr.includes(currentUser.uid)?' mine':''}" onclick="reactMsg('${doc.id}','${e}')">${e} <span>${arr.length}</span></button>`;
+          return `<button class="msg-reaction-pill${arr.includes(currentUser.uid)?' mine':''}" data-msgid="${doc.id}" data-emoji="${sanitize(e)}" onclick="reactMsg(this.dataset.msgid,this.dataset.emoji)">${sanitize(e)} <span>${arr.length}</span></button>`;
         }).join('')}</div>` : '';
     const replyBlockG = m.replyTo
       ? `<div class="reply-quote" onclick="document.getElementById('msg-${m.replyTo.msgId}')?.scrollIntoView({behavior:'smooth',block:'center'})">
@@ -1554,8 +1554,8 @@ function renderGroupMessages(docs, participantData, showLoadOlder) {
         </div>
         ${reactionsHtml}
         <div class="msg-time">
-          <button class="msg-reply-btn" onclick="setReply('${doc.id}','${sanitize(gSenderName).replace(/'/g,"\\'")}','${sanitize(gPreviewText).replace(/'/g,"\\'")}')"><i class="ti ti-arrow-back-up"></i></button>
-          <button class="msg-reply-btn" onclick="forwardMessage('${sanitize(gPreviewText).replace(/'/g,"\\'")}')"><i class="ti ti-corner-up-right"></i></button>
+          <button class="msg-reply-btn" data-mid="${doc.id}" data-snd="${sanitize(gSenderName)}" data-prv="${sanitize(gPreviewText)}" onclick="setReply(this.dataset.mid,this.dataset.snd,this.dataset.prv)"><i class="ti ti-arrow-back-up"></i></button>
+          <button class="msg-reply-btn" data-prv="${sanitize(gPreviewText)}" onclick="forwardMessage(this.dataset.prv)"><i class="ti ti-corner-up-right"></i></button>
           ${time}
         </div>
       </div>

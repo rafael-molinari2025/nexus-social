@@ -352,7 +352,10 @@ const AGORA_APP_ID      = '6178ae4b6a854914bc111c753bcd6350';
 const AGORA_TOKEN_SERVER = 'https://nexus-social-fawn.vercel.app';
 
 async function getAgoraToken(channelName) {
-  const res = await fetch(`${AGORA_TOKEN_SERVER}/api/token?channel=${encodeURIComponent(channelName)}`);
+  const idToken = await auth.currentUser?.getIdToken();
+  const res = await fetch(`${AGORA_TOKEN_SERVER}/api/token?channel=${encodeURIComponent(channelName)}`, {
+    headers: idToken ? { 'Authorization': `Bearer ${idToken}` } : {}
+  });
   if (!res.ok) throw new Error('Não foi possível obter o token de acesso.');
   const { token } = await res.json();
   return token;
