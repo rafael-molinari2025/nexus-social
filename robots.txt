@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /pages/admin.html
+Disallow: /pages/moderacao.html
+Disallow: /pages/configuracoes.html
+Disallow: /pages/analytics.html
+Allow: /
+
+Sitemap: https://nexus.primetitec.com.br/sitemap.xml

@@ -136,6 +136,10 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid;
+      // Só o criador da comunidade pode promover membros a admin (apenas campo role)
+      allow update: if request.auth != null
+        && get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.createdBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
       // Próprio membro pode sair OU admin da comunidade pode remover
       allow delete: if request.auth != null
         && (resource.data.uid == request.auth.uid

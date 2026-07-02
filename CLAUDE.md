@@ -174,6 +174,7 @@ Gerenciados em `firestore.indexes.json` (fonte de verdade). Deployar com `fireba
 | `posts` | `modStatus` ASC + `createdAt` DESC |
 | `posts` | `modStatus` ASC + `modAt` ASC |
 | `posts` | `likes` ARRAY_CONTAINS + `createdAt` DESC |
+| `posts` | `hashtags` ARRAY_CONTAINS + `createdAt` DESC |
 | `posts` | `authorId` ASC + `isArchived` ASC + `createdAt` DESC *(3 campos)* |
 | `scraps` | `toUid` ASC + `createdAt` DESC |
 | `friend_requests` | `to` ASC + `status` ASC |

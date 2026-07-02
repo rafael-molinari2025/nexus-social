@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rede Social Nexus</title>
+  <title>Comunidade — Nexus</title>
   <meta name="description" content="Página de comunidade no Nexus.">
   <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="../css/style.css">
@@ -352,7 +352,7 @@ function postHTML(id, p) {
         ${canDelete ? `<button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
       </div>
     </div>
-    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<a href="hashtag.html?q=$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>')}</div>
+    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/#(\w+)/g,'<a href="hashtag.html?q=$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" style="color:#0ea5e9;text-decoration:none;font-weight:500">@$1</a>')}</div>
     <div class="post-actions">
       <button class="post-action-btn${liked?' liked':''}" id="like-${id}" onclick="toggleLike('${id}')">
         <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" aria-hidden="true"></i> ${likeCount||''}

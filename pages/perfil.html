@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rede Social Nexus</title>
+  <title>Perfil — Nexus</title>
   <meta name="description" content="Veja o perfil de um usuário no Nexus.">
   <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="../css/style.css">
@@ -833,7 +833,7 @@ async function loadProfilePosts(uid) {
         : '';
       return `<div class="post" id="post-${doc.id}">
         ${isPinned ? `<div style="font-size:11px;color:var(--purple-600);font-weight:600;margin-bottom:.3rem;display:flex;align-items:center;gap:.3rem"><i class="ti ti-pin-filled"></i> Post fixado</div>` : ''}
-        ${p.text ? `<div class="post-body" style="padding:.75rem 0">${sanitize(p.text).replace(/\n/g,'<br>')}</div>` : ''}
+        ${p.text ? '<div class="post-body" style="padding:.75rem 0">' + sanitize(p.text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/#(\w+)/g,'<a href="hashtag.html?q=$1" class="hashtag">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" class="mention">@$1</a>') + '</div>' : ''}
         ${_profilePostImageHTML(p)}
         <div class="post-actions" style="padding:.35rem 0">
           <button class="post-action-btn${liked?' liked':''}" id="like-btn-${doc.id}" onclick="toggleLike('${doc.id}')">

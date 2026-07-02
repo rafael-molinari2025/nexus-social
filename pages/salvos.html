@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rede Social Nexus</title>
+  <title>Salvos — Nexus</title>
+  <meta name="description" content="Posts salvos e coleções de favoritos no Nexus.">
   <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="../css/tabler-icons.min.css">
@@ -434,7 +435,7 @@ function postHTML(id, p) {
         </button>
       </div>
     </div>
-    ${p.text ? `<div class="post-body" style="padding:.5rem 0">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<span style="color:var(--purple-600)">#$1</span>')}</div>` : ''}
+    ${p.text ? `<div class="post-body" style="padding:.5rem 0">${sanitize(p.text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>').replace(/#(\w+)/g,'<a href="hashtag.html?q=$1" class="hashtag">#$1</a>').replace(/@(\w+)/g,'<a href="busca.html?q=$1" class="mention">@$1</a>')}</div>` : ''}
     ${p.videoURL ? `<video src="${p.videoURL}" controls preload="metadata" style="width:100%;max-height:360px;border-radius:var(--radius-md);background:#000;display:block;margin-bottom:.5rem" onclick="event.stopPropagation()"></video>`
       : p.imageURL ? `<img class="post-image" src="${p.imageURL}" alt="Imagem" loading="lazy" style="cursor:zoom-in;border-radius:var(--radius-md);margin-bottom:.5rem" onclick="openLightbox([this.src])">`
       : ''}

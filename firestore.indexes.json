@@ -149,6 +149,14 @@
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "hashtags", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "authorId", "order": "ASCENDING" },
         { "fieldPath": "isArchived", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
