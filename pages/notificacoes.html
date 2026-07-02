@@ -69,6 +69,7 @@
 
     <div class="notif-filter" id="notif-filter">
       <button class="notif-filter-btn active" onclick="filterNotifs('all', this)">Todas</button>
+      <button class="notif-filter-btn" onclick="filterNotifs('mention', this)">Menções</button>
       <button class="notif-filter-btn" onclick="filterNotifs('friend_request', this)">Amizades</button>
       <button class="notif-filter-btn" onclick="filterNotifs('post_like', this)">Curtidas</button>
       <button class="notif-filter-btn" onclick="filterNotifs('post_comment', this)">Comentários</button>
@@ -112,7 +113,8 @@ function notifLink(n) {
     case 'friend_accept':  return 'amigos.html';
     case 'scrap':          return n.fromUid ? `perfil.html?uid=${n.fromUid}` : 'recados.html';
     case 'message':        return 'mensagens.html';
-    default:               return '#';
+    case 'mention':        return n.link || (n.postId ? `post.html?id=${n.postId}` : '#');
+    default:               return n.link || '#';
   }
 }
 
