@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rede Social Nexus</title>
+  <meta name="description" content="Posts com hashtag no Nexus.">
+  <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <style>
+    .htag-page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: calc(var(--topbar-h) + 1.25rem) .75rem 5rem;
+    }
+    @media (max-width: 768px) {
+      .htag-page { padding-top: calc(var(--topbar-h) + .75rem); padding-bottom: calc(80px + 1rem); }
+    }
+    .htag-header {
+      display: flex; align-items: center; gap: .875rem;
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: var(--radius-xl); padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem; box-shadow: var(--shadow-sm);
+    }
+    .htag-back {
+      width: 36px; height: 36px; border-radius: var(--radius-md);
+      background: var(--gray-100); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-secondary); font-size: 18px; flex-shrink: 0;
+      transition: background var(--transition);
+    }
+    .htag-back:hover { background: var(--gray-200); }
+    .htag-icon {
+      width: 48px; height: 48px; border-radius: var(--radius-lg);
+      background: var(--indigo-50); display: flex; align-items: center;
+      justify-content: center; font-size: 22px; font-weight: 800;
+      color: var(--purple-600); flex-shrink: 0;
+    }
+    .htag-title { font-size: 20px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+    .htag-sub { font-size: 13px; color: var(--text-muted); margin-top: .15rem; }
+
+    .post { padding: 1rem 1.25rem; border-bottom: 0.5px solid var(--border); }
+    .post:last-child { border-bottom: none; }
+    .post-header { display: flex; align-items: center; gap: .65rem; margin-bottom: .6rem; }
+    .post-meta { flex: 1; min-width: 0; }
+    .post-author {
+      font-size: 14px; font-weight: 600; color: var(--text-primary);
+      cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .post-author:hover { text-decoration: underline; }
+    .post-time { font-size: 12px; color: var(--text-muted); }
+    .post-body {
+      font-size: 14px; line-height: 1.6; color: var(--text-primary);
+      margin-bottom: .6rem; word-break: break-word;
+      display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+      cursor: pointer;
+    }
+    .post-img {
+      width: 100%; max-height: 280px; object-fit: cover;
+      border-radius: var(--radius-md); margin-bottom: .6rem;
+      cursor: pointer; display: block;
+    }
+    .post-stats { display: flex; gap: 1rem; }
+    .post-stat {
+      display: flex; align-items: center; gap: .3rem;
+      font-size: 13px; color: var(--text-muted);
+    }
+    .post-stat i { font-size: 15px; }
+    .htag-empty {
+      text-align: center; padding: 3rem 1rem; color: var(--text-muted);
+    }
+    .htag-empty i { font-size: 40px; opacity: .35; display: block; margin-bottom: .75rem; }
+    .htag-empty p { font-size: 14px; }
+    .load-more-btn {
+      display: flex; align-items: center; justify-content: center; gap: .4rem;
+      width: 100%; padding: .65rem; margin-top: .75rem;
+      background: none; border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg); font-size: 13px; font-weight: 500;
+      color: var(--text-secondary); cursor: pointer; font-family: var(--font-sans);
+      transition: background var(--transition);
+    }
+    .load-more-btn:hover { background: var(--gray-100); }
+    .htag-link { color: var(--purple-600); text-decoration: none; font-weight: 500; }
+    .htag-link:hover { text-decoration: underline; }
+    .mention-link { color: #0ea5e9; text-decoration: none; font-weight: 500; }
+    .mention-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div id="topbar" class="topbar"></div>
+<div class="toast" id="toast"></div>
+
+<div class="htag-page">
+  <div class="htag-header">
+    <button class="htag-back" onclick="history.length > 1 ? history.back() : location.href='../index.html'" title="Voltar">
+      <i class="ti ti-arrow-left"></i>
+    </button>
+    <div class="htag-icon">#</div>
+    <div>
+      <div class="htag-title" id="htag-title">…</div>
+      <div class="htag-sub" id="htag-sub">Carregando…</div>
+    </div>
+  </div>
+
+  <div class="card" id="post-list">
+    <div style="padding:2rem;text-align:center"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+const tag = (new URLSearchParams(location.search).get('q') || '').replace(/^#/, '').toLowerCase().trim();
+let _lastDoc  = null;
+let _loading  = false;
+let _total    = 0;
+const PAGE    = 20;
+
+document.title = tag ? `#${tag} — Nexus` : 'Hashtag — Nexus';
+
+requireAuth(async user => {
+  const ud = await getUserData(user.uid) || { uid: user.uid, displayName: user.displayName };
+  renderTopbar(ud, '');
+
+  if (!tag) {
+    document.getElementById('htag-title').textContent = 'Hashtag inválida';
+    document.getElementById('htag-sub').textContent = '';
+    document.getElementById('post-list').innerHTML = `<div class="htag-empty"><i class="ti ti-hash"></i><p>Nenhuma hashtag especificada.</p></div>`;
+    return;
+  }
+
+  document.getElementById('htag-title').textContent = `#${tag}`;
+  loadPosts();
+});
+
+async function loadPosts(append = false) {
+  if (_loading) return;
+  _loading = true;
+
+  const list = document.getElementById('post-list');
+
+  try {
+    let q = db.collection('posts')
+      .where('hashtags', 'array-contains', tag)
+      .orderBy('createdAt', 'desc')
+      .limit(PAGE);
+    if (_lastDoc) q = q.startAfter(_lastDoc);
+
+    const snap = await q.get();
+
+    if (!append && snap.empty) {
+      document.getElementById('htag-sub').textContent = 'Nenhum post';
+      list.innerHTML = `<div class="htag-empty"><i class="ti ti-hash"></i><p>Nenhum post com <strong>#${sanitize(tag)}</strong> ainda.</p></div>`;
+      _loading = false;
+      return;
+    }
+
+    if (!snap.empty) {
+      _lastDoc = snap.docs[snap.docs.length - 1];
+      _total  += snap.docs.length;
+    }
+
+    document.getElementById('htag-sub').textContent =
+      _total === 1 ? '1 post' : `${_total}${snap.docs.length === PAGE ? '+' : ''} posts`;
+
+    const html = snap.docs.map(doc => postCardHTML(doc.id, doc.data())).join('');
+
+    // Remove existing load-more button before appending
+    const existingBtn = list.querySelector('.load-more-btn');
+    if (existingBtn) existingBtn.remove();
+
+    if (!append) {
+      list.innerHTML = html;
+    } else {
+      list.insertAdjacentHTML('beforeend', html);
+    }
+
+    if (snap.docs.length === PAGE) {
+      const btn = document.createElement('button');
+      btn.className = 'load-more-btn';
+      btn.innerHTML = '<i class="ti ti-refresh"></i> Ver mais';
+      btn.onclick = () => loadPosts(true);
+      list.appendChild(btn);
+    }
+  } catch(e) {
+    console.error('loadPosts hashtag:', e);
+    if (!append) list.innerHTML = `<div class="htag-empty"><i class="ti ti-alert-circle"></i><p>Erro ao carregar posts.</p></div>`;
+  }
+
+  _loading = false;
+}
+
+function postCardHTML(id, p) {
+  const cl = getAvatarColor(p.authorId);
+  const av = p.authorPhoto
+    ? `<img src="${sanitize(p.authorPhoto)}" alt="${sanitize(p.authorName||'')}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(p.authorName||'U')}</span>`;
+
+  const bodyText = p.text
+    ? sanitize(p.text)
+        .replace(/\n/g, '<br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/_(.*?)_/g, '<em>$1</em>')
+        .replace(/#(\w+)/g, `<a class="htag-link" href="hashtag.html?q=$1" onclick="event.stopPropagation()">#$1</a>`)
+        .replace(/@(\w+)/g, `<a class="mention-link" href="perfil.html?q=$1" onclick="event.stopPropagation()">@$1</a>`)
+    : '';
+
+  const likeCount  = Object.values(p.reactions || {}).reduce((s, arr) => s + (arr||[]).length, 0) + (p.likes||[]).length;
+  const commCount  = p.commentsCount || 0;
+
+  const imageURL = p.imageURL || (p.images && p.images[0]) || null;
+
+  return `<div class="post" onclick="location.href='post.html?id=${id}'">
+    <div class="post-header">
+      <div class="avatar avatar-40" style="background:${cl.bg};flex-shrink:0">${av}</div>
+      <div class="post-meta">
+        <div class="post-author" onclick="event.stopPropagation();location.href='perfil.html?uid=${p.authorId}'">${sanitize(p.authorName||'Usuário')}</div>
+        <div class="post-time">${timeAgo(p.createdAt)}</div>
+      </div>
+    </div>
+    ${bodyText ? `<div class="post-body" onclick="location.href='post.html?id=${id}'">${bodyText}</div>` : ''}
+    ${imageURL ? `<img class="post-img" src="${sanitize(imageURL)}" alt="Imagem" loading="lazy" onclick="event.stopPropagation();openLightbox(['${sanitize(imageURL)}'])">` : ''}
+    <div class="post-stats">
+      <span class="post-stat"><i class="ti ti-heart" aria-hidden="true"></i>${likeCount || 0}</span>
+      <span class="post-stat"><i class="ti ti-message-circle" aria-hidden="true"></i>${commCount}</span>
+    </div>
+  </div>`;
+}
+</script>
+</body>
+</html>

@@ -228,7 +228,7 @@ async function loadHashtags() {
     }
 
     el.innerHTML = sorted.map(([tag, count], i) => `
-      <a class="hashtag-item" href="busca.html?tab=posts&q=%23${encodeURIComponent(tag)}">
+      <a class="hashtag-item" href="hashtag.html?q=${encodeURIComponent(tag)}">
         <span class="hashtag-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
         <span class="hashtag-name">#${sanitize(tag)}</span>
         <span class="hashtag-count">${count} post${count !== 1 ? 's' : ''}</span>

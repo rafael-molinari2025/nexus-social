@@ -1700,7 +1700,7 @@ function parsePostText(text) {
     .replace(/\n/g, '<br>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/_(.*?)_/g, '<em>$1</em>')
-    .replace(/#(\w+)/g, `<a href="${PAGES}busca.html?tab=posts&q=%23$1" class="hashtag">#$1</a>`)
+    .replace(/#(\w+)/g, `<a href="${PAGES}hashtag.html?q=$1" class="hashtag">#$1</a>`)
     .replace(/@(\w+)/g, `<a href="${PAGES}busca.html?q=$1" class="mention">@$1</a>`);
 }
 
@@ -2669,7 +2669,7 @@ async function loadTrendingHashtags() {
     }
     el.innerHTML = sorted.map(([tag, count]) =>
       `<div style="display:flex;align-items:center;padding:.3rem 0;cursor:pointer;border-bottom:0.5px solid var(--border)"
-            onclick="location.href='${PAGES}busca.html?tab=posts&q=%23${encodeURIComponent(tag)}'">
+            onclick="location.href='${PAGES}hashtag.html?q=${encodeURIComponent(tag)}'">
         <span style="font-size:13px;font-weight:600;color:var(--purple-600)">#${sanitize(tag)}</span>
         <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${count} post${count > 1 ? 's' : ''}</span>
       </div>`

@@ -1441,6 +1441,10 @@ async function openGroupConversation(cid) {
       <button onclick="toggleChatSearch()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:0"><i class="ti ti-x"></i></button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
+    <div class="typing-indicator" id="typing-indicator" style="display:none;padding:.25rem 1.25rem;align-items:center;gap:.5rem">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+      <span style="font-size:12px;color:var(--text-muted)" id="typing-names">alguém está digitando…</span>
+    </div>
     <div class="reply-preview-bar" id="reply-preview-bar" style="display:none">
       <div style="flex:1;border-left:3px solid var(--purple-600);padding-left:.5rem;overflow:hidden">
         <div style="font-size:11px;font-weight:700;color:var(--purple-600)" id="reply-preview-name"></div>
@@ -1470,7 +1474,7 @@ async function openGroupConversation(cid) {
       <div class="chat-input-wrap">
         <textarea class="chat-input" id="chat-input" rows="1"
           placeholder="Mensagem para o grupo…"
-          oninput="autoResize(this)"
+          oninput="autoResize(this);handleTyping('${cid}')"
           onkeydown="handleGroupKey(event,'${cid}')"></textarea>
       </div>
       <button class="chat-send-btn" id="send-btn" onclick="sendGroupMessage('${cid}')">
@@ -1481,6 +1485,27 @@ async function openGroupConversation(cid) {
   const sidebar = document.getElementById('chat-sidebar');
   const main    = document.getElementById('chat-main');
   if (window.innerWidth <= 768) { sidebar.classList.add('hidden'); main.classList.add('show'); }
+
+  // Subscribe to typing indicator for group
+  if (typingUnsub) { typingUnsub(); typingUnsub = null; }
+  typingUnsub = db.collection('conversations').doc(cid).onSnapshot(snap => {
+    const typingMap = (snap.data() || {}).typing || {};
+    const typers = Object.entries(typingMap)
+      .filter(([uid]) => uid !== currentUser.uid)
+      .filter(([, ts]) => ts && (Date.now() - ts.toMillis()) < 4000);
+    const indicator = document.getElementById('typing-indicator');
+    if (!indicator) return;
+    indicator.style.display = typers.length ? 'flex' : 'none';
+    if (typers.length) {
+      const names = typers.map(([uid]) => participantData[uid]?.displayName || 'alguém');
+      const label = names.length === 1
+        ? `${sanitize(names[0])} está digitando…`
+        : 'Várias pessoas estão digitando…';
+      const el = document.getElementById('typing-names');
+      if (el) el.textContent = label;
+      scrollToBottom();
+    }
+  });
 
   if (messagesUnsub) messagesUnsub();
   _firstMsgDoc = null; _loadingOldMsgs = false;

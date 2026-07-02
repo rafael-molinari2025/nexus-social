@@ -349,7 +349,7 @@ function postHTML(id, p) {
         ${canDelete ? `<button class="btn btn-icon" onclick="deletePost('${id}')" title="Excluir"><i class="ti ti-trash" style="font-size:15px;color:var(--text-muted)" aria-hidden="true"></i></button>` : ''}
       </div>
     </div>
-    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<a href="busca.html?tab=posts&q=%23$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>')}</div>
+    <div class="post-body">${sanitize(p.text).replace(/\n/g,'<br>').replace(/#(\w+)/g,'<a href="hashtag.html?q=$1" style="color:var(--purple-600);text-decoration:none;font-weight:500">#$1</a>')}</div>
     <div class="post-actions">
       <button class="post-action-btn${liked?' liked':''}" id="like-${id}" onclick="toggleLike('${id}')">
         <i class="ti ${liked?'ti-heart-filled':'ti-heart'}" aria-hidden="true"></i> ${likeCount||''}
