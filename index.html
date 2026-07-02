@@ -20,6 +20,8 @@
   <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
   <link rel="stylesheet" href="css/style.css">
   <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" href="/favicon.png" sizes="32x32">
   <link rel="stylesheet" href="css/tabler-icons.min.css">
   <style>
     /* ── Stories ──────────────────────────────────────────────────── */
@@ -601,6 +603,11 @@
         <div class="card-title"><i class="ti ti-clock-heart" aria-hidden="true" style="color:var(--purple-600)"></i> memórias</div>
         <div id="memories-list"></div>
       </div>
+    </div>
+    <div style="padding:.75rem .25rem;font-size:11px;color:var(--text-muted);line-height:1.8">
+      <a href="pages/termos.html" style="color:var(--text-muted);text-decoration:none;margin-right:.5rem" target="_blank">Termos</a>·
+      <a href="pages/privacidade.html" style="color:var(--text-muted);text-decoration:none;margin:0 .5rem" target="_blank">Privacidade</a>
+      <br>© 2026 Nexus · Primetitec
     </div>
   </aside>
 </div>
@@ -1636,9 +1643,10 @@ async function createPost() {
     if (text.trim()) {
       btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Verificando conteúdo…';
       try {
+        const _modToken = await auth.currentUser?.getIdToken().catch(() => '');
         const modRes = await fetch('https://nexus-social-fawn.vercel.app/api/moderate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_modToken}` },
           body: JSON.stringify({ text })
         });
         const mod = modRes.ok ? await modRes.json() : { decision: 'allow' };
