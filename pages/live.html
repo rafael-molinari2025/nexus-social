@@ -355,6 +355,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="../js/firebase-config.js"></script>
 <script src="../js/utils.js"></script>
 <script>
@@ -385,6 +386,8 @@ let _camOff          = false;
 let _chatUnsub       = null;
 let _liveUnsub       = null;
 let _previewStream   = null;
+let _mediaRecorder   = null;
+let _recordingChunks = [];
 // Elemento <video> persistente — criado UMA vez e movido entre containers
 // (nunca destruído via innerHTML, pois isso pode liberar a câmera no Android)
 let _liveVideoEl     = null;
@@ -400,6 +403,48 @@ requireAuth(async user => {
     showStartScreen();
   }
 });
+
+// ── Gravação local (MediaRecorder → Firebase Storage) ─────────
+function startRecording(stream) {
+  if (!stream || !window.MediaRecorder) return;
+  _recordingChunks = [];
+  const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  try {
+    _mediaRecorder = new MediaRecorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      videoBitsPerSecond: 800_000
+    });
+    _mediaRecorder.ondataavailable = e => {
+      if (e.data?.size > 0) _recordingChunks.push(e.data);
+    };
+    _mediaRecorder.start(10_000);
+  } catch(e) {
+    console.warn('MediaRecorder init failed:', e.message);
+    _mediaRecorder = null;
+  }
+}
+
+async function stopAndUploadRecording(liveId) {
+  if (!_mediaRecorder || _mediaRecorder.state === 'inactive') return null;
+  return new Promise(resolve => {
+    _mediaRecorder.onstop = async () => {
+      try {
+        const blob = new Blob(_recordingChunks, { type: 'video/webm' });
+        _recordingChunks = [];
+        if (blob.size < 10_000) { resolve(null); return; }
+        const ref = storage.ref(`lives/${liveId}/recording.webm`);
+        await ref.put(blob, { contentType: 'video/webm' });
+        const url = await ref.getDownloadURL();
+        resolve(url);
+      } catch(e) {
+        console.error('Recording upload failed:', e.message);
+        resolve(null);
+      }
+    };
+    _mediaRecorder.stop();
+  });
+}
 
 // ── Elemento <video> persistente ───────────────────────────────
 function getLiveVideoEl() {
@@ -600,6 +645,7 @@ function renderHostScreen(liveId, title) {
   initAgoraHost(liveId);
   subscribeChat(liveId);
   subscribeViewerCount(liveId);
+  startRecording(_hostMediaStream);
 }
 
 async function initAgoraHost(liveId) {
@@ -678,19 +724,38 @@ async function endLive(liveId) {
   try {
     _localAudio?.close();
     _localVideo?.close();
-    _hostMediaStream?.getTracks().forEach(t => t.stop());
-    _hostMediaStream = null;
     if (_liveVideoEl) { _liveVideoEl.srcObject = null; }
     await _agoraClient?.leave();
     _chatUnsub?.();
     _liveUnsub?.();
-    await db.collection('lives').doc(liveId).update({
-      status:   'ended',
-      endedAt:  firebase.firestore.FieldValue.serverTimestamp()
-    });
-    showToast('Transmissão encerrada.');
-    setTimeout(() => { location.href = '../index.html'; }, 1500);
+
+    // Mostrar tela de upload enquanto salva
+    if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
+      document.getElementById('app-root').innerHTML = `
+        <div class="live-ended-wrap">
+          <div class="spinner" style="margin-bottom:.5rem"></div>
+          <p style="font-size:15px;font-weight:600;color:var(--text-primary)">Salvando gravação…</p>
+          <p style="font-size:13px;color:var(--text-muted)">Não feche esta aba até concluir</p>
+        </div>`;
+    }
+
+    // Gravar e fazer upload antes de parar o stream
+    const recordingURL = await stopAndUploadRecording(liveId);
+
+    _hostMediaStream?.getTracks().forEach(t => t.stop());
+    _hostMediaStream = null;
+
+    const updateData = {
+      status:  'ended',
+      endedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if (recordingURL) updateData.recordingURL = recordingURL;
+
+    await db.collection('lives').doc(liveId).update(updateData);
+    showToast(recordingURL ? 'Gravação salva com sucesso!' : 'Transmissão encerrada.');
+    setTimeout(() => { location.href = '../index.html'; }, 2000);
   } catch(e) {
+    console.error('endLive error:', e);
     showToast('Erro ao encerrar. Tente novamente.');
   }
 }
@@ -705,7 +770,7 @@ async function joinAsViewer(liveId) {
     }
     const live = snap.data();
     if (live.status === 'ended') {
-      showEndedScreen('Esta transmissão já foi encerrada.');
+      showEndedScreen('Esta transmissão já foi encerrada.', live.recordingURL || null);
       return;
     }
 
@@ -756,7 +821,7 @@ async function joinAsViewer(liveId) {
         _agoraClient?.leave().catch(() => {});
         _chatUnsub?.();
         _liveUnsub?.();
-        showEndedScreen('A transmissão foi encerrada.');
+        showEndedScreen('A transmissão foi encerrada.', s.data()?.recordingURL || null);
       }
     });
   } catch(e) {
@@ -823,12 +888,17 @@ function incrementViewers(liveId) {
   });
 }
 
-function showEndedScreen(msg) {
+function showEndedScreen(msg, recordingURL = null) {
   document.getElementById('app-root').innerHTML = `
     <div class="live-ended-wrap">
       <i class="ti ti-broadcast-off" style="font-size:56px;color:var(--border)"></i>
       <p style="font-size:16px;font-weight:600">${sanitize(msg)}</p>
-      <button class="btn btn-primary" onclick="location.href='../index.html'" style="gap:.4rem">
+      ${recordingURL ? `
+        <a href="${encodeURI(recordingURL)}" target="_blank" rel="noopener"
+           class="btn btn-primary" style="gap:.4rem;text-decoration:none">
+          <i class="ti ti-player-play"></i> Assistir gravação
+        </a>` : ''}
+      <button class="btn${recordingURL ? '' : ' btn-primary'}" onclick="location.href='../index.html'" style="gap:.4rem">
         <i class="ti ti-home"></i> Voltar ao feed
       </button>
     </div>`;
@@ -908,6 +978,9 @@ window.addEventListener('pagehide', () => {
   _agoraClient?.leave().catch(() => {});
   _chatUnsub?.();
   _liveUnsub?.();
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
+    try { _mediaRecorder.stop(); } catch(_) {}
+  }
 });
 
 // ── Tela cheia do vídeo ────────────────────────────────────────
