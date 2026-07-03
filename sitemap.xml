@@ -6,4 +6,6 @@
   <url><loc>https://nexus.primetitec.com.br/pages/eventos.html</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>https://nexus.primetitec.com.br/pages/tendencias.html</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
   <url><loc>https://nexus.primetitec.com.br/pages/busca.html</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://nexus.primetitec.com.br/pages/privacidade.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://nexus.primetitec.com.br/pages/termos.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>
