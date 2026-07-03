@@ -96,7 +96,7 @@ O diretório `api/` contém serverless functions deployadas no **Vercel** (`nexu
 
 - **`api/token.js`** — gera tokens RTC para o Agora.io usando `agora-token`. Aceita `?channel=<id>` e retorna `{ token, expireAt }`.
 - **`api/notify.js`** — envia push notifications via Firebase Admin SDK. Chamado internamente por `sendPushToUser()` em `utils.js`; requer `Authorization: Bearer <idToken>` e body `{ toUid, title, body, url, tag }`.
-- **`api/moderate.js`** — modera texto de posts via Claude Haiku antes da publicação. Recebe `POST { text }` e retorna `{ decision, reason, categories[] }`. Decisions: `allow` / `flag` / `block`. Fail-open: se a IA falhar, retorna `allow` para não bloquear o usuário.
+- **`api/moderate.js`** — modera texto de posts via Claude Haiku antes da publicação. Requer `Authorization: Bearer <idToken>` (mesmo padrão de `notify.js`). Recebe `POST { text }` e retorna `{ decision, reason, categories[] }`. Decisions: `allow` / `flag` / `block`. Fail-open: se a IA falhar, retorna `allow` para não bloquear o usuário. Posts sem texto são aprovados sem chamar a IA.
 - **`api/scan.js`** — varredura em background de posts das últimas 48h sem `modStatus`. Roda via cron Vercel a cada 6 horas (`vercel.json`). Pode ser disparado manualmente via `POST` com header `x-scan-secret`. Posts sem texto (só imagem/vídeo) são aprovados automaticamente sem chamar a IA.
 
 ### Variáveis de ambiente no Vercel
@@ -232,6 +232,7 @@ Toda nova página HTML deve incluir este script em `<head>` **antes do primeiro 
 - `users/{uid}` permite `list` para qualquer autenticado — necessário para buscas.
 - `users/{uid}.isAdmin` e `isVerified` **não podem ser escritos pelo próprio usuário** — bloqueados na regra de self-update. Admin pode conceder/revogar `isVerified` em qualquer conta (somente esse campo).
 - `posts/{id}.modStatus/modReason/modCategories/modAt` só podem ser escritos por admin.
+- `community_members` tem `allow update` restrito ao criador da comunidade, e somente para o campo `role` (promoção a admin). Sem essa regra, `promoteToAdmin()` sempre falha com permission-denied.
 
 ---
 
@@ -279,6 +280,63 @@ O site está deployado em `nexus.primetitec.com.br` (CNAME → `rede-social-acf4
 ## PWA
 
 - Service Worker: `sw.js` (versão atual: `nexus-v5`) — **network-first** para todos os assets e HTML; cache usado só como fallback offline. Ao mudar assets estáticos significativos, incrementar `CACHE_NAME` para invalidar clientes.
-- Manifest: `manifest.json` — `start_url: /index.html`, tema `#534AB7`
+- Manifest: `manifest.json` — `start_url: /index.html`, tema `#534AB7`. Ícones reais em PNG: `icons/icon-192.png` (192×192) e `icons/icon-512.png` (512×512 maskable). **Não usar `data:` URI** em `manifest.json` — iOS Safari ignora ícones inline.
 - O SW é registrado em `js/utils.js` via `navigator.serviceWorker.register('/sw.js')` ao carregar qualquer página
-- `firebase.json` tem header `no-cache, no-store` específico para `/sw.js` (antes de qualquer regra `*.js`) para garantir que o browser sempre busque o SW atualizado
+- `firebase.json` tem header `no-cache, no-store` específico para `/sw.js` para garantir que o browser sempre busque o SW atualizado
+
+---
+
+## Assets estáticos de identidade
+
+Arquivos na raiz do projeto:
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `favicon.svg` | Ícone SVG 32×32 — suportado por navegadores modernos |
+| `favicon.png` | Ícone PNG 32×32 — fallback |
+| `og-image.png` | Imagem Open Graph 1200×630 para preview em redes sociais e WhatsApp |
+| `icons/icon-192.png` | Ícone PWA 192×192 (any) |
+| `icons/icon-512.png` | Ícone PWA 512×512 (maskable any) |
+| `robots.txt` | Bloqueia admin/moderacao/configuracoes/analytics; expõe sitemap |
+| `sitemap.xml` | URLs públicas: index, login, comunidades, eventos, tendencias, busca |
+
+Toda página HTML deve incluir:
+```html
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" href="/favicon.png" sizes="32x32">
+```
+Páginas em `pages/` devem usar `/favicon.svg` (caminho absoluto), não `../favicon.svg`.
+
+---
+
+## Segurança HTTP (firebase.json)
+
+O `firebase.json` aplica headers de segurança em todos os paths (`"source": "**"`):
+
+| Header | Valor |
+|--------|-------|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(self), microphone=(self), geolocation=()` |
+
+**Atenção:** `Permissions-Policy: camera=()` (sem `self`) bloqueia câmera **inclusive para o próprio site**, quebrando `live.html` e `audio.html`. Sempre usar `camera=(self), microphone=(self)`.
+
+---
+
+## Páginas legais (standalone)
+
+`pages/privacidade.html` e `pages/termos.html` são páginas **standalone** — sem topbar, sem `requireAuth`, sem `renderTopbar()`. Usam CSS próprio (`.legal-page`, `.legal-section`, `.legal-highlight`) embutido no `<style>`. Acessíveis mesmo sem login. Linkadas a partir do footer de `login.html` e do footer da sidebar em `index.html`.
+
+---
+
+## SEO e metadados
+
+Todas as páginas HTML têm:
+- `<title>` único no formato `NomeDaPágina — Nexus`
+- `<meta name="description">` específica por página
+- Favicon links (absolutos: `/favicon.svg`, `/favicon.png`)
+
+Páginas administrativas (`admin.html`, `moderacao.html`, `analytics.html`, `configuracoes.html`) têm `<meta name="robots" content="noindex, nofollow">`.
+
+`index.html` tem tags Open Graph completas (`og:title`, `og:description`, `og:image`, `og:url`) e Twitter Cards, com `og:image` apontando para `/og-image.png`.
