@@ -6,14 +6,18 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == uid;
-      // Impede escalonamento de privilégios: isAdmin e isVerified não são escritos pelo próprio usuário
+      // Impede escalonamento de privilégios: campos protegidos não são escritos pelo próprio usuário
       allow update: if request.auth != null
         && request.auth.uid == uid
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'isVerified', 'uid']);
-      // Admin pode conceder/revogar verificação em qualquer conta
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['isAdmin', 'isVerified', 'isSuspended', 'isBanned',
+                      'suspendedUntil', 'suspendReason', 'banReason', 'uid']);
+      // Admin pode atualizar verificação e campos de suspensão/banimento em qualquer conta
       allow update: if request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isVerified']);
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['isVerified', 'isSuspended', 'isBanned',
+                       'suspendedUntil', 'suspendReason', 'banReason']);
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
 

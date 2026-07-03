@@ -116,35 +116,96 @@ initTheme();
 
 // ── Auth guard ────────────────────────────────────────────────
 function requireAuth(callback) {
-  auth.onAuthStateChanged(user => {
+  auth.onAuthStateChanged(async user => {
     const loginPath = _isInPages ? 'login.html' : 'pages/login.html';
     if (!user) {
       window.location.href = loginPath;
-    } else {
-      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
-      if (!user.emailVerified && !isGoogle) {
-        auth.signOut().then(() => { window.location.href = loginPath; });
-        return;
-      }
-      callback(user);
-      // Registrar FCM token uma vez por sessão
-      if (!sessionStorage.getItem('_fcm_ok')) {
-        sessionStorage.setItem('_fcm_ok', '1');
-        requestBrowserNotifications(user.uid);
-      }
-      // Migração silenciosa: garante displayName_lower no Firestore (uma vez por sessão)
-      if (!sessionStorage.getItem('_dln_ok')) {
-        sessionStorage.setItem('_dln_ok', '1');
-        db.collection('users').doc(user.uid).get().then(snap => {
-          if (snap.exists && snap.data().displayName && !snap.data().displayName_lower) {
-            db.collection('users').doc(user.uid).update({
-              displayName_lower: snap.data().displayName.toLowerCase()
-            }).catch(() => {});
+      return;
+    }
+    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+    if (!user.emailVerified && !isGoogle) {
+      auth.signOut().then(() => { window.location.href = loginPath; });
+      return;
+    }
+    // Verificar suspensão/banimento antes de liberar acesso
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      if (snap.exists) {
+        const d = snap.data();
+        if (d.isBanned) {
+          _showAccountBlocked('banned', d.banReason || '');
+          return;
+        }
+        if (d.isSuspended) {
+          const until = d.suspendedUntil ? d.suspendedUntil.toDate() : null;
+          if (!until || until > new Date()) {
+            _showAccountBlocked('suspended', d.suspendReason || '', until);
+            return;
           }
-        }).catch(() => {});
+          // Suspensão expirada — limpar automaticamente
+          db.collection('users').doc(user.uid).update({
+            isSuspended: false, suspendedUntil: null
+          }).catch(() => {});
+        }
       }
+    } catch (e) { /* fail-open: se não conseguir verificar, deixa entrar */ }
+
+    callback(user);
+    // Registrar FCM token uma vez por sessão
+    if (!sessionStorage.getItem('_fcm_ok')) {
+      sessionStorage.setItem('_fcm_ok', '1');
+      requestBrowserNotifications(user.uid);
+    }
+    // Migração silenciosa: garante displayName_lower no Firestore (uma vez por sessão)
+    if (!sessionStorage.getItem('_dln_ok')) {
+      sessionStorage.setItem('_dln_ok', '1');
+      db.collection('users').doc(user.uid).get().then(snap => {
+        if (snap.exists && snap.data().displayName && !snap.data().displayName_lower) {
+          db.collection('users').doc(user.uid).update({
+            displayName_lower: snap.data().displayName.toLowerCase()
+          }).catch(() => {});
+        }
+      }).catch(() => {});
     }
   });
+}
+
+function _showAccountBlocked(type, reason, until) {
+  const isBan = type === 'banned';
+  const loginPath = _isInPages ? 'login.html' : 'pages/login.html';
+  let detail = '';
+  if (isBan) {
+    detail = reason
+      ? `<p style="font-size:14px;color:var(--text-secondary);margin:.5rem 0 1.25rem;line-height:1.6">Motivo: <em>${sanitize(reason)}</em></p>`
+      : '<p style="font-size:14px;color:var(--text-secondary);margin:.5rem 0 1.25rem">Sua conta foi banida permanentemente por violação da Política de Uso.</p>';
+  } else {
+    const untilStr = until
+      ? `até ${until.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' })}`
+      : 'temporariamente';
+    detail = `<p style="font-size:14px;color:var(--text-secondary);margin:.5rem 0 1.25rem;line-height:1.6">
+      Sua conta está suspensa ${untilStr}.${reason ? `<br>Motivo: <em>${sanitize(reason)}</em>` : ''}
+    </p>`;
+  }
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem;background:var(--bg,#F5F4F0)">
+      <div style="max-width:400px;width:100%;text-align:center;font-family:'DM Sans',sans-serif">
+        <div style="width:72px;height:72px;border-radius:50%;background:rgba(239,68,68,.12);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+        </div>
+        <h1 style="font-size:22px;font-weight:700;margin:0 0 .25rem;color:var(--text-primary,#1A1917)">
+          Conta ${isBan ? 'banida' : 'suspensa'}
+        </h1>
+        ${detail}
+        <button onclick="auth.signOut().then(()=>{window.location.href='${loginPath}'})"
+          style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.5rem;background:#534AB7;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">
+          Sair da conta
+        </button>
+        <p style="font-size:12px;color:var(--text-muted,#8A8883);margin-top:1.5rem;line-height:1.6">
+          Para contestar, entre em contato:<br>
+          <a href="mailto:sm.servicosetecnologia@gmail.com" style="color:#534AB7;text-decoration:none">sm.servicosetecnologia@gmail.com</a>
+        </p>
+      </div>
+    </div>`;
 }
 
 // ── Redirect if already logged in ────────────────────────────

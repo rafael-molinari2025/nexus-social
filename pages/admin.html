@@ -40,6 +40,28 @@
     .status-badge.dismissed  { background: var(--gray-100); color: var(--text-muted); }
     [data-theme="dark"] .status-badge.pending  { background: rgba(251,191,36,0.18); color: #FCD34D; }
     [data-theme="dark"] .status-badge.resolved { background: rgba(34,197,94,0.15); color: #86EFAC; }
+
+    .user-mgmt-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: .85rem 1.125rem; margin-bottom: .65rem; display: flex; align-items: center; gap: .85rem; flex-wrap: wrap; }
+    .user-mgmt-info { flex: 1; min-width: 0; }
+    .user-mgmt-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+    .user-mgmt-sub  { font-size: 12px; color: var(--text-muted); margin-top: .15rem; }
+    .user-status-badge { font-size: 11px; font-weight: 700; padding: .18rem .5rem; border-radius: 999px; white-space: nowrap; }
+    .usb-active    { background: rgba(34,197,94,0.12); color: #059669; }
+    .usb-suspended { background: rgba(234,179,8,0.15);  color: #92400E; }
+    .usb-banned    { background: rgba(239,68,68,0.12);  color: #DC2626; }
+    [data-theme="dark"] .usb-active    { background: rgba(34,197,94,0.18); color: #86EFAC; }
+    [data-theme="dark"] .usb-suspended { background: rgba(234,179,8,0.18);  color: #FDE68A; }
+    [data-theme="dark"] .usb-banned    { background: rgba(239,68,68,0.18);  color: #FCA5A5; }
+    .user-mgmt-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+
+    /* Modal de suspensão */
+    .mgmt-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .mgmt-modal    { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; max-width: 380px; width: 100%; box-shadow: var(--shadow-lg); }
+    .mgmt-modal h3 { font-size: 16px; font-weight: 700; margin: 0 0 1rem; }
+    .mgmt-modal label { font-size: 13px; font-weight: 600; display: block; margin-bottom: .35rem; }
+    .mgmt-modal select, .mgmt-modal textarea { width: 100%; box-sizing: border-box; margin-bottom: .85rem; }
+    .mgmt-modal textarea { resize: vertical; min-height: 72px; }
+    .mgmt-modal-actions { display: flex; gap: .5rem; justify-content: flex-end; }
     @media (max-width: 768px) { .admin-page { padding: 1rem .5rem calc(80px + 1rem); } }
   </style>
 </head>
@@ -85,6 +107,42 @@
                oninput="searchVerifyUsers(this.value)" autocomplete="off" style="flex:1">
       </div>
       <div id="verify-results"></div>
+    </div>
+
+    <!-- User management section -->
+    <div style="margin-top:2rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem">
+        <i class="ti ti-user-exclamation" style="font-size:20px;color:var(--purple-600)"></i>
+        <h2 style="font-size:17px;font-weight:700;margin:0">Gerenciamento de usuários</h2>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 .85rem">Suspender, banir ou excluir contas que violem a Política de Uso.</p>
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+        <input type="text" id="mgmt-search" class="form-input" placeholder="Buscar usuário pelo nome…"
+               oninput="searchMgmtUsers(this.value)" autocomplete="off" style="flex:1">
+      </div>
+      <div id="mgmt-results"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal suspensão/banimento -->
+<div class="mgmt-modal-bg" id="mgmt-modal" style="display:none" onclick="if(event.target===this)closeMgmtModal()">
+  <div class="mgmt-modal">
+    <h3 id="mgmt-modal-title">Suspender conta</h3>
+    <div id="mgmt-duration-wrap">
+      <label for="mgmt-duration">Duração</label>
+      <select id="mgmt-duration" class="form-input">
+        <option value="1">1 dia</option>
+        <option value="3">3 dias</option>
+        <option value="7" selected>7 dias</option>
+        <option value="30">30 dias</option>
+      </select>
+    </div>
+    <label for="mgmt-reason">Motivo <span style="font-weight:400;color:var(--text-muted)">(visível ao usuário)</span></label>
+    <textarea id="mgmt-reason" class="form-input" placeholder="Ex: publicação de conteúdo racista (artigo 3.1 da Política de Uso)"></textarea>
+    <div class="mgmt-modal-actions">
+      <button class="btn btn-sm" onclick="closeMgmtModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="mgmt-modal-confirm" onclick="confirmMgmtAction()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -341,6 +399,190 @@ async function toggleVerified(uid, newState) {
   } catch(e) {
     showToast('Erro: ' + e.message);
     if (btn) { btn.disabled = false; }
+  }
+}
+
+// ── Gerenciamento de usuários ──────────────────────────────────
+let _mgmtTimer = null;
+let _mgmtAction = null; // { type, uid }
+
+function searchMgmtUsers(q) {
+  clearTimeout(_mgmtTimer);
+  const el = document.getElementById('mgmt-results');
+  if (!q.trim()) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="spinner" style="margin:.75rem auto;display:block"></div>';
+  _mgmtTimer = setTimeout(async () => {
+    try {
+      const qLower = q.toLowerCase();
+      const snap = await db.collection('users')
+        .where('displayName_lower', '>=', qLower)
+        .where('displayName_lower', '<=', qLower + '')
+        .limit(10).get();
+      if (snap.empty) { el.innerHTML = '<p style="font-size:13px;color:var(--text-muted);padding:.5rem 0">Nenhum usuário encontrado.</p>'; return; }
+      el.innerHTML = snap.docs.map(d => renderMgmtCard(d.id, d.data())).join('');
+    } catch(e) {
+      el.innerHTML = `<p style="font-size:13px;color:var(--coral-400)">${sanitize(e.message)}</p>`;
+    }
+  }, 350);
+}
+
+function renderMgmtCard(uid, u) {
+  const cl = getAvatarColor(uid);
+  const av = u.photoURL
+    ? `<img src="${u.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="color:${cl.color}">${getInitials(u.displayName || '?')}</span>`;
+
+  let statusBadge = '<span class="user-status-badge usb-active">Ativo</span>';
+  let statusNote = '';
+  if (u.isBanned) {
+    statusBadge = '<span class="user-status-badge usb-banned">Banido</span>';
+    if (u.banReason) statusNote = `<span style="font-size:11px;color:var(--text-muted)">Motivo: ${sanitize(u.banReason)}</span>`;
+  } else if (u.isSuspended) {
+    statusBadge = '<span class="user-status-badge usb-suspended">Suspenso</span>';
+    const until = u.suspendedUntil ? u.suspendedUntil.toDate().toLocaleDateString('pt-BR') : '';
+    statusNote = `<span style="font-size:11px;color:var(--text-muted)">${until ? `Até ${until}` : ''}${u.suspendReason ? ` · ${sanitize(u.suspendReason)}` : ''}</span>`;
+  }
+
+  const canSuspend = !u.isSuspended && !u.isBanned;
+  const canBan     = !u.isBanned;
+  const canRestore = u.isSuspended || u.isBanned;
+
+  return `<div class="user-mgmt-card" id="mgmt-card-${uid}">
+    <div class="avatar avatar-40" style="background:${cl.bg};flex-shrink:0">${av}</div>
+    <div class="user-mgmt-info">
+      <div class="user-mgmt-name">
+        ${sanitize(u.displayName || 'Usuário')}
+        ${statusBadge}
+      </div>
+      <div class="user-mgmt-sub">${sanitize(u.username || uid)}</div>
+      ${statusNote}
+    </div>
+    <div class="user-mgmt-actions">
+      ${canSuspend ? `<button class="btn btn-sm" style="color:#92400E;border-color:#92400E" onclick="openSuspendModal('${uid}')">
+        <i class="ti ti-clock-pause"></i> Suspender
+      </button>` : ''}
+      ${canBan ? `<button class="btn btn-sm" style="color:var(--coral-400);border-color:var(--coral-400)" onclick="openBanModal('${uid}')">
+        <i class="ti ti-ban"></i> Banir
+      </button>` : ''}
+      ${canRestore ? `<button class="btn btn-sm" style="color:#059669;border-color:#059669" onclick="restoreUser('${uid}')">
+        <i class="ti ti-user-check"></i> Restaurar
+      </button>` : ''}
+      <button class="btn btn-sm" style="color:#DC2626;border-color:#DC2626" onclick="deleteUser('${uid}','${sanitize(u.displayName||'este usuário')}')">
+        <i class="ti ti-user-x"></i> Excluir
+      </button>
+    </div>
+  </div>`;
+}
+
+function openSuspendModal(uid) {
+  _mgmtAction = { type: 'suspend', uid };
+  document.getElementById('mgmt-modal-title').textContent = 'Suspender conta';
+  document.getElementById('mgmt-duration-wrap').style.display = '';
+  document.getElementById('mgmt-reason').placeholder = 'Ex: publicação de conteúdo racista (artigo 3.1 da Política de Uso)';
+  document.getElementById('mgmt-reason').value = '';
+  document.getElementById('mgmt-modal').style.display = 'flex';
+}
+
+function openBanModal(uid) {
+  _mgmtAction = { type: 'ban', uid };
+  document.getElementById('mgmt-modal-title').textContent = 'Banir conta permanentemente';
+  document.getElementById('mgmt-duration-wrap').style.display = 'none';
+  document.getElementById('mgmt-reason').placeholder = 'Ex: conteúdo de abuso sexual infantil — violação grave da Política de Uso';
+  document.getElementById('mgmt-reason').value = '';
+  document.getElementById('mgmt-modal').style.display = 'flex';
+}
+
+function closeMgmtModal() {
+  document.getElementById('mgmt-modal').style.display = 'none';
+  _mgmtAction = null;
+}
+
+async function confirmMgmtAction() {
+  if (!_mgmtAction) return;
+  const { type, uid } = _mgmtAction;
+  const reason = document.getElementById('mgmt-reason').value.trim();
+  const btn = document.getElementById('mgmt-modal-confirm');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i>';
+
+  try {
+    if (type === 'suspend') {
+      const days = parseInt(document.getElementById('mgmt-duration').value, 10);
+      const until = new Date();
+      until.setDate(until.getDate() + days);
+      await db.collection('users').doc(uid).update({
+        isSuspended: true,
+        suspendedUntil: firebase.firestore.Timestamp.fromDate(until),
+        suspendReason: reason
+      });
+      // Desabilitar autenticação Firebase via API
+      await callManageUser('disable_auth', uid);
+      showToast(`Conta suspensa por ${days} dia(s).`);
+    } else if (type === 'ban') {
+      await db.collection('users').doc(uid).update({
+        isBanned: true,
+        banReason: reason,
+        isSuspended: false,
+        suspendedUntil: null
+      });
+      await callManageUser('disable_auth', uid);
+      showToast('Conta banida permanentemente.');
+    }
+    closeMgmtModal();
+    const q = document.getElementById('mgmt-search')?.value || '';
+    searchMgmtUsers(q);
+  } catch(e) {
+    showToast('Erro: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Confirmar';
+  }
+}
+
+async function restoreUser(uid) {
+  confirmAction('Restaurar o acesso desta conta? A suspensão/banimento será removido.', async () => {
+    try {
+      await db.collection('users').doc(uid).update({
+        isSuspended: false,
+        isBanned: false,
+        suspendedUntil: null,
+        suspendReason: '',
+        banReason: ''
+      });
+      await callManageUser('enable_auth', uid);
+      showToast('Acesso restaurado.');
+      const q = document.getElementById('mgmt-search')?.value || '';
+      searchMgmtUsers(q);
+    } catch(e) { showToast('Erro: ' + e.message); }
+  });
+}
+
+function deleteUser(uid, name) {
+  confirmAction(`Excluir permanentemente a conta de "${name}"? Esta ação não pode ser desfeita — o usuário perderá acesso imediatamente e o cadastro será removido.`, async () => {
+    try {
+      await callManageUser('delete', uid);
+      showToast('Conta excluída permanentemente.');
+      const card = document.getElementById(`mgmt-card-${uid}`);
+      if (card) card.remove();
+    } catch(e) { showToast('Erro: ' + e.message); }
+  });
+}
+
+async function callManageUser(action, uid) {
+  const idToken = await auth.currentUser.getIdToken();
+  const res = await fetch('https://nexus-social-fawn.vercel.app/api/manage-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+    body: JSON.stringify({ action, uid })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    // disable_auth/enable_auth falhas não são fatais — conta Firestore já foi atualizada
+    if (action !== 'delete') {
+      console.warn('manage-user non-fatal:', action, err.error);
+      return;
+    }
+    throw new Error(err.error || `HTTP ${res.status}`);
   }
 }
 </script>
