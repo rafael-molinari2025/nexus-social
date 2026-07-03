@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-CYDS5B5TN5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-CYDS5B5TN5');
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política de Uso — Nexus</title>
+  <meta name="description" content="Política de Uso do Nexus. Saiba o que é permitido e proibido na plataforma e como funciona a moderação de conteúdo.">
+  <script>!function(){var t=localStorage.getItem("nexus-theme");if(t&&"auto"!==t)document.documentElement.setAttribute("data-theme",t);else window.matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}();</script>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/tabler-icons.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" href="/favicon.png" sizes="32x32">
+  <style>
+    .legal-page { max-width: 720px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+    .legal-header { margin-bottom: 2rem; }
+    .legal-title { font-size: 28px; font-weight: 700; margin-bottom: .5rem; }
+    .legal-updated { font-size: 13px; color: var(--text-muted); }
+    .legal-section { margin-bottom: 2rem; }
+    .legal-section h2 { font-size: 17px; font-weight: 600; margin-bottom: .75rem; color: var(--purple-600); }
+    .legal-section p, .legal-section li { font-size: 14px; line-height: 1.75; color: var(--text-secondary); margin-bottom: .5rem; }
+    .legal-section ul { padding-left: 1.25rem; }
+    .legal-section li { margin-bottom: .25rem; }
+    .legal-back { display: inline-flex; align-items: center; gap: .5rem; font-size: 14px; color: var(--text-muted); margin-bottom: 1.5rem; cursor: pointer; }
+    .legal-back:hover { color: var(--purple-600); }
+    .legal-highlight { background: var(--purple-50); border-left: 3px solid var(--purple-600); padding: .75rem 1rem; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 14px; color: var(--text-secondary); line-height: 1.65; margin-bottom: 1rem; }
+    [data-theme="dark"] .legal-highlight { background: rgba(83,74,183,0.12); }
+
+    .policy-category { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .policy-category-header { display: flex; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+    .policy-category-tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: .2rem .55rem; border-radius: 999px; white-space: nowrap; }
+    .tag-block { background: rgba(239,68,68,0.12); color: #DC2626; }
+    .tag-flag  { background: rgba(234,179,8,0.15);  color: #B45309; }
+    [data-theme="dark"] .tag-block { background: rgba(239,68,68,0.18); color: #FCA5A5; }
+    [data-theme="dark"] .tag-flag  { background: rgba(234,179,8,0.18);  color: #FDE68A; }
+    .policy-category-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .policy-category p, .policy-category li { font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); margin-bottom: .35rem; }
+    .policy-category ul { padding-left: 1.2rem; margin-top: .35rem; }
+
+    .allowed-box { background: rgba(34,197,94,0.08); border-left: 3px solid #22C55E; padding: .75rem 1rem; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-top: .75rem; font-size: 13.5px; color: var(--text-secondary); line-height: 1.65; }
+    [data-theme="dark"] .allowed-box { background: rgba(34,197,94,0.12); }
+
+    .consequence-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .75rem; margin-top: .75rem; }
+    .consequence-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: .75rem 1rem; text-align: center; }
+    .consequence-card .badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: .25rem .6rem; border-radius: 999px; margin-bottom: .5rem; }
+    .badge-approved { background: #D1FAE5; color: #065F46; }
+    .badge-flagged  { background: #FEF9C3; color: #92400E; }
+    .badge-removed  { background: #FEE2E2; color: #991B1B; }
+    [data-theme="dark"] .badge-approved { background: rgba(34,197,94,0.15); color: #86EFAC; }
+    [data-theme="dark"] .badge-flagged  { background: rgba(234,179,8,0.15);  color: #FDE68A; }
+    [data-theme="dark"] .badge-removed  { background: rgba(239,68,68,0.15);  color: #FCA5A5; }
+    .consequence-card p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 0; }
+    @media (max-width: 600px) { .consequence-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .legal-page { padding: 1rem .75rem 3rem; } .legal-title { font-size: 22px; } }
+  </style>
+</head>
+<body>
+<div style="padding-top: 1rem">
+  <div class="legal-page">
+    <a class="legal-back" href="javascript:history.back()">
+      <i class="ti ti-arrow-left"></i> Voltar
+    </a>
+
+    <div class="legal-header">
+      <h1 class="legal-title">Política de Uso</h1>
+      <p class="legal-updated">Última atualização: 03 de julho de 2026</p>
+    </div>
+
+    <div class="legal-highlight">
+      Esta Política de Uso define o que é permitido e proibido no <strong>Nexus</strong>. Ela complementa os <a href="termos.html" style="color:var(--purple-600)">Termos de Uso</a> e é a base sobre a qual nosso sistema de moderação automática e humana opera. Ao publicar qualquer conteúdo na plataforma, você declara estar ciente e de acordo com estas regras.
+    </div>
+
+    <!-- 1. Princípio geral -->
+    <div class="legal-section">
+      <h2>1. Princípio geral</h2>
+      <p>O Nexus é um espaço de conexão, debate e troca de ideias. Queremos que você possa se expressar com liberdade, mas de forma que não prejudique outras pessoas. A regra principal é simples: <strong>trate os outros como gostaria de ser tratado</strong>.</p>
+      <p>Liberdade de expressão tem limites quando o conteúdo causa dano real — seja incitando violência, discriminando grupos, assediando indivíduos ou espalhando desinformação perigosa. Esses limites estão detalhados nas seções abaixo.</p>
+    </div>
+
+    <!-- 2. O que é permitido -->
+    <div class="legal-section">
+      <h2>2. O que é permitido</h2>
+      <p>São bem-vindos no Nexus:</p>
+      <ul>
+        <li>Opiniões políticas, mesmo controversas, desde que não incitem violência ou ameacem instituições democráticas.</li>
+        <li>Críticas a figuras públicas, empresas, governos ou instituições, baseadas em fatos ou argumentos.</li>
+        <li>Humor, ironia e sátira — inclusive sobre temas sensíveis — desde que o alvo não seja desumanizado.</li>
+        <li>Debate sobre religião, ideologia, estilo de vida e preferências, sem atacar grupos ou pessoas.</li>
+        <li>Palavrões e linguagem informal, desde que não sejam direcionados para ofender ou ameaçar alguém.</li>
+        <li>Relatos pessoais sobre experiências difíceis (discriminação sofrida, violência, saúde mental) com finalidade de apoio ou conscientização.</li>
+        <li>Conteúdo adulto implícito (não explícito) em contextos artísticos ou relacionais, desde que não envolva menores de idade.</li>
+      </ul>
+    </div>
+
+    <!-- 3. Categorias de conteúdo proibido -->
+    <div class="legal-section">
+      <h2>3. Categorias de conteúdo proibido</h2>
+      <p>As categorias abaixo são as utilizadas pelo sistema de moderação automática do Nexus. Conteúdo classificado nessas categorias pode ser sinalizado para revisão humana ou removido imediatamente.</p>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-block">Remoção imediata</span>
+          <span class="policy-category-title">Racismo e discriminação étnica/racial</span>
+        </div>
+        <p>Conteúdo que expressa preconceito, inferioridade ou desumanização com base em raça, cor, etnia, origem nacional ou regional.</p>
+        <ul>
+          <li>Uso de termos racistas, xingamentos ou apelidos depreciativos racializados.</li>
+          <li>Declarações que atribuem características negativas a grupos étnicos.</li>
+          <li>Conteúdo que glorifica ideologias supremacistas ou segregacionistas.</li>
+          <li>Xenofobia: ódio ou discriminação contra estrangeiros ou grupos de origem geográfica.</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> debater desigualdades raciais, relatar episódios de racismo sofridos, compartilhar dados históricos ou reportagens, fazer crítica antirracista.
+        </div>
+      </div>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-block">Remoção imediata</span>
+          <span class="policy-category-title">Homofobia e transfobia</span>
+        </div>
+        <p>Conteúdo que discrimina, desumaniza ou incita ódio contra pessoas LGBTQIA+ com base em orientação sexual ou identidade/expressão de gênero.</p>
+        <ul>
+          <li>Uso de termos ofensivos ou slurs direcionados a pessoas LGBTQIA+.</li>
+          <li>Declarações que tratam a homossexualidade ou transexualidade como doença ou distúrbio moral.</li>
+          <li>Incitação a violência ou discriminação contra pessoas LGBTQIA+.</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> debater políticas públicas LGBTQIA+, compartilhar perspectivas religiosas ou culturais em tom respeitoso (sem insultos ou chamados à violência), relatos de experiências pessoais.
+        </div>
+      </div>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-block">Remoção imediata</span>
+          <span class="policy-category-title">Discurso de ódio</span>
+        </div>
+        <p>Conteúdo que desumaniza, ataca ou incita violência contra grupos com base em qualquer característica protegida — como gênero, religião, classe social, deficiência ou situação de vulnerabilidade.</p>
+        <ul>
+          <li>Glorificação ou apologia a genocídios, massacres ou crimes contra a humanidade.</li>
+          <li>Chamados explícitos ou implícitos à violência contra grupos.</li>
+          <li>Comparar grupos humanos a animais ou pragas.</li>
+          <li>Conteúdo que celebra ataques terroristas ou atiradores em massa.</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> criticar ideologias, religiões ou sistemas políticos sem atacar seus seguidores como pessoas; analisar historicamente eventos violentos; denunciar discurso de ódio (citando-o como objeto de análise).
+        </div>
+      </div>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-block">Remoção imediata</span>
+          <span class="policy-category-title">Assédio e ameaças</span>
+        </div>
+        <p>Conteúdo que assedia, intimida ou ameaça diretamente pessoas identificáveis.</p>
+        <ul>
+          <li>Ameaças explícitas de violência física, sexual ou patrimonial.</li>
+          <li>Cyberbullying: campanha coordenada para humilhar ou marginalizar uma pessoa específica.</li>
+          <li>Divulgação não consentida de informações privadas (<em>doxing</em>): endereço, telefone, local de trabalho.</li>
+          <li>Conteúdo que encoraja outros a assediar alguém.</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> criticar publicamente o comportamento de figuras públicas; compartilhar experiências de assédio sofrido; debate sobre abuso e violência para fins de conscientização.
+        </div>
+      </div>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-block">Remoção imediata</span>
+          <span class="policy-category-title">Conteúdo sexual explícito</span>
+        </div>
+        <p>Pornografia e conteúdo sexual gráfico não são permitidos no Nexus, que é uma plataforma de acesso geral.</p>
+        <ul>
+          <li>Imagens, vídeos ou descrições explícitas de atos sexuais.</li>
+          <li>Qualquer conteúdo sexual envolvendo menores de idade (CSAM) — crime sujeito a denúncia às autoridades.</li>
+          <li>Aliciamento ou solicitação sexual não consensual.</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> conteúdo adulto implícito e artístico (nu artístico, literatura erótica não gráfica), discussões sobre educação sexual, saúde reprodutiva e relacionamentos.
+        </div>
+      </div>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-block">Remoção imediata</span>
+          <span class="policy-category-title">Conteúdo político extremista</span>
+        </div>
+        <p>Conteúdo que ameaça a ordem democrática ou incita violência política.</p>
+        <ul>
+          <li>Chamados explícitos a golpe de estado, invasão de instituições ou derrubada do governo pela força.</li>
+          <li>Ameaças a autoridades eleitas, ministros de cortes supremas ou membros do legislativo.</li>
+          <li>Propaganda de organizações terroristas ou milicias paramilitares.</li>
+          <li>Incitação a violência em contextos eleitorais ou de manifestações.</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> crítica a governos, partidos, políticas e figuras políticas; manifestação de ideias de qualquer espectro político; convocação de manifestações pacíficas; análise de cenários políticos.
+        </div>
+      </div>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-flag">Revisão humana</span>
+          <span class="policy-category-title">Desinformação perigosa</span>
+        </div>
+        <p>Informações falsas que representam risco direto à saúde ou segurança pública.</p>
+        <ul>
+          <li>Curas milagrosas, tratamentos sem base científica ou negação de doenças com impacto comprovado.</li>
+          <li>Desinformação sobre vacinas que pode levar pessoas a recusar tratamentos de saúde.</li>
+          <li>Instruções para automutilação, suicídio ou fabricação de substâncias perigosas.</li>
+          <li>Pânicos fabricados sobre segurança pública (ex.: notícias falsas sobre ataques ou envenenamentos).</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> questionar estudos científicos com base em evidências; compartilhar notícias de fontes jornalísticas; debater políticas de saúde pública; relatar experiências pessoais com tratamentos (identificadas como tal).
+        </div>
+      </div>
+
+      <div class="policy-category">
+        <div class="policy-category-header">
+          <span class="policy-category-tag tag-flag">Revisão humana</span>
+          <span class="policy-category-title">Spam, fraude e publicidade enganosa</span>
+        </div>
+        <p>Conteúdo que abusa da plataforma para fins comerciais enganosos ou que prejudica outros usuários.</p>
+        <ul>
+          <li>Mensagens em massa repetitivas sem valor para a comunidade.</li>
+          <li>Esquemas de pirâmide, golpes financeiros ou promessas de ganhos irreais.</li>
+          <li>Links de phishing ou sites que coletam dados sem consentimento.</li>
+          <li>Personificação de marcas ou figuras públicas para enganar outros usuários.</li>
+          <li>Compra ou venda de curtidas, seguidores ou engajamento artificial.</li>
+        </ul>
+        <div class="allowed-box">
+          <strong>Permitido:</strong> divulgar produtos ou serviços próprios de forma honesta e transparente; compartilhar links de lojas ou perfis profissionais; promoções legítimas identificadas como tal.
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Como funciona a moderação -->
+    <div class="legal-section">
+      <h2>4. Como funciona a moderação</h2>
+      <p>O Nexus usa um sistema de moderação em duas camadas:</p>
+      <ul>
+        <li><strong>Moderação automática (IA):</strong> ao publicar um post com texto, um modelo de inteligência artificial analisa o conteúdo em tempo real e retorna uma de três decisões:</li>
+      </ul>
+      <div class="consequence-grid">
+        <div class="consequence-card">
+          <span class="badge badge-approved">Aprovado</span>
+          <p>Conteúdo aceitável. O post é publicado normalmente.</p>
+        </div>
+        <div class="consequence-card">
+          <span class="badge badge-flagged">Sinalizado</span>
+          <p>Conteúdo suspeito ou ambíguo. Fica visível, mas vai para fila de revisão humana.</p>
+        </div>
+        <div class="consequence-card">
+          <span class="badge badge-removed">Removido</span>
+          <p>Violação clara. O post é bloqueado antes da publicação e marcado como removido.</p>
+        </div>
+      </div>
+      <br>
+      <ul>
+        <li><strong>Moderação humana:</strong> posts sinalizados ou denunciados por outros usuários são revisados por moderadores, que podem aprovar, manter a sinalização ou remover definitivamente.</li>
+        <li><strong>Varredura retroativa:</strong> um processo automático roda a cada 6 horas e modera posts publicados antes que o sistema estivesse ativo.</li>
+      </ul>
+      <p>A moderação automática é conservadora: em caso de dúvida, o sistema sinaliza para revisão humana em vez de remover. Só há remoção automática quando a violação é clara e inequívoca.</p>
+    </div>
+
+    <!-- 5. Denúncias -->
+    <div class="legal-section">
+      <h2>5. Denúncias de conteúdo</h2>
+      <p>Qualquer usuário autenticado pode denunciar um post usando o menu de opções do post. Denúncias são revisadas por moderadores. Denúncias de má-fé ou abusivas podem resultar em restrições para o denunciante.</p>
+    </div>
+
+    <!-- 6. Consequências -->
+    <div class="legal-section">
+      <h2>6. Consequências de violações</h2>
+      <p>As consequências variam com a gravidade e a reincidência:</p>
+      <ul>
+        <li><strong>Remoção do conteúdo:</strong> o post é retirado da plataforma sem aviso prévio quando viola claramente esta política.</li>
+        <li><strong>Aviso:</strong> para infrações leves ou de primeiro incidente, o usuário pode receber notificação explicando a violação.</li>
+        <li><strong>Suspensão temporária:</strong> violações repetidas ou infrações moderadas podem resultar em bloqueio temporário da conta.</li>
+        <li><strong>Banimento permanente:</strong> violações graves (CSAM, terrorismo, doxing com intenção de dano) resultam em exclusão permanente da conta e, quando aplicável, denúncia às autoridades competentes.</li>
+      </ul>
+    </div>
+
+    <!-- 7. Contestação e recurso -->
+    <div class="legal-section">
+      <h2>7. Contestação e recurso</h2>
+      <p>Se você acredita que um conteúdo seu foi removido incorretamente, entre em contato pelo e-mail <a href="mailto:sm.servicosetecnologia@gmail.com" style="color:var(--purple-600)">sm.servicosetecnologia@gmail.com</a> com o título <strong>"Contestação de Moderação"</strong>, descrevendo o conteúdo e por que você acredita que não viola esta política.</p>
+      <p>Analisaremos os recursos em até 7 dias úteis.</p>
+    </div>
+
+    <!-- 8. Conteúdo de terceiros -->
+    <div class="legal-section">
+      <h2>8. Responsabilidade pelo conteúdo</h2>
+      <p>Você é integralmente responsável pelo conteúdo que publica. O Nexus não endossa, valida nem se responsabiliza por publicações de usuários. A moderação é um esforço de boa-fé, não uma garantia de que todo conteúdo inadequado será identificado e removido.</p>
+      <p>Ao publicar, você declara que possui os direitos necessários sobre o conteúdo e que ele não viola direitos de terceiros.</p>
+    </div>
+
+    <!-- 9. Atualizações -->
+    <div class="legal-section">
+      <h2>9. Atualizações desta política</h2>
+      <p>Esta política pode ser atualizada para refletir novos contextos legais, sociais ou tecnológicos. Atualizações relevantes serão comunicadas aos usuários. A data de última atualização consta no topo desta página. O uso continuado da plataforma após a publicação de mudanças implica aceitação da versão vigente.</p>
+    </div>
+
+    <!-- 10. Contato -->
+    <div class="legal-section">
+      <h2>10. Contato</h2>
+      <p>Dúvidas sobre esta política ou sobre moderação de conteúdo: <a href="mailto:sm.servicosetecnologia@gmail.com" style="color:var(--purple-600)">sm.servicosetecnologia@gmail.com</a></p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

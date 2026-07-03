@@ -28,14 +28,23 @@ function getDb() {
 }
 
 const PROMPT_TEMPLATE = (text) =>
-  `Moderação de conteúdo de rede social brasileira. Analise e classifique.
+  `Moderador da rede social Nexus (brasileira). Analise o texto e aplique a Política de Uso.
 
 TEXTO: """${text.slice(0, 1500)}"""
 
-Categorias: racismo, homofobia, politico, odio, assedio, sexual_explicito, desinformacao, spam
+CATEGORIAS:
+- racismo: ódio racial/étnico/xenofobia
+- homofobia: ódio por orientação sexual ou identidade de gênero
+- odio: desumanização de grupos, apologia à violência coletiva
+- assedio: ameaças diretas, doxing, bullying coordenado
+- sexual_explicito: pornografia ou conteúdo sexual explícito
+- politico: incitação a golpe, terrorismo, violência eleitoral
+- desinformacao: saúde perigosa falsa, instruções de automutilação
+- spam: fraude, phishing, pirâmide
 
 Responda APENAS com JSON: {"decision":"allow","reason":"","categories":[]}
-Valores: "block" (viola claramente), "flag" (suspeito), "allow" (aceitável)`;
+Valores: "block" (violação clara), "flag" (suspeito, revisão humana), "allow" (aceitável)
+Seja conservador: só "block" quando inequívoco.`;
 
 module.exports = async function handler(req, res) {
   // Autenticação: Vercel Cron envia GET com header x-vercel-cron:1

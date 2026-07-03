@@ -46,17 +46,17 @@ module.exports = async function handler(req, res) {
       max_tokens: 300,
       messages: [{
         role: 'user',
-        content: `Você é um moderador de uma rede social brasileira. Analise o texto abaixo e determine se viola alguma política.
+        content: `Você é um moderador de conteúdo de uma rede social brasileira chamada Nexus. Analise o texto e decida se viola a Política de Uso da plataforma.
 
-POLÍTICAS DE CONTEÚDO PROIBIDO:
-- racismo: conteúdo racista, xenófobo, discriminação étnica/racial
-- homofobia: conteúdo homofóbico, transfóbico, discriminação por orientação/identidade sexual
-- politico: propaganda extremista, incitação a golpe, ameaças a instituições democráticas, discurso político que incita ódio ou violência
-- odio: discurso de ódio, desumanização de grupos, incitação à violência
-- assedio: assédio, bullying, ameaças diretas a pessoas identificáveis
-- sexual_explicito: pornografia ou conteúdo sexual explícito
-- desinformacao: notícias falsas perigosas sobre saúde ou segurança pública
-- spam: spam comercial enganoso
+CATEGORIAS DE VIOLAÇÃO (use os identificadores exatos):
+- racismo: conteúdo racista, xenófobo ou que discrimina por raça/etnia/origem. NÃO inclui: debater desigualdade racial, relatar discriminação sofrida, crítica antirracista.
+- homofobia: conteúdo homofóbico, transfóbico ou que discrimina por orientação sexual/identidade de gênero. NÃO inclui: debater políticas LGBTQIA+, perspectivas religiosas respeitosas.
+- odio: discurso de ódio que desumaniza grupos, glorifica genocídios ou incita violência contra grupos. NÃO inclui: criticar ideologias, analisar eventos históricos violentos.
+- assedio: ameaças diretas a pessoas identificáveis, doxing, bullying coordenado. NÃO inclui: criticar figura pública, relatar assédio sofrido.
+- sexual_explicito: pornografia, descrição gráfica de atos sexuais, qualquer conteúdo sexual envolvendo menores. NÃO inclui: educação sexual, nu artístico, literatura erótica não explícita.
+- politico: chamados a golpe de estado, ameaças a instituições democráticas, propaganda terrorista, incitação à violência eleitoral. NÃO inclui: opiniões políticas, crítica a governos/partidos, convocação de manifestações pacíficas.
+- desinformacao: informações falsas perigosas sobre saúde (curas milagrosas, anti-vacinas) ou segurança pública (pânicos fabricados), instruções de automutilação. NÃO inclui: questionar estudos com base em evidências, relatos pessoais identificados como tal.
+- spam: esquemas de pirâmide, phishing, golpes financeiros, personificação de marcas para enganar. NÃO inclui: divulgação honesta de produtos próprios, promoções legítimas.
 
 TEXTO A ANALISAR:
 """
@@ -66,12 +66,12 @@ ${text.slice(0, 2000)}
 Responda APENAS com JSON válido, sem texto adicional:
 {"decision":"allow","reason":"","categories":[]}
 
-Regras de decisão:
-- "block": claramente viola uma política — não deve ser publicado
-- "flag": suspeito ou ambíguo — requer revisão humana
-- "allow": conteúdo normal, aceitável na plataforma
+REGRAS DE DECISÃO:
+- "block": violação clara e inequívoca de uma categoria acima — remover antes de publicar
+- "flag": suspeito ou ambíguo — publicar mas enviar para revisão humana
+- "allow": conteúdo normal e aceitável — publicar sem restrição
 
-Contexto importante: opiniões políticas comuns, críticas construtivas, palavrões leves sem alvo específico e debates acalorados são "allow". Só classifique como "block" ou "flag" se houver violação clara ou forte suspeita.`
+IMPORTANTE: seja conservador. Palavrões leves, opiniões fortes, debates acalorados, críticas duras e humor pesado são "allow" salvo violação direta de uma categoria. Só use "block" quando não houver dúvida razoável.`
       }]
     });
 
