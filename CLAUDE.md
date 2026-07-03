@@ -340,3 +340,11 @@ Todas as páginas HTML têm:
 Páginas administrativas (`admin.html`, `moderacao.html`, `analytics.html`, `configuracoes.html`) têm `<meta name="robots" content="noindex, nofollow">`.
 
 `index.html` tem tags Open Graph completas (`og:title`, `og:description`, `og:image`, `og:url`) e Twitter Cards, com `og:image` apontando para `/og-image.png`.
+
+---
+
+## Google Analytics (GA4)
+
+Tag `G-CYDS5B5TN5` integrada em todas as 28 páginas HTML logo após `<meta charset="UTF-8">`. Carrega via `gtag.js` com **Medição aprimorada** ativada (page views, scrolls, cliques de saída). Não adicionar uma segunda tag GA em páginas novas — verificar se o snippet já está presente antes de editar.
+
+O arquivo `googleef3313d95571f977.html` na raiz é o **arquivo de verificação do Google Search Console** — não remover, pois sua remoção cancela a verificação de propriedade.
