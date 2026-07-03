@@ -355,7 +355,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="../js/firebase-config.js"></script>
 <script src="../js/utils.js"></script>
 <script>
@@ -404,7 +403,7 @@ requireAuth(async user => {
   }
 });
 
-// ── Gravação local (MediaRecorder → Firebase Storage) ─────────
+// ── Gravação local (MediaRecorder → Cloudinary) ───────────────
 function startRecording(stream) {
   if (!stream || !window.MediaRecorder) return;
   _recordingChunks = [];
@@ -413,7 +412,7 @@ function startRecording(stream) {
   try {
     _mediaRecorder = new MediaRecorder(stream, {
       ...(mimeType ? { mimeType } : {}),
-      videoBitsPerSecond: 800_000
+      videoBitsPerSecond: 400_000  // 400 kbps — compatível com limite do Cloudinary free
     });
     _mediaRecorder.ondataavailable = e => {
       if (e.data?.size > 0) _recordingChunks.push(e.data);
@@ -433,10 +432,19 @@ async function stopAndUploadRecording(liveId) {
         const blob = new Blob(_recordingChunks, { type: 'video/webm' });
         _recordingChunks = [];
         if (blob.size < 10_000) { resolve(null); return; }
-        const ref = storage.ref(`lives/${liveId}/recording.webm`);
-        await ref.put(blob, { contentType: 'video/webm' });
-        const url = await ref.getDownloadURL();
-        resolve(url);
+
+        const formData = new FormData();
+        formData.append('file', blob, `live_${liveId}.webm`);
+        formData.append('upload_preset', 'nexus_uploads');
+        formData.append('public_id', `lives/${liveId}`);
+
+        const res = await fetch('https://api.cloudinary.com/v1_1/dyoi5mrdc/video/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (!res.ok) throw new Error(`Cloudinary ${res.status}`);
+        const data = await res.json();
+        resolve(data.secure_url || null);
       } catch(e) {
         console.error('Recording upload failed:', e.message);
         resolve(null);
