@@ -388,6 +388,7 @@ let _previewStream   = null;
 let _mediaRecorder   = null;
 let _recordingChunks = [];
 let _liveTitle       = null;
+let _facingMode      = 'user'; // 'user' = frontal, 'environment' = traseira
 // Elemento <video> persistente — criado UMA vez e movido entre containers
 // (nunca destruído via innerHTML, pois isso pode liberar a câmera no Android)
 let _liveVideoEl     = null;
@@ -512,10 +513,16 @@ function showStartScreen() {
           </div>
         </div>
 
-        <button class="btn" id="btn-test-cam" onclick="testCamera()"
-                style="justify-content:center;gap:.5rem">
-          <i class="ti ti-camera"></i> Testar câmera e microfone
-        </button>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn" id="btn-test-cam" onclick="testCamera()"
+                  style="flex:1;justify-content:center;gap:.5rem">
+            <i class="ti ti-camera"></i> Testar câmera e microfone
+          </button>
+          <button class="btn" id="btn-flip-preview" onclick="flipCamera()" title="Alternar câmera"
+                  style="width:44px;justify-content:center;padding:0;flex-shrink:0">
+            <i class="ti ti-camera-rotate"></i>
+          </button>
+        </div>
 
         <div class="form-group" style="margin:0">
           <label class="form-label">Título da transmissão</label>
@@ -547,7 +554,7 @@ async function testCamera() {
   btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Solicitando permissão…';
   try {
     if (_previewStream) { _previewStream.getTracks().forEach(t => t.stop()); }
-    _previewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    _previewStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: _facingMode } }, audio: true });
     const vid = getLiveVideoEl();
     vid.srcObject = _previewStream;
     await vid.play().catch(() => {});
@@ -580,7 +587,7 @@ async function startLive() {
     if (_hostMediaStream) { _hostMediaStream.getTracks().forEach(t => t.stop()); _hostMediaStream = null; }
     btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i> Acessando câmera…';
     try {
-      _hostMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      _hostMediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: _facingMode } }, audio: true });
       vid.srcObject = _hostMediaStream;
       await vid.play().catch(() => {});
     } catch(e) {
@@ -666,6 +673,9 @@ function renderHostScreen(liveId, title) {
           <button class="live-ctrl-btn ctrl-cam" id="btn-cam" onclick="toggleCam()" title="Câmera">
             <i class="ti ti-video"></i>
           </button>
+          <button class="live-ctrl-btn" id="btn-flip" onclick="flipCamera()" title="Câmera traseira">
+            <i class="ti ti-camera-rotate"></i>
+          </button>
         </div>
         <button class="live-fullscreen-btn" onclick="toggleVideoFullscreen()" title="Tela cheia">
           <i class="ti ti-maximize"></i>
@@ -741,6 +751,60 @@ function toggleCam() {
     btn.classList.remove('off');
     btn.innerHTML = '<i class="ti ti-video"></i>';
     btn.title = 'Desligar câmera';
+  }
+}
+
+async function flipCamera() {
+  const isLive    = !!_hostMediaStream;
+  const activeStream = isLive ? _hostMediaStream : _previewStream;
+  if (!activeStream) {
+    // Sem stream ativa: apenas alterna o modo para o próximo getUserMedia
+    _facingMode = _facingMode === 'user' ? 'environment' : 'user';
+    showToast(_facingMode === 'environment' ? 'Câmera traseira selecionada' : 'Câmera frontal selecionada');
+    return;
+  }
+
+  _facingMode = _facingMode === 'user' ? 'environment' : 'user';
+  const btn = document.getElementById('btn-flip') || document.getElementById('btn-flip-preview');
+  if (btn) { btn.disabled = true; }
+
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: _facingMode } } });
+    const newTrack  = newStream.getVideoTracks()[0];
+    if (!newTrack) throw new Error('sem track de vídeo');
+
+    // Substitui track de vídeo no stream ativo
+    activeStream.getVideoTracks().forEach(t => { t.stop(); activeStream.removeTrack(t); });
+    activeStream.addTrack(newTrack);
+
+    // Atualiza elemento de vídeo
+    if (_liveVideoEl) {
+      _liveVideoEl.srcObject = null;
+      _liveVideoEl.srcObject = activeStream;
+      _liveVideoEl.play().catch(() => {});
+    }
+
+    // Substitui track no Agora (durante live)
+    if (isLive && _agoraClient && _localVideo) {
+      try {
+        const newAgoraTrack = AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: newTrack.clone() });
+        await _agoraClient.unpublish([_localVideo]);
+        _localVideo.close();
+        _localVideo = newAgoraTrack;
+        await _agoraClient.publish([_localVideo]);
+      } catch(e) {
+        console.warn('Agora flip camera error:', e);
+      }
+    }
+
+    const flipBtn = document.getElementById('btn-flip');
+    if (flipBtn) flipBtn.title = _facingMode === 'user' ? 'Câmera traseira' : 'Câmera frontal';
+
+  } catch(e) {
+    _facingMode = _facingMode === 'user' ? 'environment' : 'user'; // reverte
+    showToast('Não foi possível alternar a câmera.');
+  } finally {
+    if (btn) { btn.disabled = false; }
   }
 }
 
