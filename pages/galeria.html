@@ -427,21 +427,14 @@ async function loadContent() {
       items = snap.docs.map(d => ({ id: d.id, url: d.data().imageURL, caption: d.data().caption || '', albumId: d.data().albumId || null, deletable: true }));
       if (_activeAlbum) items = items.filter(p => p.albumId === _activeAlbum);
     } else if (_activeTab === 'videos') {
-      let snap;
-      try {
-        snap = await db.collection('lives')
-          .where('hostUid', '==', currentUser.uid)
-          .where('status', '==', 'ended')
-          .orderBy('createdAt', 'desc')
-          .get();
-      } catch(_) {
-        snap = await db.collection('lives')
-          .where('hostUid', '==', currentUser.uid)
-          .where('status', '==', 'ended')
-          .get();
-      }
+      // Single-field query — sem índice composto necessário
+      const snap = await db.collection('lives')
+        .where('hostUid', '==', currentUser.uid)
+        .get();
+
       const lives = snap.docs
-        .filter(d => d.data().recordingURL)
+        .filter(d => d.data().status === 'ended' && d.data().recordingURL)
+        .sort((a, b) => (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0))
         .map(d => ({ id: d.id, title: d.data().title || 'Live sem título', url: d.data().recordingURL, createdAt: d.data().createdAt }));
 
       if (!lives.length) {

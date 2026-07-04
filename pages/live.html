@@ -440,7 +440,7 @@ async function stopAndUploadRecording(liveId) {
     console.warn('stopAndUploadRecording: sem gravação ativa', _mediaRecorder?.state);
     return null;
   }
-  const chunks = _recordingChunks;  // captura referência antes de limpar
+  const chunks = _recordingChunks;
   const mime   = _recordingMimeType || 'video/webm';
   const ext    = mime.includes('mp4') ? 'mp4' : 'webm';
   _recordingChunks   = [];
@@ -448,31 +448,45 @@ async function stopAndUploadRecording(liveId) {
 
   return new Promise(resolve => {
     _mediaRecorder.onstop = async () => {
-      // Inclui qualquer chunk final que chegou no evento stop
       if (_recordingChunks.length) chunks.push(..._recordingChunks);
       _recordingChunks = [];
 
       try {
         const blob = new Blob(chunks, { type: mime });
-        console.log(`Gravação: ${blob.size} bytes, tipo ${mime}`);
+        console.log(`Gravação: ${blob.size} bytes, tipo: ${mime}`);
         if (blob.size < 5_000) {
-          console.warn('Gravação muito pequena, descartando.');
+          console.warn('Gravação vazia ou corrompida, descartando.');
           resolve(null);
           return;
         }
-        const formData = new FormData();
-        formData.append('file', blob, `live_${liveId}.${ext}`);
-        formData.append('upload_preset', 'nexus_uploads');
-        formData.append('public_id', `lives/${liveId}`);
 
-        const res = await fetch('https://api.cloudinary.com/v1_1/dyoi5mrdc/auto/upload', {
+        // 1. Obtém assinatura do servidor (bypassa restrições de preset unsigned)
+        const publicId = `lives/${liveId}`;
+        const idToken  = await auth.currentUser.getIdToken();
+        const signRes  = await fetch('https://nexus-social-fawn.vercel.app/api/cloudinary-sign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+          body: JSON.stringify({ public_id: publicId })
+        });
+        if (!signRes.ok) throw new Error(`Assinatura falhou: ${signRes.status}`);
+        const { signature, timestamp, api_key, cloud_name } = await signRes.json();
+
+        // 2. Upload direto ao Cloudinary com assinatura (sem preset, sem restrições)
+        const formData = new FormData();
+        formData.append('file',       blob, `live_${liveId}.${ext}`);
+        formData.append('api_key',    api_key);
+        formData.append('timestamp',  timestamp);
+        formData.append('signature',  signature);
+        formData.append('public_id',  publicId);
+
+        const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloud_name}/video/upload`, {
           method: 'POST',
           body: formData
         });
-        const data = await res.json();
-        if (!res.ok) {
-          console.error('Cloudinary error:', JSON.stringify(data));
-          throw new Error(data?.error?.message || `HTTP ${res.status}`);
+        const data = await uploadRes.json();
+        if (!uploadRes.ok) {
+          console.error('Cloudinary upload error:', JSON.stringify(data));
+          throw new Error(data?.error?.message || `HTTP ${uploadRes.status}`);
         }
         console.log('Gravação salva:', data.secure_url);
         resolve(data.secure_url || null);
