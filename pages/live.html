@@ -428,15 +428,21 @@ function startRecording(stream) {
     _mediaRecorder.ondataavailable = e => {
       if (e.data?.size > 0) _recordingChunks.push(e.data);
     };
-    _mediaRecorder.start(10_000);
+    _mediaRecorder.start(2_000);
   } catch(e) {
     console.warn('MediaRecorder init failed:', e.message);
     _mediaRecorder = null;
   }
 }
 
+function _setSavingStatus(msg) {
+  const el = document.getElementById('saving-status');
+  if (el) el.textContent = msg;
+}
+
 async function stopAndUploadRecording(liveId) {
   if (!_mediaRecorder || _mediaRecorder.state === 'inactive') {
+    _setSavingStatus('Gravação não disponível.');
     console.warn('stopAndUploadRecording: sem gravação ativa', _mediaRecorder?.state);
     return null;
   }
@@ -448,50 +454,67 @@ async function stopAndUploadRecording(liveId) {
 
   return new Promise(resolve => {
     _mediaRecorder.onstop = async () => {
-      if (_recordingChunks.length) chunks.push(..._recordingChunks);
-      _recordingChunks = [];
+      // Inclui chunk final do evento stop
+      if (_recordingChunks.length) { chunks.push(..._recordingChunks); _recordingChunks = []; }
 
       try {
         const blob = new Blob(chunks, { type: mime });
-        console.log(`Gravação: ${blob.size} bytes, tipo: ${mime}`);
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+        console.log(`Gravação: ${blob.size} bytes (${sizeMB} MB), tipo: ${mime}`);
+
         if (blob.size < 5_000) {
-          console.warn('Gravação vazia ou corrompida, descartando.');
-          resolve(null);
-          return;
+          _setSavingStatus('Gravação muito curta ou sem dados.');
+          showToast('Transmissão muito curta — gravação não salva.');
+          resolve(null); return;
         }
 
-        // 1. Obtém assinatura do servidor (bypassa restrições de preset unsigned)
-        const publicId = `lives/${liveId}`;
-        const idToken  = await auth.currentUser.getIdToken();
+        // 1. Token Firebase
+        _setSavingStatus(`Arquivo: ${sizeMB} MB — autenticando…`);
+        const currentUserObj = auth.currentUser;
+        if (!currentUserObj) throw new Error('Usuário não autenticado');
+        const idToken = await currentUserObj.getIdToken(true);
+
+        // 2. Assinatura no servidor Vercel
+        _setSavingStatus('Obtendo credenciais de upload…');
         const signRes  = await fetch('https://nexus-social-fawn.vercel.app/api/cloudinary-sign', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-          body: JSON.stringify({ public_id: publicId })
+          body:    JSON.stringify({ public_id: publicId })
         });
-        if (!signRes.ok) throw new Error(`Assinatura falhou: ${signRes.status}`);
-        const { signature, timestamp, api_key, cloud_name } = await signRes.json();
-
-        // 2. Upload direto ao Cloudinary com assinatura (sem preset, sem restrições)
-        const formData = new FormData();
-        formData.append('file',       blob, `live_${liveId}.${ext}`);
-        formData.append('api_key',    api_key);
-        formData.append('timestamp',  timestamp);
-        formData.append('signature',  signature);
-        formData.append('public_id',  publicId);
-
-        const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloud_name}/video/upload`, {
-          method: 'POST',
-          body: formData
-        });
-        const data = await uploadRes.json();
-        if (!uploadRes.ok) {
-          console.error('Cloudinary upload error:', JSON.stringify(data));
-          throw new Error(data?.error?.message || `HTTP ${uploadRes.status}`);
+        if (!signRes.ok) {
+          const errBody = await signRes.text().catch(() => '');
+          throw new Error(`Servidor (${signRes.status}): ${errBody.slice(0, 120)}`);
         }
-        console.log('Gravação salva:', data.secure_url);
-        resolve(data.secure_url || null);
+        const signData = await signRes.json();
+        if (!signData.signature) throw new Error('Assinatura ausente na resposta do servidor');
+
+        // 3. Upload direto ao Cloudinary (signed — sem restrições de preset)
+        _setSavingStatus('Enviando vídeo para a nuvem…');
+        const formData = new FormData();
+        formData.append('file',      blob, `live_${liveId}.${ext}`);
+        formData.append('api_key',   signData.api_key);
+        formData.append('timestamp', String(signData.timestamp));
+        formData.append('signature', signData.signature);
+        // Sem public_id no upload — Cloudinary auto-gera (assinatura só tem timestamp)
+
+        const uploadRes = await fetch(
+          `https://api.cloudinary.com/v1_1/${signData.cloud_name}/video/upload`,
+          { method: 'POST', body: formData }
+        );
+        const upData = await uploadRes.json();
+        if (!uploadRes.ok) {
+          throw new Error(`Cloudinary: ${upData?.error?.message || uploadRes.status}`);
+        }
+
+        _setSavingStatus('Gravação salva com sucesso!');
+        console.log('Gravação salva:', upData.secure_url);
+        resolve(upData.secure_url || null);
+
       } catch(e) {
         console.error('Recording upload failed:', e.message);
+        _setSavingStatus(`Erro: ${e.message}`);
+        showToast(`Gravação não salva — ${e.message}`);
+        await new Promise(r => setTimeout(r, 4000));
         resolve(null);
       }
     };
@@ -885,12 +908,12 @@ async function endLive(liveId) {
     _chatUnsub?.();
     _liveUnsub?.();
 
-    // Mostra tela de "salvando" enquanto o MediaRecorder finaliza
+    // Mostra tela de "salvando" com status atualizável
     document.getElementById('app-root').innerHTML = `
       <div class="live-ended-wrap">
         <div class="spinner" style="margin-bottom:.5rem"></div>
         <p style="font-size:15px;font-weight:600;color:var(--text-primary)">Salvando gravação…</p>
-        <p style="font-size:13px;color:var(--text-muted)">Não feche esta aba até concluir</p>
+        <p id="saving-status" style="font-size:13px;color:var(--text-muted)">Finalizando…</p>
       </div>`;
 
     // Finaliza a gravação e faz upload (stream ainda ativa nesse momento)

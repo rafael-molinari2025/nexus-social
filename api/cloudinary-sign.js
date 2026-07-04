@@ -16,7 +16,6 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Verifica autenticação Firebase
   const idToken = (req.headers.authorization || '').replace('Bearer ', '').trim();
   if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
   try {
@@ -33,16 +32,10 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Cloudinary credentials not configured' });
   }
 
-  const { public_id = '' } = req.body || {};
+  // Assinatura apenas com timestamp — sem public_id para evitar discrepâncias
   const timestamp = Math.round(Date.now() / 1000);
-
-  // Monta string para assinar: parâmetros em ordem alfabética + api_secret
-  const toSign = [
-    public_id ? `public_id=${public_id}` : null,
-    `timestamp=${timestamp}`
-  ].filter(Boolean).join('&') + apiSecret;
-
+  const toSign    = `timestamp=${timestamp}` + apiSecret;
   const signature = crypto.createHash('sha1').update(toSign).digest('hex');
 
-  res.status(200).json({ signature, timestamp, api_key: apiKey, cloud_name: cloudName, public_id });
+  res.status(200).json({ signature, timestamp, api_key: apiKey, cloud_name: cloudName });
 };
