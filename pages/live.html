@@ -385,10 +385,12 @@ let _camOff          = false;
 let _chatUnsub       = null;
 let _liveUnsub       = null;
 let _previewStream   = null;
-let _mediaRecorder   = null;
-let _recordingChunks = [];
-let _liveTitle       = null;
-let _facingMode      = 'user'; // 'user' = frontal, 'environment' = traseira
+let _mediaRecorder    = null;
+let _recordingChunks  = [];
+let _recordingMimeType = '';
+let _liveTitle        = null;
+let _facingMode       = 'user'; // 'user' = frontal, 'environment' = traseira
+let _isEndingLive     = false;
 // Elemento <video> persistente — criado UMA vez e movido entre containers
 // (nunca destruído via innerHTML, pois isso pode liberar a câmera no Android)
 let _liveVideoEl     = null;
@@ -408,14 +410,21 @@ requireAuth(async user => {
 // ── Gravação local (MediaRecorder → Cloudinary) ───────────────
 function startRecording(stream) {
   if (!stream || !window.MediaRecorder) return;
-  _recordingChunks = [];
-  const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  _recordingChunks  = [];
+  _recordingMimeType = '';
+  const mimeType = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4;codecs=h264,aac',
+    'video/mp4'
+  ].find(t => MediaRecorder.isTypeSupported(t)) || '';
   try {
     _mediaRecorder = new MediaRecorder(stream, {
       ...(mimeType ? { mimeType } : {}),
-      videoBitsPerSecond: 400_000  // 400 kbps — compatível com limite do Cloudinary free
+      videoBitsPerSecond: 400_000
     });
+    _recordingMimeType = _mediaRecorder.mimeType || mimeType || 'video/webm';
     _mediaRecorder.ondataavailable = e => {
       if (e.data?.size > 0) _recordingChunks.push(e.data);
     };
@@ -427,31 +436,45 @@ function startRecording(stream) {
 }
 
 async function stopAndUploadRecording(liveId) {
-  if (!_mediaRecorder || _mediaRecorder.state === 'inactive') return null;
+  if (!_mediaRecorder || _mediaRecorder.state === 'inactive') {
+    console.warn('stopAndUploadRecording: sem gravação ativa', _mediaRecorder?.state);
+    return null;
+  }
+  const chunks = _recordingChunks;  // captura referência antes de limpar
+  const mime   = _recordingMimeType || 'video/webm';
+  const ext    = mime.includes('mp4') ? 'mp4' : 'webm';
+  _recordingChunks   = [];
+  _recordingMimeType = '';
+
   return new Promise(resolve => {
     _mediaRecorder.onstop = async () => {
-      try {
-        const blob = new Blob(_recordingChunks, { type: 'video/webm' });
-        _recordingChunks = [];
-        if (blob.size < 10_000) { resolve(null); return; }
+      // Inclui qualquer chunk final que chegou no evento stop
+      if (_recordingChunks.length) chunks.push(..._recordingChunks);
+      _recordingChunks = [];
 
+      try {
+        const blob = new Blob(chunks, { type: mime });
+        console.log(`Gravação: ${blob.size} bytes, tipo ${mime}`);
+        if (blob.size < 5_000) {
+          console.warn('Gravação muito pequena, descartando.');
+          resolve(null);
+          return;
+        }
         const formData = new FormData();
-        formData.append('file', blob, `live_${liveId}.webm`);
+        formData.append('file', blob, `live_${liveId}.${ext}`);
         formData.append('upload_preset', 'nexus_uploads');
         formData.append('public_id', `lives/${liveId}`);
-        formData.append('resource_type', 'video');
 
-        // /auto/upload detecta o tipo automaticamente — mais compatível com presets unsigned
         const res = await fetch('https://api.cloudinary.com/v1_1/dyoi5mrdc/auto/upload', {
           method: 'POST',
           body: formData
         });
-
         const data = await res.json();
         if (!res.ok) {
           console.error('Cloudinary error:', JSON.stringify(data));
           throw new Error(data?.error?.message || `HTTP ${res.status}`);
         }
+        console.log('Gravação salva:', data.secure_url);
         resolve(data.secure_url || null);
       } catch(e) {
         console.error('Recording upload failed:', e.message);
@@ -809,41 +832,57 @@ async function flipCamera() {
 }
 
 async function endLive(liveId) {
+  // Guarda contra re-entrada — qualquer clique adicional é ignorado
+  if (_isEndingLive) return;
+
   const endBtn = document.querySelector('.ctrl-end');
+
+  // Primeiro clique: pede confirmação visual e retorna
   if (endBtn && endBtn.dataset.confirm !== '1') {
     endBtn.dataset.confirm = '1';
-    endBtn.title = 'Clique novamente para confirmar';
-    endBtn.style.opacity = '0.7';
+    endBtn.title = 'Toque novamente para encerrar';
+    endBtn.style.outline = '2px solid rgba(255,255,255,0.8)';
+    showToast('Toque novamente para confirmar o encerramento.');
     setTimeout(() => {
       if (endBtn.isConnected && endBtn.dataset.confirm) {
         delete endBtn.dataset.confirm;
         endBtn.title = 'Encerrar live';
-        endBtn.style.opacity = '';
+        endBtn.style.outline = '';
       }
-    }, 3000);
+    }, 4000);
     return;
   }
+
+  // Segundo clique confirmado: bloqueia qualquer novo clique imediatamente
+  _isEndingLive = true;
+  if (endBtn) {
+    endBtn.disabled = true;
+    endBtn.style.opacity = '0.4';
+    endBtn.style.outline = '';
+    endBtn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i>';
+  }
+
   try {
+    // Para o Agora (para de transmitir para espectadores)
     _localAudio?.close();
     _localVideo?.close();
-    if (_liveVideoEl) { _liveVideoEl.srcObject = null; }
-    await _agoraClient?.leave();
+    if (_liveVideoEl) _liveVideoEl.srcObject = null;
+    await _agoraClient?.leave().catch(e => console.warn('agora leave:', e));
     _chatUnsub?.();
     _liveUnsub?.();
 
-    // Mostrar tela de upload enquanto salva
-    if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
-      document.getElementById('app-root').innerHTML = `
-        <div class="live-ended-wrap">
-          <div class="spinner" style="margin-bottom:.5rem"></div>
-          <p style="font-size:15px;font-weight:600;color:var(--text-primary)">Salvando gravação…</p>
-          <p style="font-size:13px;color:var(--text-muted)">Não feche esta aba até concluir</p>
-        </div>`;
-    }
+    // Mostra tela de "salvando" enquanto o MediaRecorder finaliza
+    document.getElementById('app-root').innerHTML = `
+      <div class="live-ended-wrap">
+        <div class="spinner" style="margin-bottom:.5rem"></div>
+        <p style="font-size:15px;font-weight:600;color:var(--text-primary)">Salvando gravação…</p>
+        <p style="font-size:13px;color:var(--text-muted)">Não feche esta aba até concluir</p>
+      </div>`;
 
-    // Gravar e fazer upload antes de parar o stream
+    // Finaliza a gravação e faz upload (stream ainda ativa nesse momento)
     const recordingURL = await stopAndUploadRecording(liveId);
 
+    // Agora sim para as tracks da câmera/microfone
     _hostMediaStream?.getTracks().forEach(t => t.stop());
     _hostMediaStream = null;
 
@@ -855,11 +894,13 @@ async function endLive(liveId) {
 
     await db.collection('lives').doc(liveId).update(updateData);
     if (recordingURL) await createLivePost(liveId, _liveTitle || 'Live', recordingURL);
+
     showToast(recordingURL ? 'Gravação salva e postada no feed!' : 'Transmissão encerrada.');
     setTimeout(() => { location.href = '../index.html'; }, 2500);
   } catch(e) {
     console.error('endLive error:', e);
-    showToast('Erro ao encerrar. Tente novamente.');
+    showToast('Erro ao encerrar. Redirecionando…');
+    setTimeout(() => { location.href = '../index.html'; }, 3000);
   }
 }
 
