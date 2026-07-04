@@ -165,8 +165,40 @@
       border-radius: 3px; transition: width .3s;
     }
 
+    /* Video grid */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .video-card {
+      border-radius: var(--radius-md); overflow: hidden;
+      background: var(--gray-100); border: 0.5px solid var(--border);
+    }
+    .video-thumb {
+      position: relative; aspect-ratio: 16/9; overflow: hidden; cursor: pointer;
+      background: #000;
+    }
+    .video-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .video-play-overlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.38); transition: background .18s;
+    }
+    .video-thumb:hover .video-play-overlay { background: rgba(0,0,0,.55); }
+    .video-play-btn {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: rgba(255,255,255,.9); border: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: var(--purple-600); pointer-events: none;
+    }
+    .video-info { padding: .5rem .75rem; }
+    .video-title { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .video-date  { font-size: 11px; color: var(--text-muted); margin-top: .15rem; }
+
     @media (max-width: 480px) {
       .gallery-grid { gap: 2px; }
+      .video-grid   { grid-template-columns: 1fr; }
       .gallery-page { padding: 1rem .5rem calc(80px + 1rem); }
     }
   </style>
@@ -225,6 +257,9 @@
       </button>
       <button class="gallery-tab" id="tab-btn-posts" onclick="switchTab('posts')">
         <i class="ti ti-news" aria-hidden="true"></i> Fotos de posts
+      </button>
+      <button class="gallery-tab" id="tab-btn-videos" onclick="switchTab('videos')">
+        <i class="ti ti-video" aria-hidden="true"></i> Vídeos
       </button>
     </div>
 
@@ -362,7 +397,7 @@ async function doAssign(photoId, albumId, albumName) {
 // ── Tabs ──────────────────────────────────────────────────────
 function switchTab(tab) {
   _activeTab = tab;
-  ['galeria','posts'].forEach(t => {
+  ['galeria','posts','videos'].forEach(t => {
     document.getElementById(`tab-btn-${t}`).classList.toggle('active', t === tab);
   });
   document.getElementById('upload-zone').style.display = tab === 'galeria' ? '' : 'none';
@@ -391,6 +426,49 @@ async function loadContent() {
       }
       items = snap.docs.map(d => ({ id: d.id, url: d.data().imageURL, caption: d.data().caption || '', albumId: d.data().albumId || null, deletable: true }));
       if (_activeAlbum) items = items.filter(p => p.albumId === _activeAlbum);
+    } else if (_activeTab === 'videos') {
+      let snap;
+      try {
+        snap = await db.collection('lives')
+          .where('hostUid', '==', currentUser.uid)
+          .where('status', '==', 'ended')
+          .orderBy('createdAt', 'desc')
+          .get();
+      } catch(_) {
+        snap = await db.collection('lives')
+          .where('hostUid', '==', currentUser.uid)
+          .where('status', '==', 'ended')
+          .get();
+      }
+      const lives = snap.docs
+        .filter(d => d.data().recordingURL)
+        .map(d => ({ id: d.id, title: d.data().title || 'Live sem título', url: d.data().recordingURL, createdAt: d.data().createdAt }));
+
+      if (!lives.length) {
+        el.innerHTML = `<div class="empty-state">
+          <i class="ti ti-video-off" aria-hidden="true"></i>
+          <p>Nenhuma gravação de live disponível.<br>Suas transmissões ao vivo serão salvas aqui.</p>
+        </div>`;
+        return;
+      }
+
+      el.innerHTML = `<div class="video-grid">
+        ${lives.map(v => `
+          <div class="video-card">
+            <div class="video-thumb" onclick="openVideoPlayer('${encodeURI(v.url)}')">
+              <video src="${sanitize(v.url)}" preload="metadata" muted></video>
+              <div class="video-play-overlay">
+                <div class="video-play-btn"><i class="ti ti-player-play" aria-hidden="true"></i></div>
+              </div>
+            </div>
+            <div class="video-info">
+              <div class="video-title">${sanitize(v.title)}</div>
+              <div class="video-date">${v.createdAt ? timeAgo(v.createdAt) : ''}</div>
+            </div>
+          </div>`).join('')}
+      </div>`;
+      return;
+
     } else {
       let snap;
       try {
@@ -534,6 +612,26 @@ function deletePhoto(photoId) {
       loadContent();
     } catch(e) { showToast('Erro ao excluir foto.'); }
   });
+}
+
+// ── Player de vídeo ───────────────────────────────────────────
+function openVideoPlayer(url) {
+  const bg = document.createElement('div');
+  bg.className = 'video-player-bg';
+  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '<i class="ti ti-x" aria-hidden="true"></i>';
+  closeBtn.style.cssText = 'position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.15);border:none;color:#fff;width:40px;height:40px;border-radius:50%;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;';
+  closeBtn.onclick = () => bg.remove();
+  const vid = document.createElement('video');
+  vid.src = url;
+  vid.controls = true;
+  vid.autoplay = true;
+  vid.style.cssText = 'max-width:90vw;max-height:85vh;border-radius:var(--radius-md);';
+  bg.appendChild(vid);
+  bg.appendChild(closeBtn);
+  document.body.appendChild(bg);
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────

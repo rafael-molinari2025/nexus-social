@@ -387,6 +387,7 @@ let _liveUnsub       = null;
 let _previewStream   = null;
 let _mediaRecorder   = null;
 let _recordingChunks = [];
+let _liveTitle       = null;
 // Elemento <video> persistente — criado UMA vez e movido entre containers
 // (nunca destruído via innerHTML, pois isso pode liberar a câmera no Android)
 let _liveVideoEl     = null;
@@ -437,13 +438,19 @@ async function stopAndUploadRecording(liveId) {
         formData.append('file', blob, `live_${liveId}.webm`);
         formData.append('upload_preset', 'nexus_uploads');
         formData.append('public_id', `lives/${liveId}`);
+        formData.append('resource_type', 'video');
 
-        const res = await fetch('https://api.cloudinary.com/v1_1/dyoi5mrdc/video/upload', {
+        // /auto/upload detecta o tipo automaticamente — mais compatível com presets unsigned
+        const res = await fetch('https://api.cloudinary.com/v1_1/dyoi5mrdc/auto/upload', {
           method: 'POST',
           body: formData
         });
-        if (!res.ok) throw new Error(`Cloudinary ${res.status}`);
+
         const data = await res.json();
+        if (!res.ok) {
+          console.error('Cloudinary error:', JSON.stringify(data));
+          throw new Error(data?.error?.message || `HTTP ${res.status}`);
+        }
         resolve(data.secure_url || null);
       } catch(e) {
         console.error('Recording upload failed:', e.message);
@@ -452,6 +459,28 @@ async function stopAndUploadRecording(liveId) {
     };
     _mediaRecorder.stop();
   });
+}
+
+async function createLivePost(liveId, title, videoURL) {
+  try {
+    await db.collection('posts').add({
+      text:        `Live encerrada: "${title}"`,
+      videoURL,
+      liveId,
+      images:      [],
+      imageURL:    null,
+      authorId:    currentUser.uid,
+      authorName:  currentUser.displayName || 'Usuário',
+      authorPhoto: currentUser.photoURL || null,
+      likes:       [],
+      bookmarks:   [],
+      commentsCount: 0,
+      privacy:     'public',
+      createdAt:   firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(e) {
+    console.error('createLivePost error:', e.message);
+  }
 }
 
 // ── Elemento <video> persistente ───────────────────────────────
@@ -607,6 +636,7 @@ async function startLive() {
 
 // ── Tela do host ───────────────────────────────────────────────
 function renderHostScreen(liveId, title) {
+  _liveTitle = title;
   document.title = `Nexus — AO VIVO`;
 
   document.getElementById('app-root').innerHTML = `
@@ -760,8 +790,9 @@ async function endLive(liveId) {
     if (recordingURL) updateData.recordingURL = recordingURL;
 
     await db.collection('lives').doc(liveId).update(updateData);
-    showToast(recordingURL ? 'Gravação salva com sucesso!' : 'Transmissão encerrada.');
-    setTimeout(() => { location.href = '../index.html'; }, 2000);
+    if (recordingURL) await createLivePost(liveId, _liveTitle || 'Live', recordingURL);
+    showToast(recordingURL ? 'Gravação salva e postada no feed!' : 'Transmissão encerrada.');
+    setTimeout(() => { location.href = '../index.html'; }, 2500);
   } catch(e) {
     console.error('endLive error:', e);
     showToast('Erro ao encerrar. Tente novamente.');
