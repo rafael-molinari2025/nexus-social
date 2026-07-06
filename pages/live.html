@@ -409,9 +409,14 @@ requireAuth(async user => {
 
 // ── Gravação local (MediaRecorder → Cloudinary) ───────────────
 function startRecording(stream) {
-  if (!stream || !window.MediaRecorder) return;
+  if (!stream || !window.MediaRecorder) {
+    if (stream) showToast('Aviso: gravação não suportada neste navegador.');
+    return;
+  }
+
   _recordingChunks  = [];
   _recordingMimeType = '';
+
   const mimeType = [
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
@@ -419,18 +424,32 @@ function startRecording(stream) {
     'video/mp4;codecs=h264,aac',
     'video/mp4'
   ].find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+  // Tenta criar MediaRecorder com progressivamente menos opções para máxima compatibilidade
+  // (videoBitsPerSecond não é padrão em Safari — usar bitsPerSecond)
+  const tryMR = opts => { try { return new MediaRecorder(stream, opts); } catch(_) { return null; } };
+  _mediaRecorder =
+    (mimeType && tryMR({ mimeType, bitsPerSecond: 400_000 })) ||
+    (mimeType && tryMR({ mimeType })) ||
+    tryMR({});
+
+  if (!_mediaRecorder) {
+    console.warn('startRecording: MediaRecorder falhou em todas as tentativas');
+    showToast('Aviso: gravação não disponível neste dispositivo.');
+    return;
+  }
+
+  _recordingMimeType = _mediaRecorder.mimeType || mimeType || 'video/webm';
+  _mediaRecorder.ondataavailable = e => { if (e.data?.size > 0) _recordingChunks.push(e.data); };
+  _mediaRecorder.onerror = e => {
+    console.error('MediaRecorder error:', e?.error ?? e);
+    _mediaRecorder = null;
+  };
   try {
-    _mediaRecorder = new MediaRecorder(stream, {
-      ...(mimeType ? { mimeType } : {}),
-      videoBitsPerSecond: 400_000
-    });
-    _recordingMimeType = _mediaRecorder.mimeType || mimeType || 'video/webm';
-    _mediaRecorder.ondataavailable = e => {
-      if (e.data?.size > 0) _recordingChunks.push(e.data);
-    };
     _mediaRecorder.start(2_000);
   } catch(e) {
-    console.warn('MediaRecorder init failed:', e.message);
+    console.warn('MediaRecorder.start failed:', e.message);
+    showToast(`Gravação falhou ao iniciar: ${e.message}`);
     _mediaRecorder = null;
   }
 }
@@ -468,25 +487,35 @@ async function stopAndUploadRecording(liveId) {
           resolve(null); return;
         }
 
-        // 1. Token Firebase
+        // 1. Token Firebase (sem force-refresh para evitar chamada de rede extra no mobile)
         _setSavingStatus(`Arquivo: ${sizeMB} MB — autenticando…`);
         const currentUserObj = auth.currentUser;
         if (!currentUserObj) throw new Error('Usuário não autenticado');
-        const idToken = await currentUserObj.getIdToken(true);
+        let idToken;
+        try {
+          idToken = await currentUserObj.getIdToken();
+        } catch(tokenErr) {
+          throw new Error(`Token (${tokenErr.message})`);
+        }
 
         // 2. Assinatura no servidor Vercel
         _setSavingStatus('Obtendo credenciais de upload…');
-        const signRes  = await fetch('https://nexus-social-fawn.vercel.app/api/cloudinary-sign', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-          body:    JSON.stringify({ public_id: publicId })
-        });
-        if (!signRes.ok) {
-          const errBody = await signRes.text().catch(() => '');
-          throw new Error(`Servidor (${signRes.status}): ${errBody.slice(0, 120)}`);
+        let signData;
+        try {
+          const signRes = await fetch('https://nexus-social-fawn.vercel.app/api/cloudinary-sign', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+            body:    JSON.stringify({})
+          });
+          if (!signRes.ok) {
+            const errBody = await signRes.text().catch(() => '');
+            throw new Error(`sign-${signRes.status}: ${errBody.slice(0, 80)}`);
+          }
+          signData = await signRes.json();
+          if (!signData.signature) throw new Error('Assinatura ausente');
+        } catch(signErr) {
+          throw new Error(`Assinatura (${signErr.message})`);
         }
-        const signData = await signRes.json();
-        if (!signData.signature) throw new Error('Assinatura ausente na resposta do servidor');
 
         // 3. Upload direto ao Cloudinary (signed — sem restrições de preset)
         _setSavingStatus('Enviando vídeo para a nuvem…');
@@ -495,15 +524,19 @@ async function stopAndUploadRecording(liveId) {
         formData.append('api_key',   signData.api_key);
         formData.append('timestamp', String(signData.timestamp));
         formData.append('signature', signData.signature);
-        // Sem public_id no upload — Cloudinary auto-gera (assinatura só tem timestamp)
 
-        const uploadRes = await fetch(
-          `https://api.cloudinary.com/v1_1/${signData.cloud_name}/video/upload`,
-          { method: 'POST', body: formData }
-        );
-        const upData = await uploadRes.json();
+        let uploadRes, upData;
+        try {
+          uploadRes = await fetch(
+            `https://api.cloudinary.com/v1_1/${signData.cloud_name}/video/upload`,
+            { method: 'POST', body: formData }
+          );
+          upData = await uploadRes.json();
+        } catch(uploadErr) {
+          throw new Error(`Upload (${uploadErr.message})`);
+        }
         if (!uploadRes.ok) {
-          throw new Error(`Cloudinary: ${upData?.error?.message || uploadRes.status}`);
+          throw new Error(`Cloudinary (${uploadRes.status}): ${upData?.error?.message || ''}`);
         }
 
         _setSavingStatus('Gravação salva com sucesso!');
@@ -833,15 +866,24 @@ async function flipCamera() {
     const newTrack  = newStream.getVideoTracks()[0];
     if (!newTrack) throw new Error('sem track de vídeo');
 
-    // Substitui track de vídeo no stream ativo
-    activeStream.getVideoTracks().forEach(t => { t.stop(); activeStream.removeTrack(t); });
-    activeStream.addTrack(newTrack);
-
-    // Atualiza elemento de vídeo
-    if (_liveVideoEl) {
-      _liveVideoEl.srcObject = null;
-      _liveVideoEl.srcObject = activeStream;
-      _liveVideoEl.play().catch(() => {});
+    // Em live com gravação ativa: NÃO toca em _hostMediaStream — parar o track
+    // interrompe o MediaRecorder no Chrome. Atualiza só o display e o Agora.
+    if (isLive && _mediaRecorder && _mediaRecorder.state === 'recording') {
+      if (_liveVideoEl) {
+        const displayStream = new MediaStream([newTrack, ..._hostMediaStream.getAudioTracks()]);
+        _liveVideoEl.srcObject = null;
+        _liveVideoEl.srcObject = displayStream;
+        _liveVideoEl.play().catch(() => {});
+      }
+    } else {
+      // Preview ou live sem gravação: substitui track no stream ativo normalmente
+      activeStream.getVideoTracks().forEach(t => { t.stop(); activeStream.removeTrack(t); });
+      activeStream.addTrack(newTrack);
+      if (_liveVideoEl) {
+        _liveVideoEl.srcObject = null;
+        _liveVideoEl.srcObject = activeStream;
+        _liveVideoEl.play().catch(() => {});
+      }
     }
 
     // Substitui track no Agora (durante live)

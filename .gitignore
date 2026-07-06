@@ -29,3 +29,5 @@ files.zip
 # === Logs ===
 *.log
 npm-debug.log*
+
+.vercel
