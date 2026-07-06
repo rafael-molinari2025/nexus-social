@@ -852,7 +852,7 @@ async function flipCamera() {
   const activeStream = isLive ? _hostMediaStream : _previewStream;
   if (!activeStream) {
     _facingMode = _facingMode === 'user' ? 'environment' : 'user';
-    showToast(_facingMode === 'environment' ? 'Câmera traseira selecionada' : 'Câmera frontal selecionada');
+    showToast(_facingMode === 'environment' ? 'Câmera traseira' : 'Câmera frontal');
     return;
   }
 
@@ -861,57 +861,92 @@ async function flipCamera() {
   if (btn) btn.disabled = true;
 
   try {
-    // Libera a câmera atual antes de pedir a outra (Android não abre duas simultaneamente)
     const oldVideoTrack = activeStream.getVideoTracks()[0];
+    let newVideoTrack = null;
+
+    // ── Método 1: applyConstraints ─────────────────────────────────
+    // Troca a câmera dentro do mesmo track sem parar nada.
+    // MediaRecorder, MediaStream e elemento <video> continuam inalterados.
     if (oldVideoTrack) {
-      activeStream.removeTrack(oldVideoTrack);
-      oldVideoTrack.stop();
-    }
+      const ok = await oldVideoTrack
+        .applyConstraints({ facingMode: _facingMode })
+        .then(() => true).catch(() => false);
 
-    // Solicita a nova câmera
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: _facingMode } }
-    });
-    const newVideoTrack = newStream.getVideoTracks()[0];
-    if (!newVideoTrack) throw new Error('sem track de vídeo');
-
-    // Insere nova track no stream ativo (MediaRecorder segue gravando com a nova câmera)
-    activeStream.addTrack(newVideoTrack);
-
-    // Substitui o elemento <video> por um novo — única forma confiável de atualizar
-    // o display no Android/iOS: após await, play() fica bloqueado por falta de gesture,
-    // mas autoplay+muted num elemento recém-criado funciona sem gesture.
-    if (_liveVideoEl) {
-      const parent   = _liveVideoEl.parentNode;
-      const oldStyle = _liveVideoEl.style.cssText;
-      const oldId    = _liveVideoEl.id || '';
-
-      const newVid = document.createElement('video');
-      if (oldId) newVid.id = oldId;
-      newVid.autoplay = true;
-      newVid.muted    = true;
-      newVid.playsInline = true;
-      newVid.setAttribute('webkit-playsinline', '');
-      newVid.style.cssText = oldStyle;
-      newVid.srcObject = activeStream;
-
-      if (parent) {
-        parent.replaceChild(newVid, _liveVideoEl);
+      if (ok) {
+        newVideoTrack = oldVideoTrack;
+        console.log('[flip] applyConstraints OK →', oldVideoTrack.getSettings().facingMode);
       }
-      _liveVideoEl = newVid;
     }
 
-    // Atualiza track no Agora (espectadores veem a câmera nova)
-    if (isLive && _agoraClient && _localVideo) {
+    // ── Método 2: stop + getUserMedia (fallback) ────────────────────
+    if (!newVideoTrack) {
+      // Para a track antiga para o Android liberar o hardware da câmera
+      if (oldVideoTrack) {
+        activeStream.removeTrack(oldVideoTrack);
+        oldVideoTrack.stop();
+        await new Promise(r => setTimeout(r, 300)); // aguarda liberação do hardware
+      }
+
+      // Tenta exact primeiro (garante a câmera certa), depois ideal
+      const ns = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: _facingMode } }
+      }).catch(() =>
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: _facingMode } }
+        })
+      );
+
+      newVideoTrack = ns.getVideoTracks()[0];
+      if (!newVideoTrack) throw new Error('sem track de vídeo');
+      console.log('[flip] getUserMedia OK →', newVideoTrack.getSettings().facingMode);
+
+      // Adiciona nova track ao mesmo stream
+      activeStream.addTrack(newVideoTrack);
+
+      // Substitui o elemento <video> — necessário porque play() está bloqueado
+      // por política de autoplay após await; novo elemento com autoplay+muted
+      // inicia automaticamente sem precisar de gesture do usuário.
+      if (_liveVideoEl) {
+        const parent = _liveVideoEl.parentNode;
+        const nv = document.createElement('video');
+        nv.id          = _liveVideoEl.id || 'host-video';
+        nv.autoplay    = true;
+        nv.muted       = true;
+        nv.playsInline = true;
+        nv.setAttribute('webkit-playsinline', '');
+        nv.style.cssText = _liveVideoEl.style.cssText;
+        nv.srcObject     = activeStream;
+        if (parent) parent.replaceChild(nv, _liveVideoEl);
+        _liveVideoEl = nv;
+      }
+
+      // Reinicia o MediaRecorder no stream atualizado sem perder chunks anteriores
+      if (isLive && _mediaRecorder && _mediaRecorder.state !== 'inactive') {
+        _mediaRecorder.onstop = null; // evita disparar upload ao parar agora
+        _mediaRecorder.stop();
+        await new Promise(r => setTimeout(r, 150));
+        const mt    = _recordingMimeType || '';
+        const tryMR = o => { try { return new MediaRecorder(activeStream, o); } catch(_) { return null; } };
+        const mr    = (mt && tryMR({ mimeType: mt, bitsPerSecond: 400_000 }))
+                   || (mt && tryMR({ mimeType: mt }))
+                   || tryMR({});
+        if (mr) {
+          mr.ondataavailable = e => { if (e.data?.size > 0) _recordingChunks.push(e.data); };
+          mr.onerror = e => { console.error('MediaRecorder error:', e?.error ?? e); _mediaRecorder = null; };
+          try { mr.start(2_000); _mediaRecorder = mr; } catch(e) { _mediaRecorder = null; }
+        }
+      }
+    }
+
+    // ── Atualiza Agora com a nova câmera ────────────────────────────
+    if (isLive && _agoraClient && _localVideo && newVideoTrack) {
       try {
-        const newAgoraTrack = AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: newVideoTrack.clone() });
+        const at = AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: newVideoTrack.clone() });
         await _agoraClient.unpublish([_localVideo]);
         _localVideo.close();
-        _localVideo = newAgoraTrack;
+        _localVideo = at;
         await _agoraClient.publish([_localVideo]);
-      } catch(e) {
-        console.warn('Agora flip camera error:', e);
-      }
+      } catch(e) { console.warn('Agora flip:', e); }
     }
 
     const flipBtn = document.getElementById('btn-flip');
@@ -920,7 +955,7 @@ async function flipCamera() {
   } catch(e) {
     console.error('flipCamera error:', e);
     _facingMode = _facingMode === 'user' ? 'environment' : 'user';
-    showToast('Não foi possível alternar a câmera.');
+    showToast('Câmera: ' + e.message);
   } finally {
     if (btn) btn.disabled = false;
   }
