@@ -864,18 +864,17 @@ async function flipCamera() {
     const oldVideoTrack = activeStream.getVideoTracks()[0];
     let newVideoTrack = null;
 
-    // ── Método 1: applyConstraints ─────────────────────────────────
-    // Troca a câmera dentro do mesmo track sem parar nada.
-    // MediaRecorder, MediaStream e elemento <video> continuam inalterados.
+    // ── Método 1: applyConstraints com verificação real ───────────────
+    // No Android Chrome, applyConstraints resolve sem lançar erro mesmo quando
+    // NÃO troca a câmera. Verificamos getSettings().facingMode para confirmar.
     if (oldVideoTrack) {
-      const ok = await oldVideoTrack
-        .applyConstraints({ facingMode: _facingMode })
-        .then(() => true).catch(() => false);
-
-      if (ok) {
-        newVideoTrack = oldVideoTrack;
-        console.log('[flip] applyConstraints OK →', oldVideoTrack.getSettings().facingMode);
+      await oldVideoTrack.applyConstraints({ facingMode: _facingMode }).catch(() => {});
+      const actualFacing = oldVideoTrack.getSettings()?.facingMode;
+      console.log('[flip] applyConstraints → facingMode real:', actualFacing, '| solicitado:', _facingMode);
+      if (actualFacing === _facingMode) {
+        newVideoTrack = oldVideoTrack; // câmera realmente trocou
       }
+      // se actualFacing !== _facingMode (ou undefined), cai no método 2
     }
 
     // ── Método 2: stop + getUserMedia (fallback) ────────────────────
@@ -898,7 +897,9 @@ async function flipCamera() {
 
       newVideoTrack = ns.getVideoTracks()[0];
       if (!newVideoTrack) throw new Error('sem track de vídeo');
-      console.log('[flip] getUserMedia OK →', newVideoTrack.getSettings().facingMode);
+      const gotFacing = newVideoTrack.getSettings()?.facingMode;
+      console.log('[flip] getUserMedia OK → facingMode:', gotFacing);
+      showToast('Câmera: ' + (gotFacing || _facingMode)); // diagnóstico temporário
 
       // Adiciona nova track ao mesmo stream
       activeStream.addTrack(newVideoTrack);
