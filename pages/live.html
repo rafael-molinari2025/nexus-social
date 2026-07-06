@@ -848,10 +848,9 @@ function toggleCam() {
 }
 
 async function flipCamera() {
-  const isLive    = !!_hostMediaStream;
+  const isLive       = !!_hostMediaStream;
   const activeStream = isLive ? _hostMediaStream : _previewStream;
   if (!activeStream) {
-    // Sem stream ativa: apenas alterna o modo para o próximo getUserMedia
     _facingMode = _facingMode === 'user' ? 'environment' : 'user';
     showToast(_facingMode === 'environment' ? 'Câmera traseira selecionada' : 'Câmera frontal selecionada');
     return;
@@ -859,31 +858,32 @@ async function flipCamera() {
 
   _facingMode = _facingMode === 'user' ? 'environment' : 'user';
   const btn = document.getElementById('btn-flip') || document.getElementById('btn-flip-preview');
-  if (btn) { btn.disabled = true; }
+  if (btn) btn.disabled = true;
 
   try {
-    const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: _facingMode } } });
-    const newTrack  = newStream.getVideoTracks()[0];
+    // Para a track antiga ANTES de pedir a nova câmera — no Android, abrir a câmera
+    // traseira enquanto a frontal ainda está ativa trava ou retorna a câmera errada.
+    const oldVideoTrack = activeStream.getVideoTracks()[0];
+    if (oldVideoTrack) {
+      activeStream.removeTrack(oldVideoTrack);
+      oldVideoTrack.stop();
+    }
+
+    // Pede a nova câmera (só vídeo — áudio já está no activeStream)
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: _facingMode } }
+    });
+    const newTrack = newStream.getVideoTracks()[0];
     if (!newTrack) throw new Error('sem track de vídeo');
 
-    // Em live com gravação ativa: NÃO toca em _hostMediaStream — parar o track
-    // interrompe o MediaRecorder no Chrome. Atualiza só o display e o Agora.
-    if (isLive && _mediaRecorder && _mediaRecorder.state === 'recording') {
-      if (_liveVideoEl) {
-        const displayStream = new MediaStream([newTrack, ..._hostMediaStream.getAudioTracks()]);
-        _liveVideoEl.srcObject = null;
-        _liveVideoEl.srcObject = displayStream;
-        _liveVideoEl.play().catch(() => {});
-      }
-    } else {
-      // Preview ou live sem gravação: substitui track no stream ativo normalmente
-      activeStream.getVideoTracks().forEach(t => { t.stop(); activeStream.removeTrack(t); });
-      activeStream.addTrack(newTrack);
-      if (_liveVideoEl) {
-        _liveVideoEl.srcObject = null;
-        _liveVideoEl.srcObject = activeStream;
-        _liveVideoEl.play().catch(() => {});
-      }
+    // Insere a nova track no mesmo stream (MediaRecorder + display veem a nova câmera)
+    activeStream.addTrack(newTrack);
+
+    // Atualiza o elemento <video> local
+    if (_liveVideoEl) {
+      _liveVideoEl.srcObject = null;
+      _liveVideoEl.srcObject = activeStream;
+      _liveVideoEl.play().catch(() => {});
     }
 
     // Substitui track no Agora (durante live)
@@ -903,10 +903,11 @@ async function flipCamera() {
     if (flipBtn) flipBtn.title = _facingMode === 'user' ? 'Câmera traseira' : 'Câmera frontal';
 
   } catch(e) {
+    console.error('flipCamera error:', e);
     _facingMode = _facingMode === 'user' ? 'environment' : 'user'; // reverte
     showToast('Não foi possível alternar a câmera.');
   } finally {
-    if (btn) { btn.disabled = false; }
+    if (btn) btn.disabled = false;
   }
 }
 
